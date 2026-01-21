@@ -35,6 +35,26 @@ export const getById = async (req, res) => {
   }
 };
 
+export const getAll = async (req, res) => {
+  try {
+    const { page, limit, asset_type, status, floor, sortBy, sortOrder } =
+      req.query;
+    const result = await assetsService.getAssetsBySite("all", {
+      page: parseInt(page) || 1,
+      limit: parseInt(limit) || 50,
+      asset_type,
+      status,
+      floor,
+      sortBy,
+      sortOrder,
+    });
+    res.json({ success: true, ...result });
+  } catch (error) {
+    console.error("Get all assets error:", error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+
 export const getBySite = async (req, res) => {
   try {
     const { page, limit, asset_type, status, floor, sortBy, sortOrder } =
