@@ -59,7 +59,7 @@ export const getByType = async (req, res) => {
   try {
     const assets = await assetsService.getAssetsByType(
       req.params.siteId,
-      req.params.assetType
+      req.params.assetType,
     );
     res.json({ success: true, data: assets });
   } catch (error) {
@@ -72,7 +72,7 @@ export const getByLocation = async (req, res) => {
   try {
     const assets = await assetsService.getAssetsByLocation(
       req.params.siteId,
-      req.params.location
+      req.params.location,
     );
     res.json({ success: true, data: assets });
   } catch (error) {
@@ -101,7 +101,7 @@ export const search = async (req, res) => {
 export const getUnderWarranty = async (req, res) => {
   try {
     const assets = await assetsService.getAssetsUnderWarranty(
-      req.params.siteId
+      req.params.siteId,
     );
     res.json({ success: true, data: assets });
   } catch (error) {
@@ -115,7 +115,7 @@ export const getWarrantyExpiring = async (req, res) => {
     const { days } = req.query;
     const assets = await assetsService.getAssetsWarrantyExpiring(
       req.params.siteId,
-      parseInt(days) || 30
+      parseInt(days) || 30,
     );
     res.json({ success: true, data: assets });
   } catch (error) {
@@ -156,7 +156,7 @@ export const updateStatus = async (req, res) => {
 
     const asset = await assetsService.updateAssetStatus(
       req.params.assetId,
-      status
+      status,
     );
     res.json({ success: true, data: asset });
   } catch (error) {
@@ -193,6 +193,7 @@ export const getStats = async (req, res) => {
 export default {
   create,
   getById,
+  getAll,
   getBySite,
   getByType,
   getByLocation,

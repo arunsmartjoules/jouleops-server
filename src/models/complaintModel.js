@@ -56,6 +56,7 @@ export const formatComplaintForInsert = (data) => {
     notes: data.notes || null,
     contact_name: data.contact_name || null,
     contact_number: data.contact_number || null,
+    remarks: data.remarks || null,
     current_temperature: data.current_temperature || null,
     current_rh: data.current_rh || null,
     standard_temperature: data.standard_temperature || null,
@@ -84,6 +85,7 @@ export const formatComplaintResponse = (complaint) => {
     assigned_to: complaint.assigned_to,
     area_asset: complaint.area_asset,
     internal_remarks: complaint.internal_remarks,
+    remarks: complaint.remarks,
     created_at: complaint.created_at,
     updated_at: complaint.updated_at,
   };

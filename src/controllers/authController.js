@@ -4,6 +4,7 @@ import usersService from "../services/usersService.js";
 import supabase from "../config/supabase.js";
 import { logActivity } from "../services/logsService.js";
 import { v4 as uuidv4 } from "uuid";
+import crypto from "crypto";
 
 /**
  * Auth Controller
@@ -64,11 +65,37 @@ export const login = async (req, res) => {
         user_id: user.user_id,
         role: user.role,
         email: user.email,
+        is_admin:
+          user.role === "Admin" ||
+          user.role === "admin" ||
+          user.is_superadmin ||
+          false,
         is_superadmin: user.is_superadmin || false,
       },
       secret,
-      { expiresIn: "24h" }
+      { expiresIn: "30d" }, // Increased for dev
     );
+
+    // Generate refresh token (long-lived)
+    const refreshToken = jwt.sign(
+      { user_id: user.user_id, type: "refresh" },
+      process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET,
+      { expiresIn: "30d" },
+    );
+
+    // Hash refresh token before storing
+    const tokenHash = crypto
+      .createHash("sha256")
+      .update(refreshToken)
+      .digest("hex");
+
+    // Store refresh token hash in database
+    await supabase.from("refresh_tokens").insert({
+      user_id: user.user_id,
+      token_hash: tokenHash, // Store hash, not raw token
+      expires_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(), // 30 days
+      device_info: req.headers["user-agent"],
+    });
 
     // Remove sensitive data
     delete user.password;
@@ -87,6 +114,8 @@ export const login = async (req, res) => {
       success: true,
       data: {
         token,
+        refresh_token: refreshToken,
+        expires_in: 900,
         user: {
           id: user.user_id,
           email: user.email,
@@ -124,7 +153,7 @@ export const getProfile = async (req, res) => {
 };
 
 export const signup = async (req, res) => {
-  console.log("Signup endpoint called with body:", req.body);
+  // console.log("Signup endpoint called"); // Removed sensitive log
   try {
     const { email, password, name } = req.body;
 
@@ -208,11 +237,37 @@ export const signup = async (req, res) => {
         user_id: updatedUser.user_id,
         role: updatedUser.role,
         email: updatedUser.email,
+        is_admin:
+          updatedUser.role === "Admin" ||
+          updatedUser.role === "admin" ||
+          updatedUser.is_superadmin ||
+          false,
         is_superadmin: updatedUser.is_superadmin || false,
       },
       secret,
-      { expiresIn: "24h" }
+      { expiresIn: "30d" },
     );
+
+    // Generate refresh token (long-lived)
+    const refreshToken = jwt.sign(
+      { user_id: updatedUser.user_id, type: "refresh" },
+      process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET,
+      { expiresIn: "30d" },
+    );
+
+    // Hash refresh token before storing
+    const tokenHash = crypto
+      .createHash("sha256")
+      .update(refreshToken)
+      .digest("hex");
+
+    // Store refresh token hash in database
+    await supabase.from("refresh_tokens").insert({
+      user_id: updatedUser.user_id,
+      token_hash: tokenHash, // Store hash
+      expires_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(), // 30 days
+      device_info: req.headers["user-agent"],
+    });
 
     // Remove sensitive data
     delete updatedUser.password;
@@ -233,6 +288,8 @@ export const signup = async (req, res) => {
       success: true,
       data: {
         token,
+        refresh_token: refreshToken,
+        expires_in: 900,
         user: {
           id: updatedUser.user_id,
           email: updatedUser.email,
@@ -406,7 +463,7 @@ export const sendPasswordResetCode = async (req, res) => {
       email,
       code,
       "password-reset",
-      user.user_id
+      user.user_id,
     );
     await emailService.sendVerificationEmail(email, code, "password-reset");
 
@@ -491,6 +548,20 @@ export const logout = async (req, res) => {
       });
     }
 
+    const { refresh_token } = req.body;
+    if (refresh_token) {
+      const tokenHash = crypto
+        .createHash("sha256")
+        .update(refresh_token)
+        .digest("hex");
+
+      // Revoke the specific token
+      await supabase
+        .from("refresh_tokens")
+        .delete()
+        .eq("token_hash", tokenHash);
+    }
+
     res.json({
       success: true,
       message: "Logged out successfully",
@@ -551,7 +622,7 @@ export const changePassword = async (req, res) => {
 
     const isCurrentPasswordValid = await bcrypt.compare(
       currentPassword,
-      user.password
+      user.password,
     );
     if (!isCurrentPasswordValid) {
       return res.status(401).json({
@@ -594,6 +665,101 @@ export const changePassword = async (req, res) => {
   }
 };
 
+export const refreshToken = async (req, res) => {
+  try {
+    const { refresh_token } = req.body;
+
+    if (!refresh_token) {
+      return res.status(400).json({
+        success: false,
+        error: "Refresh token required",
+      });
+    }
+
+    // Verify refresh token
+    const secret = process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET;
+    let decoded;
+    try {
+      decoded = jwt.verify(refresh_token, secret);
+    } catch (err) {
+      return res.status(401).json({
+        success: false,
+        error: "Invalid refresh token",
+      });
+    }
+
+    // Hash the incoming token to find it
+    const tokenHash = crypto
+      .createHash("sha256")
+      .update(refresh_token)
+      .digest("hex");
+
+    // Check if token hash is in database (not revoked)
+    const { data: storedToken } = await supabase
+      .from("refresh_tokens")
+      .select("*")
+      .eq("token_hash", tokenHash) // Check against hash
+      .eq("user_id", decoded.user_id)
+      .eq("revoked", false)
+      .single();
+
+    if (!storedToken) {
+      return res.status(401).json({
+        success: false,
+        error: "Invalid or revoked refresh token",
+      });
+    }
+
+    // Get user data
+    const { data: user } = await supabase
+      .from("users")
+      .select("*")
+      .eq("user_id", decoded.user_id)
+      .single();
+
+    if (!user) {
+      return res.status(401).json({
+        success: false,
+        error: "User not found",
+      });
+    }
+
+    // Generate new access token
+    const newAccessToken = jwt.sign(
+      {
+        user_id: user.user_id,
+        role: user.role,
+        email: user.email,
+        is_admin:
+          user.role === "Admin" ||
+          user.role === "admin" ||
+          user.is_superadmin ||
+          false,
+        is_superadmin: user.is_superadmin || false,
+      },
+      process.env.JWT_SECRET,
+      { expiresIn: "30d" },
+    );
+
+    res.json({
+      success: true,
+      data: {
+        token: newAccessToken,
+        expires_in: 2592000, // 30 days in seconds
+      },
+    });
+  } catch (error) {
+    console.error("Refresh token error:", error);
+    if (error.name === "TokenExpiredError") {
+      return res.status(401).json({
+        success: false,
+        error: "Refresh token expired",
+      });
+    }
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+
 export default {
   login,
   signup,
@@ -604,5 +770,7 @@ export default {
   sendVerificationCode,
   verifySignupCode,
   sendPasswordResetCode,
+  sendPasswordResetCode,
   resetPasswordWithCode,
+  refreshToken,
 };

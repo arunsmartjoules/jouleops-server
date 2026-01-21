@@ -50,6 +50,8 @@ export const getAllLogs = async (options = {}) => {
   if (module) query = query.eq("module", module);
   if (action) query = query.eq("action", action);
   if (search) query = query.ilike("description", `%${search}%`);
+  if (options.from) query = query.gte("created_at", `${options.from}T00:00:00`);
+  if (options.to) query = query.lte("created_at", `${options.to}T23:59:59`);
 
   query = query
     .order("created_at", { ascending: false })
@@ -107,7 +109,47 @@ export const getAllLogs = async (options = {}) => {
   };
 };
 
+/**
+ * Get aggregated error counts for the last X days
+ */
+export const getErrorTrends = async (days = 7) => {
+  const startDate = new Date();
+  startDate.setDate(startDate.getDate() - (days - 1));
+  startDate.setHours(0, 0, 0, 0);
+
+  const { data, error } = await supabase
+    .from("app_logs")
+    .select("created_at")
+    .ilike("action", "%ERROR%")
+    .gte("created_at", startDate.toISOString());
+
+  if (error) throw new Error(`Failed to fetch error trends: ${error.message}`);
+
+  // Initialize days
+  const trends = [];
+  for (let i = 0; i < days; i++) {
+    const d = new Date(startDate);
+    d.setDate(d.getDate() + i);
+    trends.push({
+      date: d.toISOString().split("T")[0],
+      errors: 0,
+    });
+  }
+
+  // Count errors per day
+  data.forEach((log) => {
+    const dateStr = log.created_at.split("T")[0];
+    const trendItem = trends.find((t) => t.date === dateStr);
+    if (trendItem) {
+      trendItem.errors++;
+    }
+  });
+
+  return trends;
+};
+
 export default {
   logActivity,
   getAllLogs,
+  getErrorTrends,
 };

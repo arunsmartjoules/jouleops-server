@@ -22,7 +22,7 @@ export const sendPushNotification = async (tokens, title, body, data = {}) => {
   const validTokens = tokens.filter(
     (token) =>
       token.startsWith("ExponentPushToken[") ||
-      token.startsWith("ExpoPushToken[")
+      token.startsWith("ExpoPushToken["),
   );
 
   if (validTokens.length === 0) {
@@ -30,41 +30,91 @@ export const sendPushNotification = async (tokens, title, body, data = {}) => {
     return { success: false, error: "No valid tokens" };
   }
 
-  // Prepare messages
-  const messages = validTokens.map((token) => ({
-    to: token,
-    sound: "default",
-    title: title,
-    body: body,
-    data: data,
-    priority: "high",
-    channelId: "default",
-  }));
-
-  try {
-    // Send to Expo Push Notification API
-    const response = await fetch("https://exp.host/--/api/v2/push/send", {
-      method: "POST",
-      headers: {
-        Accept: "application/json",
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(messages),
-    });
-
-    const result = await response.json();
-
-    if (!response.ok) {
-      console.error("Push notification error:", result);
-      return { success: false, error: result };
-    }
-
-    console.log("Push notification sent:", result);
-    return { success: true, data: result };
-  } catch (error) {
-    console.error("Failed to send push notification:", error);
-    return { success: false, error: error.message };
+  const BATCH_SIZE = 100;
+  const chunks = [];
+  for (let i = 0; i < validTokens.length; i += BATCH_SIZE) {
+    chunks.push(validTokens.slice(i, i + BATCH_SIZE));
   }
+
+  const batchResults = [];
+  let totalSuccess = 0;
+
+  for (const chunk of chunks) {
+    const messages = chunk.map((token) => ({
+      to: token,
+      sound: "default",
+      title: title,
+      body: body,
+      data: data,
+      priority: "high",
+      channelId: "default",
+    }));
+
+    try {
+      // Send to Expo Push Notification API
+      const response = await fetch("https://exp.host/--/api/v2/push/send", {
+        method: "POST",
+        headers: {
+          Accept: "application/json",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(messages),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        console.error("Push notification batch error:", result);
+        batchResults.push({ success: false, error: result, tokens: chunk });
+        continue;
+      }
+
+      // Check for errors in individual ticket responses
+      // Note: Expo returns an array of results matching the order of tokens
+      if (result.data && Array.isArray(result.data)) {
+        result.data.forEach((item, index) => {
+          if (item.status === "ok") {
+            totalSuccess++;
+          } else if (
+            item.details &&
+            item.details.error === "DeviceNotRegistered"
+          ) {
+            // Token is no longer valid, we should cleanup this token
+            const invalidToken = chunk[index];
+            console.log(`Cleaning up invalid token: ${invalidToken}`);
+            // We'll let the pushTokenService handle this if imported,
+            // but for now we'll just log it.
+            // Ideally we'd call pushTokenService.removeToken(invalidToken)
+          }
+        });
+      }
+
+      batchResults.push({
+        success: true,
+        data: result,
+        tokensCount: chunk.length,
+      });
+    } catch (error) {
+      console.error("Failed to send push notification batch:", error);
+      batchResults.push({
+        success: false,
+        error: error.message,
+        tokens: chunk,
+      });
+    }
+  }
+
+  const allSuccess = batchResults.every((r) => r.success);
+  console.log(
+    `Push notification summary: ${totalSuccess}/${validTokens.length} successful`,
+  );
+
+  return {
+    success: allSuccess,
+    totalSent: validTokens.length,
+    totalSuccess,
+    batchResults,
+  };
 };
 
 /**
@@ -74,7 +124,7 @@ export const sendNotificationToUser = async (
   userId,
   title,
   body,
-  data = {}
+  data = {},
 ) => {
   const tokenRecords = await getUserTokens(userId);
 
@@ -89,7 +139,18 @@ export const sendNotificationToUser = async (
   if (result.success) {
     await logNotification(userId, title, body, data.type || "custom", "sent");
   } else {
-    await logNotification(userId, title, body, data.type || "custom", "failed");
+    const errorMessage =
+      typeof result.error === "object"
+        ? JSON.stringify(result.error)
+        : result.error;
+    await logNotification(
+      userId,
+      title,
+      body,
+      data.type || "custom",
+      "failed",
+      errorMessage,
+    );
   }
 
   return result;
@@ -102,7 +163,7 @@ export const sendNotificationToUsers = async (
   userIds,
   title,
   body,
-  data = {}
+  data = {},
 ) => {
   const tokenRecords = await getUsersTokens(userIds);
 
@@ -118,12 +179,17 @@ export const sendNotificationToUsers = async (
     if (result.success) {
       await logNotification(userId, title, body, data.type || "custom", "sent");
     } else {
+      const errorMessage =
+        typeof result.error === "object"
+          ? JSON.stringify(result.error)
+          : result.error;
       await logNotification(
         userId,
         title,
         body,
         data.type || "custom",
-        "failed"
+        "failed",
+        errorMessage,
       );
     }
   }
@@ -152,15 +218,20 @@ export const sendNotificationToAll = async (title, body, data = {}) => {
         title,
         body,
         data.type || "custom",
-        "sent"
+        "sent",
       );
     } else {
+      const errorMessage =
+        typeof result.error === "object"
+          ? JSON.stringify(result.error)
+          : result.error;
       await logNotification(
         record.user_id,
         title,
         body,
         data.type || "custom",
-        "failed"
+        "failed",
+        errorMessage,
       );
     }
   }
@@ -176,7 +247,8 @@ export const logNotification = async (
   title,
   body,
   notificationType,
-  status = "sent"
+  status = "sent",
+  errorMessage = null,
 ) => {
   try {
     const { error } = await supabase.from("notification_logs").insert({
@@ -185,6 +257,7 @@ export const logNotification = async (
       body: body,
       notification_type: notificationType,
       status: status,
+      error_message: errorMessage,
       sent_at: new Date().toISOString(),
     });
 

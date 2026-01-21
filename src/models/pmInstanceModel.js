@@ -65,6 +65,7 @@ export const formatPMInstanceForInsert = (data) => {
     teams: data.teams || null,
     teams_name: data.teams_name || null,
     assigned_to_name: data.assigned_to_name || null,
+    remarks: data.remarks || null,
   };
 };
 

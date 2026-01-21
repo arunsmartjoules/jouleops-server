@@ -12,7 +12,7 @@ interface VerificationCode {
   userId?: string;
 }
 
-const verificationCodes = new Map<string, VerificationCode>();
+import supabase from "../config/supabase.js";
 
 // Generate 6-digit code
 export function generateVerificationCode(): string {
@@ -20,54 +20,71 @@ export function generateVerificationCode(): string {
 }
 
 // Store verification code
-export function storeVerificationCode(
+// Store verification code
+export async function storeVerificationCode(
   email: string,
   code: string,
-  type: VerificationCode["type"],
-  userId?: string
-): void {
+  type: "signup" | "password-reset" | "superadmin-change",
+  userId?: string,
+): Promise<void> {
   const expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes
-  verificationCodes.set(email, { code, email, type, expiresAt, userId });
 
-  // Auto-cleanup after expiration
-  setTimeout(() => {
-    verificationCodes.delete(email);
-  }, 15 * 60 * 1000);
+  // Upsert or insert (delete previous codes for this email/type first to be clean)
+  await supabase
+    .from("verification_codes")
+    .delete()
+    .eq("email", email)
+    .eq("type", type);
+
+  const { error } = await supabase.from("verification_codes").insert({
+    email,
+    code,
+    type,
+    user_id: userId,
+    expires_at: expiresAt.toISOString(),
+  });
+
+  if (error) {
+    console.error("Failed to store verification code:", error);
+    // Continue despite error? Or throw? For OTPs, we probably want to throw.
+    throw new Error("Failed to generate verification code");
+  }
 }
 
 // Verify code
-export function verifyCode(
+export async function verifyCode(
   email: string,
-  code: string
-): VerificationCode | null {
-  const stored = verificationCodes.get(email);
+  code: string,
+): Promise<{ email: string; type: string; userId?: string } | null> {
+  const { data, error } = await supabase
+    .from("verification_codes")
+    .select("*")
+    .eq("email", email)
+    .eq("code", code)
+    .gt("expires_at", new Date().toISOString()) // Check expiry
+    .single();
 
-  if (!stored) {
+  if (error || !data) {
     return null;
   }
 
-  if (stored.expiresAt < new Date()) {
-    verificationCodes.delete(email);
-    return null;
-  }
-
-  if (stored.code !== code) {
-    return null;
-  }
-
-  return stored;
+  return {
+    email: data.email,
+    type: data.type,
+    userId: data.user_id,
+  };
 }
 
 // Delete verification code
-export function deleteVerificationCode(email: string): void {
-  verificationCodes.delete(email);
+export async function deleteVerificationCode(email: string): Promise<void> {
+  await supabase.from("verification_codes").delete().eq("email", email);
 }
 
 // Send verification email
 export async function sendVerificationEmail(
   email: string,
   code: string,
-  type: "signup" | "password-reset" | "superadmin-change"
+  type: "signup" | "password-reset" | "superadmin-change",
 ): Promise<void> {
   const subjects = {
     signup: "Verify Your SmartOps Account",
@@ -81,11 +98,11 @@ export async function sendVerificationEmail(
     "superadmin-change": `A request to change the superadmin has been made.<br>Your verification code is: <strong>${code}</strong><br>This code will expire in 15 minutes.<br>If you didn't request this, please contact your administrator immediately.`,
   };
 
-  // Log OTP to console for development/debugging
-  console.log(`\n========================================`);
-  console.log(`📧 OTP for ${email}: ${code}`);
-  console.log(`   Type: ${type}`);
-  console.log(`========================================\n`);
+  // Log OTP to console for development/debugging - REMOVED FOR SECURITY
+  // console.log(`\n========================================`);
+  // console.log(`📧 OTP for ${email}: ${code}`);
+  // console.log(`   Type: ${type}`);
+  // console.log(`========================================\n`);
 
   try {
     const result = await resend.emails.send({

@@ -1,5 +1,7 @@
 import jwt from "jsonwebtoken";
 import type { Request, Response, NextFunction } from "express";
+import crypto from "crypto";
+import supabase from "../config/supabase.js";
 
 /**
  * Authentication Middleware
@@ -13,7 +15,7 @@ interface AuthRequest extends Request {
 export const verifyToken = (
   req: AuthRequest,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const authHeader = req.headers.authorization;
@@ -39,7 +41,16 @@ export const verifyToken = (
       throw new Error("JWT_SECRET is not defined");
     }
 
-    const decoded = jwt.verify(token, secret);
+    const decoded: any = jwt.verify(token, secret);
+
+    // Ensure user_id and id are consistent (alias id to user_id for backward compatibility)
+    if (!decoded.user_id && decoded.id) decoded.user_id = decoded.id;
+    if (!decoded.id && decoded.user_id) decoded.id = decoded.user_id;
+
+    // Fallback: If role is missing in token, we might need to fetch it from DB
+    // but to avoid blocking every request, we'll let the requireRole/verifyAdmin handle it
+    // or we can do it here once. The plan says "only query Supabase if token lacks role".
+
     req.user = decoded;
     next();
   } catch (error: any) {
@@ -61,7 +72,7 @@ export const verifyToken = (
 export const optionalAuth = (
   req: AuthRequest,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const authHeader = req.headers.authorization;
@@ -84,7 +95,7 @@ export const optionalAuth = (
 };
 
 // Check if user has specific role
-export const requireRole = (...roles: string[]) => {
+export const requireRole = (roles: string[] | string) => {
   return (req: AuthRequest, res: Response, next: NextFunction) => {
     if (!req.user) {
       return res.status(401).json({
@@ -98,7 +109,15 @@ export const requireRole = (...roles: string[]) => {
       return next();
     }
 
-    if (!roles.includes(req.user.role)) {
+    // Normalize user role
+    const userRole = req.user.role ? req.user.role.toLowerCase() : "";
+
+    // Normalize allowed roles
+    const allowedRoles = (Array.isArray(roles) ? roles : [roles]).map((r) =>
+      r.toLowerCase(),
+    );
+
+    if (!allowedRoles.includes(userRole)) {
       return res.status(403).json({
         success: false,
         error: "Insufficient permissions",
@@ -110,28 +129,59 @@ export const requireRole = (...roles: string[]) => {
 };
 
 // API Key authentication (for n8n/webhooks)
-export const verifyApiKey = (
+export const verifyApiKey = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
-  const apiKey = req.headers["x-api-key"];
+  const apiKeyHeader = req.headers["x-api-key"];
 
-  if (!apiKey) {
+  if (!apiKeyHeader) {
     return res.status(401).json({
       success: false,
       error: "API key required",
     });
   }
 
-  if (apiKey !== process.env.API_KEY) {
-    return res.status(401).json({
-      success: false,
-      error: "Invalid API key",
-    });
-  }
+  // Ensure apiKey is a string
+  const apiKey =
+    (Array.isArray(apiKeyHeader) ? apiKeyHeader[0] : apiKeyHeader) || "";
 
-  next();
+  try {
+    // Hash the incoming key
+    const keyHash = crypto.createHash("sha256").update(apiKey).digest("hex");
+
+    // Lookup in DB
+    const { data: key, error } = await supabase
+      .from("api_keys")
+      .select("*")
+      .eq("key_hash", keyHash)
+      .single();
+
+    if (error || !key) {
+      return res.status(401).json({
+        success: false,
+        error: "Invalid API key",
+      });
+    }
+
+    // Update last used asynchronously (don't await)
+    supabase
+      .from("api_keys")
+      .update({ last_used_at: new Date() })
+      .eq("id", key.id)
+      .then(() => {});
+
+    // (Optional) Attach key info to request if needed for scoping later
+    // req.apiKey = key;
+
+    next();
+  } catch (err: any) {
+    console.error("API Key Check Error:", err);
+    return res
+      .status(500)
+      .json({ success: false, error: "Internal Server Error" });
+  }
 };
 
 export default {

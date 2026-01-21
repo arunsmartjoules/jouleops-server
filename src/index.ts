@@ -4,7 +4,9 @@ import helmet from "helmet";
 import morgan from "morgan";
 import rateLimit from "express-rate-limit";
 import dotenv from "dotenv";
+import compression from "compression";
 
+// Import routes
 // Import routes
 import authRoutes from "./routes/authRoutes.js";
 import complaintsRoutes from "./routes/complaintsRoutes.js";
@@ -21,11 +23,16 @@ import adminRoutes from "./routes/adminRoutes.js";
 import siteUsersRoutes from "./routes/siteUsersRoutes.js";
 import complaintCategoryRoutes from "./routes/complaintCategoryRoutes.js";
 import notificationRoutes from "./routes/notificationRoutes.js";
-import { startNotificationScheduler } from "./utils/scheduler.js";
+import whatsappRoutes from "./routes/whatsappRoutes.js";
+import systemRoutes from "./routes/systemRoutes.js";
+import importRoutes from "./routes/importRoutes.js";
+// import { startNotificationScheduler } from "./utils/scheduler.js"; // Removed in Week 3 cleanup
+import { initAttendanceReminders } from "./jobs/attendanceReminderJob.js";
 
 dotenv.config();
 
 const app = express();
+app.use(compression());
 app.use(cors());
 app.use(helmet());
 app.use(morgan("combined"));
@@ -38,12 +45,13 @@ app.use(
       success: false,
       error: "Too many requests, please try again later.",
     },
-  })
+  }),
 );
 
 // Mount routes
 app.use("/api/auth", authRoutes);
 app.use("/api/complaints", complaintsRoutes);
+app.use("/api/tickets", complaintsRoutes);
 app.use("/api/users", usersRoutes);
 app.use("/api/assets", assetsRoutes);
 app.use("/api/sites", sitesRoutes);
@@ -57,6 +65,9 @@ app.use("/api/admin", adminRoutes);
 app.use("/api/site-users", siteUsersRoutes);
 app.use("/api/complaint-categories", complaintCategoryRoutes);
 app.use("/api/notifications", notificationRoutes);
+app.use("/api/whatsapp", whatsappRoutes);
+app.use("/api/system", systemRoutes);
+app.use("/api/import", importRoutes);
 
 app.get("/ping", (req, res) => {
   res.json({
@@ -167,6 +178,6 @@ app.listen(port, host, () => {
 ╚════════════════════════════════════════════════════════════╝
     `);
 
-  // Start notification scheduler
-  startNotificationScheduler();
+  // Start attendance reminder jobs
+  initAttendanceReminders();
 });

@@ -5,6 +5,7 @@ import notificationSettingsService from "../services/notificationSettingsService
 import pushNotificationService from "../services/pushNotificationService.js";
 import attendanceNotificationService from "../services/attendanceNotificationService.js";
 import supabase from "../config/supabase.js";
+import { reloadAttendanceReminders } from "../jobs/attendanceReminderJob.js";
 
 const router = express.Router();
 
@@ -20,7 +21,7 @@ const router = express.Router();
 router.post("/register-token", verifyToken, async (req, res) => {
   try {
     const { pushToken, deviceId, platform } = req.body;
-    const userId = req.user.id;
+    const userId = req.user.user_id;
 
     if (!pushToken || !deviceId) {
       return res.status(400).json({
@@ -33,7 +34,7 @@ router.post("/register-token", verifyToken, async (req, res) => {
       userId,
       pushToken,
       deviceId,
-      platform
+      platform,
     );
 
     res.json({
@@ -107,16 +108,10 @@ router.get("/settings", verifyToken, async (req, res) => {
 router.put("/settings/check-in", verifyToken, async (req, res) => {
   try {
     const { message, time } = req.body;
-    const userId = req.user.id;
+    const userId = req.user.user_id;
+    const role = req.user.role;
 
-    // Check if user is admin
-    const { data: user } = await supabase
-      .from("users")
-      .select("role")
-      .eq("user_id", userId)
-      .single();
-
-    if (user?.role !== "Admin") {
+    if (role !== "Admin" && role !== "admin") {
       return res.status(403).json({
         success: false,
         error: "Unauthorized. Admin access required.",
@@ -128,15 +123,16 @@ router.put("/settings/check-in", verifyToken, async (req, res) => {
     if (message) {
       results.message = await notificationSettingsService.updateCheckInMessage(
         message,
-        userId
+        userId,
       );
     }
 
     if (time) {
       results.time = await notificationSettingsService.updateCheckInTime(
         time,
-        userId
+        userId,
       );
+      await reloadAttendanceReminders();
     }
 
     res.json({
@@ -159,16 +155,10 @@ router.put("/settings/check-in", verifyToken, async (req, res) => {
 router.put("/settings/check-out", verifyToken, async (req, res) => {
   try {
     const { message, time } = req.body;
-    const userId = req.user.id;
+    const userId = req.user.user_id;
+    const role = req.user.role;
 
-    // Check if user is admin
-    const { data: user } = await supabase
-      .from("users")
-      .select("role")
-      .eq("user_id", userId)
-      .single();
-
-    if (user?.role !== "Admin") {
+    if (role !== "Admin" && role !== "admin") {
       return res.status(403).json({
         success: false,
         error: "Unauthorized. Admin access required.",
@@ -180,15 +170,16 @@ router.put("/settings/check-out", verifyToken, async (req, res) => {
     if (message) {
       results.message = await notificationSettingsService.updateCheckOutMessage(
         message,
-        userId
+        userId,
       );
     }
 
     if (time) {
       results.time = await notificationSettingsService.updateCheckOutTime(
         time,
-        userId
+        userId,
       );
+      await reloadAttendanceReminders();
     }
 
     res.json({
@@ -211,16 +202,10 @@ router.put("/settings/check-out", verifyToken, async (req, res) => {
 router.post("/send-custom", verifyToken, async (req, res) => {
   try {
     const { title, body, recipients, userIds } = req.body;
-    const userId = req.user.id;
+    const userId = req.user.user_id;
+    const role = req.user.role;
 
-    // Check if user is admin
-    const { data: user } = await supabase
-      .from("users")
-      .select("role")
-      .eq("user_id", userId)
-      .single();
-
-    if (user?.role !== "Admin") {
+    if (role !== "Admin" && role !== "admin") {
       return res.status(403).json({
         success: false,
         error: "Unauthorized. Admin access required.",
@@ -240,14 +225,14 @@ router.post("/send-custom", verifyToken, async (req, res) => {
       result = await pushNotificationService.sendNotificationToAll(
         title,
         body,
-        { type: "custom" }
+        { type: "custom" },
       );
     } else if (recipients === "selected" && userIds && userIds.length > 0) {
       result = await pushNotificationService.sendNotificationToUsers(
         userIds,
         title,
         body,
-        { type: "custom" }
+        { type: "custom" },
       );
     } else {
       return res.status(400).json({
@@ -272,17 +257,11 @@ router.post("/send-custom", verifyToken, async (req, res) => {
  */
 router.get("/logs", verifyToken, async (req, res) => {
   try {
-    const userId = req.user.id;
+    const userId = req.user.user_id;
+    const role = req.user.role;
     const { page, limit, type, user_id } = req.query;
 
-    // Check if user is admin
-    const { data: user } = await supabase
-      .from("users")
-      .select("role")
-      .eq("user_id", userId)
-      .single();
-
-    if (user?.role !== "Admin") {
+    if (role !== "Admin" && role !== "admin") {
       return res.status(403).json({
         success: false,
         error: "Unauthorized. Admin access required.",
@@ -315,10 +294,9 @@ router.get("/logs", verifyToken, async (req, res) => {
  */
 router.get("/preferences", verifyToken, async (req, res) => {
   try {
-    const userId = req.user.id;
-    const preferences = await notificationSettingsService.getUserPreferences(
-      userId
-    );
+    const userId = req.user.user_id;
+    const preferences =
+      await notificationSettingsService.getUserPreferences(userId);
 
     res.json({
       success: true,
@@ -339,12 +317,12 @@ router.get("/preferences", verifyToken, async (req, res) => {
  */
 router.put("/preferences", verifyToken, async (req, res) => {
   try {
-    const userId = req.user.id;
+    const userId = req.user.user_id;
     const { attendance_notifications_enabled } = req.body;
 
     const preferences = await notificationSettingsService.updateUserPreferences(
       userId,
-      { attendance_notifications_enabled }
+      { attendance_notifications_enabled },
     );
 
     res.json({
@@ -366,17 +344,11 @@ router.put("/preferences", verifyToken, async (req, res) => {
  */
 router.post("/trigger-attendance", verifyToken, async (req, res) => {
   try {
-    const userId = req.user.id;
+    const userId = req.user.user_id;
+    const role = req.user.role;
     const { type } = req.body; // 'check-in' or 'check-out'
 
-    // Check if user is admin
-    const { data: user } = await supabase
-      .from("users")
-      .select("role")
-      .eq("user_id", userId)
-      .single();
-
-    if (user?.role !== "Admin") {
+    if (role !== "Admin" && role !== "admin") {
       return res.status(403).json({
         success: false,
         error: "Unauthorized. Admin access required.",

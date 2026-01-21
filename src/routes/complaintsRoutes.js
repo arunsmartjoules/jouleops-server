@@ -9,17 +9,20 @@ const router = express.Router();
  * Base path: /api/complaints
  */
 
+// Protected routes (require JWT)
+router.get("/", verifyToken, complaintsController.getAll);
+
 // Public routes (with API key for n8n)
 router.post("/", verifyApiKey, complaintsController.create);
 router.get(
   "/message/:messageId",
   verifyApiKey,
-  complaintsController.getByMessageId
+  complaintsController.getByMessageId,
 );
 router.get(
   "/group/:groupId/recent",
   verifyApiKey,
-  complaintsController.getRecentByGroup
+  complaintsController.getRecentByGroup,
 );
 
 // Protected routes (require JWT)
@@ -30,7 +33,7 @@ router.put("/:ticketId", verifyToken, complaintsController.update);
 router.patch(
   "/:ticketId/status",
   verifyToken,
-  complaintsController.updateStatus
+  complaintsController.updateStatus,
 );
 router.delete("/:ticketId", verifyToken, complaintsController.remove);
 

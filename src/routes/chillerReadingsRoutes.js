@@ -9,27 +9,28 @@ const router = express.Router();
  * Base path: /api/chiller-readings
  */
 
+router.get("/", verifyToken, chillerReadingsController.getAll);
 router.post("/", verifyApiKey, chillerReadingsController.create);
 router.get("/site/:siteId", verifyToken, chillerReadingsController.getBySite);
 router.get(
   "/site/:siteId/shift/:dateShift",
   verifyToken,
-  chillerReadingsController.getByDateShift
+  chillerReadingsController.getByDateShift,
 );
 router.get(
   "/chiller/:chillerId",
   verifyToken,
-  chillerReadingsController.getByChiller
+  chillerReadingsController.getByChiller,
 );
 router.get(
   "/chiller/:chillerId/latest",
   verifyToken,
-  chillerReadingsController.getLatest
+  chillerReadingsController.getLatest,
 );
 router.get(
   "/chiller/:chillerId/averages",
   verifyToken,
-  chillerReadingsController.getAverages
+  chillerReadingsController.getAverages,
 );
 router.get("/:id", verifyToken, chillerReadingsController.getById);
 router.put("/:id", verifyToken, chillerReadingsController.update);

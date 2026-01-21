@@ -42,10 +42,11 @@ export const getChillerReadingsBySite = async (siteId, options = {}) => {
 
   const offset = (page - 1) * limit;
 
-  let query = supabase
-    .from("chiller_readings")
-    .select("*", { count: "exact" })
-    .eq("site_id", siteId);
+  let query = supabase.from("chiller_readings").select("*", { count: "exact" });
+
+  if (siteId !== "all") {
+    query = query.eq("site_id", siteId);
+  }
 
   if (chiller_id) {
     query = query.eq("chiller_id", chiller_id);

@@ -1,5 +1,10 @@
 import supabase from "../config/supabase.js";
 import { formatComplaintForInsert } from "../models/complaintModel.js";
+import whapiService from "./whapiService.js";
+import whatsappGroupService from "./whatsappGroupService.js";
+import whatsappTemplateService from "./whatsappTemplateService.js";
+import sitesService from "./sitesService.js";
+import logger from "../utils/logger.js";
 
 // CREATE - Insert new complaint
 export const createComplaint = async (data) => {
@@ -18,22 +23,53 @@ export const createComplaint = async (data) => {
   return result;
 };
 
-// READ - Get complaint by ticket_id
+// READ - Get complaint by ticket_id or ticket_no
 export const getComplaintById = async (ticketId) => {
-  const { data, error } = await supabase
-    .from("complaints")
-    .select("*")
-    .eq("ticket_id", ticketId)
-    .single();
+  if (!ticketId) return null;
 
-  if (error) {
-    if (error.code === "PGRST116") {
-      return null; // Not found
-    }
-    throw new Error(`Failed to get complaint: ${error.message}`);
+  // 1. Try UUID lookup first if it looks like one
+  const isUuid =
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+      ticketId,
+    );
+
+  if (isUuid) {
+    const { data: byId, error: errorId } = await supabase
+      .from("complaints")
+      .select("*")
+      .eq("ticket_id", ticketId)
+      .maybeSingle();
+
+    if (byId) return byId;
+    if (errorId) logger.error(`Error searching by UUID: ${errorId.message}`);
   }
 
-  return data;
+  // 2. Fallback: Search by ticket_no (human readable ID)
+  const { data: byNo, error: errorNo } = await supabase
+    .from("complaints")
+    .select("*")
+    .eq("ticket_no", ticketId)
+    .maybeSingle();
+
+  if (errorNo) {
+    logger.error(`Error searching by ticket_no: ${errorNo.message}`);
+    throw new Error(`Failed to get complaint: ${errorNo.message}`);
+  }
+
+  // 3. Last Fallback: Try Supabase standard 'id' (unlikely but safe)
+  if (isUuid) {
+    const { data: bySupabaseId, error: errorSid } = await supabase
+      .from("complaints")
+      .select("*")
+      .eq("id", ticketId)
+      .maybeSingle();
+
+    if (bySupabaseId) return bySupabaseId;
+    if (errorSid)
+      logger.error(`Error searching by Supabase id: ${errorSid.message}`);
+  }
+
+  return byNo;
 };
 
 // READ - Get complaints by site with pagination
@@ -145,19 +181,37 @@ export const getRecentComplaintsByGroup = async (groupId, limit = 5) => {
 };
 
 // UPDATE - Update complaint
-export const updateComplaint = async (ticketId, updateData) => {
-  // Remove fields that shouldn't be updated
-  const { ticket_id, created_at, ...allowedUpdates } = updateData;
+export const updateComplaint = async (
+  ticketId,
+  updateData,
+  userContext = {},
+) => {
+  const existing = await getComplaintById(ticketId);
+  if (!existing) throw new Error("Complaint not found");
+
+  // Remove fields that shouldn't be updated, but keep those required for persistence
+  const { ticket_id, ticket_no, created_at, ...allowedUpdates } = updateData;
 
   const { data, error } = await supabase
     .from("complaints")
-    .update(allowedUpdates)
-    .eq("ticket_id", ticketId)
+    .update({ ...allowedUpdates, updated_at: new Date().toISOString() })
+    .eq("id", existing.id)
     .select()
     .single();
 
   if (error) {
     throw new Error(`Failed to update complaint: ${error.message}`);
+  }
+
+  // If status changed, trigger notification
+  if (allowedUpdates.status && allowedUpdates.status !== existing.status) {
+    triggerWhatsAppNotification(data, userContext).catch((err) => {
+      logger.error("Failed to trigger WhatsApp notification on update", {
+        module: "COMPLAINTS_SERVICE",
+        error: err.message,
+        ticket_no: data.ticket_no,
+      });
+    });
   }
 
   return data;
@@ -167,12 +221,17 @@ export const updateComplaint = async (ticketId, updateData) => {
 export const updateComplaintStatus = async (
   ticketId,
   status,
-  remarks = null
+  remarks = null,
+  userContext = {},
 ) => {
+  const existing = await getComplaintById(ticketId);
+  if (!existing) throw new Error("Complaint not found");
+
   const updateData = { status };
 
   if (remarks) {
     updateData.internal_remarks = remarks;
+    updateData.remarks = remarks;
   }
 
   // Add timestamp based on status
@@ -182,10 +241,13 @@ export const updateComplaintStatus = async (
     updateData.closed_at = new Date().toISOString();
   }
 
+  // Add updated_at
+  updateData.updated_at = new Date().toISOString();
+
   const { data, error } = await supabase
     .from("complaints")
     .update(updateData)
-    .eq("ticket_id", ticketId)
+    .eq("id", existing.id)
     .select()
     .single();
 
@@ -193,8 +255,73 @@ export const updateComplaintStatus = async (
     throw new Error(`Failed to update status: ${error.message}`);
   }
 
+  // Handle WhatsApp Notification asynchronously
+  triggerWhatsAppNotification(data, userContext).catch((err) => {
+    logger.error("Failed to trigger WhatsApp notification", {
+      module: "COMPLAINTS_SERVICE",
+      error: err.message,
+      ticket_no: data.ticket_no,
+    });
+  });
+
   return data;
 };
+
+/**
+ * Helper to trigger WhatsApp notification for a complaint status update
+ */
+async function triggerWhatsAppNotification(complaint, userContext) {
+  try {
+    // 1. Get WhatsApp group mapping for the site
+    const mapping = await whatsappGroupService.getMappingBySiteId(
+      complaint.site_id,
+    );
+    if (!mapping || !mapping.is_active) {
+      logger.info("No active WhatsApp mapping found for site", {
+        site_id: complaint.site_id,
+      });
+      return;
+    }
+
+    // 2. Get Site details to get the name
+    const site = await sitesService.getSiteById(complaint.site_id);
+    const siteName = site?.name || complaint.site_id;
+
+    // 3. Get Template
+    const template = await whatsappTemplateService.getTemplateByKey(
+      "ticket_status_update",
+    );
+    if (!template || !template.is_active) {
+      logger.warn("WhatsApp status update template not found or inactive");
+      return;
+    }
+
+    // 4. Parse Template
+    const content = whapiService.parseTemplate(template.template_content, {
+      ticket_no: complaint.ticket_no,
+      title: complaint.title,
+      status: complaint.status,
+      site_name: siteName,
+      updated_by: userContext.name || userContext.email || "System",
+      timestamp: new Date().toLocaleString("en-IN", {
+        timeZone: "Asia/Kolkata",
+      }),
+    });
+
+    // 5. Send Message
+    await whapiService.sendGroupMessage(mapping.whatsapp_group_id, content, {
+      ticket_id: complaint.ticket_id,
+      ticket_no: complaint.ticket_no,
+      site_id: complaint.site_id,
+      sent_by: userContext.email || "system",
+    });
+  } catch (error) {
+    logger.error("Error in triggerWhatsAppNotification", {
+      module: "COMPLAINTS_SERVICE",
+      error: error.message,
+    });
+  }
+}
 
 // DELETE - Delete complaint
 export const deleteComplaint = async (ticketId) => {

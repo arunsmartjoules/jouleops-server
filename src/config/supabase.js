@@ -11,12 +11,7 @@ const supabaseKey =
   process.env.SUPABASE_ANON_KEY ||
   process.env.SUPABASE_PUBLISHABLE_DEFAULT_KEY;
 
-console.log("Supabase initialization:");
-console.log("  URL:", supabaseUrl || "MISSING");
-console.log(
-  "  Key Headers:",
-  supabaseKey ? supabaseKey.substring(0, 5) + "..." : "MISSING"
-);
+console.log("Supabase initialization: OK");
 
 if (!supabaseUrl || !supabaseKey) {
   throw new Error("Missing Supabase environment variables");

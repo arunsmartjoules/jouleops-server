@@ -6,13 +6,15 @@ import logsService from "../services/logsService.js";
 
 export const getAll = async (req, res) => {
   try {
-    const { page, limit, module, action, search } = req.query;
+    const { page, limit, module, action, search, from, to } = req.query;
     const result = await logsService.getAllLogs({
       page: parseInt(page) || 1,
       limit: parseInt(limit) || 50,
       module,
       action,
       search,
+      from,
+      to,
     });
 
     res.json({ success: true, ...result });
@@ -46,7 +48,19 @@ export const create = async (req, res) => {
   }
 };
 
+export const getTrends = async (req, res) => {
+  try {
+    const days = parseInt(req.query.days) || 7;
+    const trends = await logsService.getErrorTrends(days);
+    res.json({ success: true, data: trends });
+  } catch (error) {
+    console.error("Get trends error:", error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+
 export default {
   getAll,
   create,
+  getTrends,
 };

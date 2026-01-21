@@ -28,7 +28,7 @@ export const create = async (req, res) => {
 export const getById = async (req, res) => {
   try {
     const instance = await pmInstancesService.getPMInstanceById(
-      req.params.instanceId
+      req.params.instanceId,
     );
     if (!instance) {
       return res
@@ -56,7 +56,7 @@ export const getBySite = async (req, res) => {
         asset_type,
         sortBy,
         sortOrder,
-      }
+      },
     );
     res.json({ success: true, ...result });
   } catch (error) {
@@ -68,7 +68,7 @@ export const getBySite = async (req, res) => {
 export const getByAsset = async (req, res) => {
   try {
     const instances = await pmInstancesService.getPMInstancesByAsset(
-      req.params.assetId
+      req.params.assetId,
     );
     res.json({ success: true, data: instances });
   } catch (error) {
@@ -82,7 +82,7 @@ export const getPending = async (req, res) => {
     const { days } = req.query;
     const instances = await pmInstancesService.getPendingPMInstances(
       req.params.siteId,
-      parseInt(days) || 7
+      parseInt(days) || 7,
     );
     res.json({ success: true, data: instances });
   } catch (error) {
@@ -94,7 +94,7 @@ export const getPending = async (req, res) => {
 export const getOverdue = async (req, res) => {
   try {
     const instances = await pmInstancesService.getOverduePMInstances(
-      req.params.siteId
+      req.params.siteId,
     );
     res.json({ success: true, data: instances });
   } catch (error) {
@@ -106,7 +106,7 @@ export const getOverdue = async (req, res) => {
 export const update = async (req, res) => {
   try {
     const existing = await pmInstancesService.getPMInstanceById(
-      req.params.instanceId
+      req.params.instanceId,
     );
     if (!existing) {
       return res
@@ -116,7 +116,7 @@ export const update = async (req, res) => {
 
     const instance = await pmInstancesService.updatePMInstance(
       req.params.instanceId,
-      req.body
+      req.body,
     );
     res.json({ success: true, data: instance });
   } catch (error) {
@@ -136,7 +136,7 @@ export const updateStatus = async (req, res) => {
     }
 
     const existing = await pmInstancesService.getPMInstanceById(
-      req.params.instanceId
+      req.params.instanceId,
     );
     if (!existing) {
       return res
@@ -147,7 +147,7 @@ export const updateStatus = async (req, res) => {
     const instance = await pmInstancesService.updatePMInstanceStatus(
       req.params.instanceId,
       status,
-      req.user?.user_id
+      req.user?.user_id,
     );
     res.json({ success: true, data: instance });
   } catch (error) {
@@ -168,7 +168,7 @@ export const updateProgress = async (req, res) => {
 
     const instance = await pmInstancesService.updatePMInstanceProgress(
       req.params.instanceId,
-      progress
+      progress,
     );
     res.json({ success: true, data: instance });
   } catch (error) {
@@ -180,7 +180,7 @@ export const updateProgress = async (req, res) => {
 export const remove = async (req, res) => {
   try {
     const existing = await pmInstancesService.getPMInstanceById(
-      req.params.instanceId
+      req.params.instanceId,
     );
     if (!existing) {
       return res
@@ -206,9 +206,15 @@ export const getStats = async (req, res) => {
   }
 };
 
+export const getAll = async (req, res) => {
+  req.params.siteId = "all";
+  return getBySite(req, res);
+};
+
 export default {
   create,
   getById,
+  getAll,
   getBySite,
   getByAsset,
   getPending,

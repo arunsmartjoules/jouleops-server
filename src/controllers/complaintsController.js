@@ -109,7 +109,7 @@ export const getRecentByGroup = async (req, res) => {
 
     const complaints = await complaintsService.getRecentComplaintsByGroup(
       groupId,
-      parseInt(limit) || 5
+      parseInt(limit) || 5,
     );
 
     res.json({
@@ -130,9 +130,8 @@ export const getByMessageId = async (req, res) => {
   try {
     const { messageId } = req.params;
 
-    const complaint = await complaintsService.getComplaintByMessageId(
-      messageId
-    );
+    const complaint =
+      await complaintsService.getComplaintByMessageId(messageId);
 
     if (!complaint) {
       return res.status(404).json({
@@ -171,7 +170,12 @@ export const update = async (req, res) => {
     // Update complaint
     const complaint = await complaintsService.updateComplaint(
       ticketId,
-      req.body
+      req.body,
+      {
+        name: req.user?.full_name || req.user?.name,
+        email: req.user?.email,
+        userId: req.user?.user_id,
+      },
     );
 
     res.json({
@@ -211,11 +215,39 @@ export const updateStatus = async (req, res) => {
       });
     }
 
+    // Enforce workflow rules
+    if (status === "Resolved") {
+      if (existing.status !== "Inprogress") {
+        return res.status(400).json({
+          success: false,
+          error: "Only tickets in 'Inprogress' status can be resolved.",
+        });
+      }
+      if (!remarks || remarks.trim().length === 0) {
+        return res.status(400).json({
+          success: false,
+          error: "Resolution message is required when resolving a ticket.",
+        });
+      }
+    }
+
+    if (status === "Cancelled" && (!remarks || remarks.trim().length === 0)) {
+      return res.status(400).json({
+        success: false,
+        error: "Reason is required when cancelling a ticket.",
+      });
+    }
+
     // Update status
     const complaint = await complaintsService.updateComplaintStatus(
       ticketId,
       status,
-      remarks
+      remarks,
+      {
+        name: req.user?.full_name || req.user?.name,
+        email: req.user?.email,
+        userId: req.user?.user_id,
+      },
     );
 
     res.json({
@@ -281,9 +313,15 @@ export const getStats = async (req, res) => {
   }
 };
 
+export const getAll = async (req, res) => {
+  req.params.siteId = "all";
+  return getBySite(req, res);
+};
+
 export default {
   create,
   getById,
+  getAll,
   getBySite,
   getRecentByGroup,
   getByMessageId,

@@ -14,6 +14,7 @@ router.post("/signup", authController.signup);
 router.post("/reset-password", authController.resetPassword);
 router.post("/logout", verifyToken, authController.logout);
 router.post("/change-password", verifyToken, authController.changePassword);
+router.post("/refresh", authController.refreshToken);
 router.get("/profile", verifyToken, authController.getProfile);
 
 // Email verification routes

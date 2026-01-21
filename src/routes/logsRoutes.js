@@ -10,6 +10,12 @@ const router = express.Router();
  */
 
 router.get("/", verifyToken, requireRole("admin"), logsController.getAll);
+router.get(
+  "/trends",
+  verifyToken,
+  requireRole("admin"),
+  logsController.getTrends,
+);
 router.post("/", verifyToken, logsController.create);
 
 export default router;

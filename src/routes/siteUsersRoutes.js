@@ -1,6 +1,6 @@
 import express from "express";
 import siteUsersController from "../controllers/siteUsersController.js";
-import { verifyToken } from "../middleware/auth.ts";
+import { verifyToken, requireRole } from "../middleware/auth.ts";
 
 const router = express.Router();
 
@@ -19,20 +19,27 @@ router.get("/by-site/:siteId", verifyToken, siteUsersController.getBySite);
 router.get("/by-user/:userId", verifyToken, siteUsersController.getByUser);
 
 // Assign user to site
-router.post("/", verifyToken, siteUsersController.assignUser);
+router.post(
+  "/",
+  verifyToken,
+  requireRole(["admin", "superadmin"]),
+  siteUsersController.assignUser,
+);
 
 // Update assignment
 router.put(
   "/:siteId/:userId",
   verifyToken,
-  siteUsersController.updateAssignment
+  requireRole(["admin", "superadmin"]),
+  siteUsersController.updateAssignment,
 );
 
 // Remove assignment
 router.delete(
   "/:siteId/:userId",
   verifyToken,
-  siteUsersController.removeAssignment
+  requireRole(["admin", "superadmin"]),
+  siteUsersController.removeAssignment,
 );
 
 export default router;

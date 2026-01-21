@@ -25,7 +25,7 @@ export const create = async (req, res) => {
 export const getById = async (req, res) => {
   try {
     const reading = await chillerReadingsService.getChillerReadingById(
-      req.params.id
+      req.params.id,
     );
     if (!reading) {
       return res
@@ -53,7 +53,7 @@ export const getBySite = async (req, res) => {
         date_to,
         sortBy,
         sortOrder,
-      }
+      },
     );
     res.json({ success: true, ...result });
   } catch (error) {
@@ -71,7 +71,7 @@ export const getByChiller = async (req, res) => {
         limit: parseInt(limit) || 50,
         date_from,
         date_to,
-      }
+      },
     );
     res.json({ success: true, data: readings });
   } catch (error) {
@@ -83,7 +83,7 @@ export const getByChiller = async (req, res) => {
 export const getLatest = async (req, res) => {
   try {
     const reading = await chillerReadingsService.getLatestReadingByChiller(
-      req.params.chillerId
+      req.params.chillerId,
     );
     if (!reading) {
       return res
@@ -101,7 +101,7 @@ export const getByDateShift = async (req, res) => {
   try {
     const readings = await chillerReadingsService.getReadingsByDateShift(
       req.params.siteId,
-      req.params.dateShift
+      req.params.dateShift,
     );
     res.json({ success: true, data: readings });
   } catch (error) {
@@ -113,7 +113,7 @@ export const getByDateShift = async (req, res) => {
 export const update = async (req, res) => {
   try {
     const existing = await chillerReadingsService.getChillerReadingById(
-      req.params.id
+      req.params.id,
     );
     if (!existing) {
       return res
@@ -123,7 +123,7 @@ export const update = async (req, res) => {
 
     const reading = await chillerReadingsService.updateChillerReading(
       req.params.id,
-      req.body
+      req.body,
     );
     res.json({ success: true, data: reading });
   } catch (error) {
@@ -135,7 +135,7 @@ export const update = async (req, res) => {
 export const remove = async (req, res) => {
   try {
     const existing = await chillerReadingsService.getChillerReadingById(
-      req.params.id
+      req.params.id,
     );
     if (!existing) {
       return res
@@ -167,7 +167,7 @@ export const getAverages = async (req, res) => {
     const averages = await chillerReadingsService.getChillerAverages(
       req.params.chillerId,
       date_from,
-      date_to
+      date_to,
     );
     res.json({ success: true, data: averages });
   } catch (error) {
@@ -176,9 +176,15 @@ export const getAverages = async (req, res) => {
   }
 };
 
+export const getAll = async (req, res) => {
+  req.params.siteId = "all";
+  return getBySite(req, res);
+};
+
 export default {
   create,
   getById,
+  getAll,
   getBySite,
   getByChiller,
   getLatest,

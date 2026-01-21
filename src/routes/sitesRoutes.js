@@ -1,6 +1,6 @@
 import express from "express";
 import sitesController from "../controllers/sitesController.js";
-import { verifyToken } from "../middleware/auth.js";
+import { verifyToken, requireRole } from "../middleware/auth.js";
 
 const router = express.Router();
 
@@ -9,14 +9,39 @@ const router = express.Router();
  * Base path: /api/sites
  */
 
-router.post("/", verifyToken, sitesController.create);
+router.post(
+  "/",
+  verifyToken,
+  requireRole(["admin", "superadmin"]),
+  sitesController.create,
+);
 router.get("/", verifyToken, sitesController.getAll);
 router.get("/:siteId", verifyToken, sitesController.getById);
-router.put("/:siteId", verifyToken, sitesController.update);
-router.delete("/:siteId", verifyToken, sitesController.remove);
+router.put(
+  "/:siteId",
+  verifyToken,
+  requireRole(["admin", "superadmin"]),
+  sitesController.update,
+);
+router.delete(
+  "/:siteId",
+  verifyToken,
+  requireRole(["admin", "superadmin"]),
+  sitesController.remove,
+);
 
 // Bulk operations
-router.post("/bulk-update", verifyToken, sitesController.bulkUpdate);
-router.post("/bulk-delete", verifyToken, sitesController.bulkRemove);
+router.post(
+  "/bulk-update",
+  verifyToken,
+  requireRole(["admin", "superadmin"]),
+  sitesController.bulkUpdate,
+);
+router.post(
+  "/bulk-delete",
+  verifyToken,
+  requireRole(["admin", "superadmin"]),
+  sitesController.bulkRemove,
+);
 
 export default router;

@@ -24,8 +24,19 @@ export const create = async (req, res) => {
 
 export const checkIn = async (req, res) => {
   try {
-    const { user_id, site_id, latitude, longitude, address, shift_id } =
-      req.body;
+    let { user_id } = req.body;
+    const { site_id, latitude, longitude, address, shift_id } = req.body;
+
+    // Force user_id from token unless admin
+    const user = req.user;
+    const isAdmin =
+      user.role === "admin" ||
+      user.role === "superadmin" ||
+      user.is_superadmin === true;
+
+    if (!isAdmin || !user_id) {
+      user_id = user.user_id || user.id;
+    }
 
     if (!user_id || !site_id) {
       return res.status(400).json({
@@ -50,13 +61,13 @@ export const checkIn = async (req, res) => {
         await attendanceLogsService.validateUserLocation(
           user_id,
           parseFloat(latitude),
-          parseFloat(longitude)
+          parseFloat(longitude),
         );
 
       // For non-WFH users, verify the selected site is in allowed sites
       if (!locationValidation.isWFH) {
         const isValidSite = locationValidation.allowedSites.some(
-          (s) => s.site_id === site_id
+          (s) => s.site_id === site_id,
         );
         if (!isValidSite) {
           return res.status(400).json({
@@ -98,12 +109,27 @@ export const checkOut = async (req, res) => {
 
     // Get existing attendance record to check for early checkout
     const existing = await attendanceLogsService.getAttendanceById(
-      req.params.id
+      req.params.id,
     );
     if (!existing) {
       return res.status(404).json({
         success: false,
         error: "Attendance record not found",
+      });
+    }
+
+    // Enforce ownership
+    const user = req.user;
+    const isAdmin =
+      user.role === "admin" ||
+      user.role === "superadmin" ||
+      user.is_superadmin === true;
+
+    // Ensure existing.user_id matches token user_id
+    if (!isAdmin && existing.user_id !== (user.user_id || user.id)) {
+      return res.status(403).json({
+        success: false,
+        error: "Unauthorized to check out for this user",
       });
     }
 
@@ -146,13 +172,27 @@ export const validateLocation = async (req, res) => {
     const { userId } = req.params;
     const { latitude, longitude } = req.query;
 
+    // Ownership check
+    const user = req.user;
+    const isAdmin =
+      user.role === "admin" ||
+      user.role === "superadmin" ||
+      user.is_superadmin === true;
+
+    if (!isAdmin && userId !== (user.user_id || user.id)) {
+      return res.status(403).json({
+        success: false,
+        error: "Unauthorized",
+      });
+    }
+
     // We allow missing lat/long to support checking WFH status first.
     // The service will handle the validation logic.
 
     const result = await attendanceLogsService.validateUserLocation(
       userId,
       latitude ? parseFloat(latitude) : null,
-      longitude ? parseFloat(longitude) : null
+      longitude ? parseFloat(longitude) : null,
     );
 
     res.json({ success: true, data: result });
@@ -165,9 +205,23 @@ export const validateLocation = async (req, res) => {
 export const getUserSites = async (req, res) => {
   try {
     const { userId } = req.params;
-    const sites = await attendanceLogsService.getUserSitesWithCoordinates(
-      userId
-    );
+
+    // Ownership check
+    const user = req.user;
+    const isAdmin =
+      user.role === "admin" ||
+      user.role === "superadmin" ||
+      user.is_superadmin === true;
+
+    if (!isAdmin && userId !== (user.user_id || user.id)) {
+      return res.status(403).json({
+        success: false,
+        error: "Unauthorized",
+      });
+    }
+
+    const sites =
+      await attendanceLogsService.getUserSitesWithCoordinates(userId);
     res.json({ success: true, data: sites });
   } catch (error) {
     console.error("Get user sites error:", error);
@@ -183,6 +237,21 @@ export const getById = async (req, res) => {
         .status(404)
         .json({ success: false, error: "Attendance log not found" });
     }
+
+    // Ownership check
+    const user = req.user;
+    const isAdmin =
+      user.role === "admin" ||
+      user.role === "superadmin" ||
+      user.is_superadmin === true;
+
+    if (!isAdmin && log.user_id !== (user.user_id || user.id)) {
+      return res.status(403).json({
+        success: false,
+        error: "Unauthorized",
+      });
+    }
+
     res.json({ success: true, data: log });
   } catch (error) {
     console.error("Get attendance log error:", error);
@@ -192,9 +261,22 @@ export const getById = async (req, res) => {
 
 export const getTodayByUser = async (req, res) => {
   try {
-    const log = await attendanceLogsService.getTodayAttendance(
-      req.params.userId
-    );
+    const { userId } = req.params;
+    // Ownership check
+    const user = req.user;
+    const isAdmin =
+      user.role === "admin" ||
+      user.role === "superadmin" ||
+      user.is_superadmin === true;
+
+    if (!isAdmin && userId !== (user.user_id || user.id)) {
+      return res.status(403).json({
+        success: false,
+        error: "Unauthorized",
+      });
+    }
+
+    const log = await attendanceLogsService.getTodayAttendance(userId);
     res.json({ success: true, data: log });
   } catch (error) {
     console.error("Get today attendance error:", error);
@@ -204,16 +286,28 @@ export const getTodayByUser = async (req, res) => {
 
 export const getByUser = async (req, res) => {
   try {
+    const { userId } = req.params;
+    // Ownership check
+    const user = req.user;
+    const isAdmin =
+      user.role === "admin" ||
+      user.role === "superadmin" ||
+      user.is_superadmin === true;
+
+    if (!isAdmin && userId !== (user.user_id || user.id)) {
+      return res.status(403).json({
+        success: false,
+        error: "Unauthorized",
+      });
+    }
+
     const { page, limit, date_from, date_to } = req.query;
-    const result = await attendanceLogsService.getAttendanceByUser(
-      req.params.userId,
-      {
-        page: parseInt(page) || 1,
-        limit: parseInt(limit) || 30,
-        date_from,
-        date_to,
-      }
-    );
+    const result = await attendanceLogsService.getAttendanceByUser(userId, {
+      page: parseInt(page) || 1,
+      limit: parseInt(limit) || 30,
+      date_from,
+      date_to,
+    });
     res.json({ success: true, ...result });
   } catch (error) {
     console.error("Get attendance error:", error);
@@ -229,7 +323,7 @@ export const getBySite = async (req, res) => {
       {
         date,
         status,
-      }
+      },
     );
     res.json({ success: true, data: logs });
   } catch (error) {
@@ -251,7 +345,7 @@ export const getReport = async (req, res) => {
     const report = await attendanceLogsService.getAttendanceReport(
       req.params.siteId,
       date_from,
-      date_to
+      date_to,
     );
     res.json({ success: true, data: report });
   } catch (error) {
@@ -273,7 +367,7 @@ export const getOverallReport = async (req, res) => {
     const report = await attendanceLogsService.getAttendanceReport(
       site_id || "all",
       date_from,
-      date_to
+      date_to,
     );
     res.json({ success: true, data: report });
   } catch (error) {
@@ -285,7 +379,7 @@ export const getOverallReport = async (req, res) => {
 export const update = async (req, res) => {
   try {
     const existing = await attendanceLogsService.getAttendanceById(
-      req.params.id
+      req.params.id,
     );
     if (!existing) {
       return res
@@ -295,7 +389,7 @@ export const update = async (req, res) => {
 
     const log = await attendanceLogsService.updateAttendanceLog(
       req.params.id,
-      req.body
+      req.body,
     );
     res.json({ success: true, data: log });
   } catch (error) {
@@ -307,7 +401,7 @@ export const update = async (req, res) => {
 export const remove = async (req, res) => {
   try {
     const existing = await attendanceLogsService.getAttendanceById(
-      req.params.id
+      req.params.id,
     );
     if (!existing) {
       return res

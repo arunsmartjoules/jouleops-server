@@ -68,6 +68,8 @@ export const updateSite = async (siteId, updateData) => {
 };
 
 export const deleteSite = async (siteId) => {
+  const { error } = await supabase.from("sites").delete().eq("site_id", siteId);
+
   if (error) throw new Error(`Failed to delete site: ${error.message}`);
   return true;
 };

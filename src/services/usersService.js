@@ -99,7 +99,7 @@ export const getAllUsers = async (options = {}) => {
 
   if (search) {
     query = query.or(
-      `name.ilike.%${search}%,email.ilike.%${search}%,employee_code.ilike.%${search}%`
+      `name.ilike.%${search}%,email.ilike.%${search}%,employee_code.ilike.%${search}%`,
     );
   }
 
@@ -137,6 +137,8 @@ export const updateUser = async (userId, updateData) => {
 };
 
 export const deleteUser = async (userId) => {
+  const { error } = await supabase.from("users").delete().eq("user_id", userId);
+
   if (error) throw new Error(`Failed to delete user: ${error.message}`);
   return true;
 };
