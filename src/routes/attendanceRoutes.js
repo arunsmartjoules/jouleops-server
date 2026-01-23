@@ -17,34 +17,33 @@ router.post("/:id/check-out", verifyToken, attendanceLogsController.checkOut);
 router.get(
   "/validate-location/:userId",
   verifyToken,
-  attendanceLogsController.validateLocation
+  attendanceLogsController.validateLocation,
 );
 
 // Get user's assigned sites with coordinates
 router.get(
   "/user-sites/:userId",
   verifyToken,
-  attendanceLogsController.getUserSites
+  attendanceLogsController.getUserSites,
 );
 
 router.get("/site/:siteId", verifyToken, attendanceLogsController.getBySite);
 router.get(
   "/site/:siteId/report",
   verifyToken,
-  attendanceLogsController.getReport
+  attendanceLogsController.getReport,
 );
 router.get(
   "/overall-report",
   verifyToken,
-  attendanceLogsController.getOverallReport
+  attendanceLogsController.getOverallReport,
 );
 router.get("/user/:userId", verifyToken, attendanceLogsController.getByUser);
 router.get(
   "/user/:userId/today",
   verifyToken,
-  attendanceLogsController.getTodayByUser
+  attendanceLogsController.getTodayByUser,
 );
-router.get("/:id", verifyToken, attendanceLogsController.getById);
 router.put("/:id", verifyToken, attendanceLogsController.update);
 router.delete("/:id", verifyToken, attendanceLogsController.remove);
 
