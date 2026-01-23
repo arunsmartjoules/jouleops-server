@@ -118,6 +118,32 @@ export const importData = async (req: MulterRequest, res: Response) => {
             const { error } = await supabase.from("sites").insert(cleanRow);
             if (error) rowError = error.message;
           }
+        } else if (type === "site-logs") {
+          const cleanRow = {
+            created_at:
+              row["Date"] || row["created_at"] || new Date().toISOString(),
+            site_id: row["Site ID"] || row["site_id"],
+            exicuter_id:
+              row["Technician"] || row["executor_id"] || row["exicuter_id"], // Support various column names
+            log_name: row["Log Name"] || row["log_name"] || "Imported Log",
+            remarks: row["Remarks"] || row["remarks"],
+            // Map common fields if present, else let them be null
+            temperature: row["Temperature"] || row["temperature"],
+            ph: row["pH"] || row["ph"],
+            tds: row["TDS"] || row["tds"],
+            rh: row["RH"] || row["rh"],
+            hardness: row["Hardness"] || row["hardness"],
+            chemical_dosing: row["Chemical Dosing"] || row["chemical_dosing"],
+            main_remarks: row["Main Remarks"] || row["main_remarks"],
+          };
+
+          if (!cleanRow.site_id) {
+            rowError = "Missing required field: Site ID";
+          } else {
+            // Note: Use 'site_logs' table directly or service if logic needed
+            const { error } = await supabase.from("site_logs").insert(cleanRow);
+            if (error) rowError = error.message;
+          }
         }
 
         if (rowError) {
