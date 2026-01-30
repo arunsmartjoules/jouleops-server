@@ -87,17 +87,31 @@ export const getComplaintsBySite = async (siteId, options = {}) => {
 
   const offset = (page - 1) * limit;
 
-  // Resolve numeric siteId to site_code if necessary,
+  // Resolve numeric siteId or UUID to site_code if necessary,
   // as complaints table uses site_code in its site_id column
   let targetSiteId = siteId;
-  if (!isNaN(parseInt(siteId)) && siteId.length < 10) {
-    const { data: site } = await supabase
-      .from("sites")
-      .select("site_code")
-      .eq("site_id", siteId)
-      .single();
-    if (site?.site_code) {
-      targetSiteId = site.site_code;
+  const uuidRegex =
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+  if (siteId !== "all") {
+    if (uuidRegex.test(siteId)) {
+      const { data: site } = await supabase
+        .from("sites")
+        .select("site_code")
+        .eq("id", siteId)
+        .single();
+      if (site?.site_code) {
+        targetSiteId = site.site_code;
+      }
+    } else if (!isNaN(parseInt(siteId)) && String(siteId).length < 10) {
+      const { data: site } = await supabase
+        .from("sites")
+        .select("site_code")
+        .eq("site_id", siteId)
+        .single();
+      if (site?.site_code) {
+        targetSiteId = site.site_code;
+      }
     }
   }
 

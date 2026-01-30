@@ -2,6 +2,31 @@ import supabase from "../config/supabase.js";
 import { formatPMInstanceForInsert } from "../models/pmInstanceModel.js";
 
 export const createPMInstance = async (data) => {
+  // Check if site_id is provided
+  if (data.site_id) {
+    // Simple UUID validation regex
+    const uuidRegex =
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+    if (!uuidRegex.test(data.site_id)) {
+      // It's not a UUID, assume it's a site_code and look it up
+      const { data: siteData, error: siteError } = await supabase
+        .from("sites")
+        .select("site_id")
+        .eq("site_code", data.site_id)
+        .single();
+
+      if (siteError || !siteData) {
+        throw new Error(
+          `Site not found for code: ${data.site_id}. Please ensure the site code is correct.`,
+        );
+      }
+
+      // Replace site_code with the actual UUID
+      data.site_id = siteData.site_id;
+    }
+  }
+
   const formattedData = formatPMInstanceForInsert(data);
 
   const { data: result, error } = await supabase
@@ -137,7 +162,7 @@ export const updatePMInstance = async (instanceId, updateData) => {
 export const updatePMInstanceStatus = async (
   instanceId,
   status,
-  userId = null
+  userId = null,
 ) => {
   const updateData = {
     status,

@@ -17,10 +17,26 @@ export const getLogsBySite = async (siteId, options = {}) => {
   const { page = 1, limit = 20, log_name = null } = options;
   const offset = (page - 1) * limit;
 
+  let targetSiteId = siteId;
+  const uuidRegex =
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+  if (siteId !== "all" && uuidRegex.test(siteId)) {
+    const { data: site } = await supabase
+      .from("sites")
+      .select("site_code")
+      .eq("id", siteId)
+      .single();
+
+    if (site?.site_code) {
+      targetSiteId = site.site_code;
+    }
+  }
+
   let query = supabase.from("site_logs").select("*", { count: "exact" });
 
-  if (siteId !== "all") {
-    query = query.eq("site_id", siteId);
+  if (targetSiteId !== "all") {
+    query = query.eq("site_id", targetSiteId);
   }
 
   if (log_name) {
