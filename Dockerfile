@@ -16,6 +16,7 @@ COPY services/sitelogs/package.json services/sitelogs/
 COPY services/pm/package.json services/pm/
 COPY services/whatsapp/package.json services/whatsapp/
 COPY services/tickets/package.json services/tickets/
+COPY services/attendance/package.json services/attendance/
 
 RUN bun install --frozen-lockfile
 
@@ -23,8 +24,7 @@ RUN bun install --frozen-lockfile
 FROM deps AS builder
 ARG SERVICE_NAME
 COPY . .
-# We don't need a full build step for Bun usually, as it runs TS directly,
-# but if you use 'turbo build', run it here.
+# If you have a build step, uncomment this:
 # RUN bunx turbo run build --filter=${SERVICE_NAME}
 
 # Stage 3: Runner
@@ -35,7 +35,7 @@ COPY --from=builder /app /app
 # Set workdir to the specific service
 WORKDIR /app/${SERVICE_NAME}
 
-# Default port
+# Default ports (mapping to your config)
 EXPOSE 3424
 
 CMD ["bun", "run", "start"]

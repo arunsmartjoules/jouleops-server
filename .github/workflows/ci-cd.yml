@@ -43,11 +43,41 @@ jobs:
               - 'shared/**'
               - 'package.json'
               - 'Dockerfile'
+            attendance:
+              - 'services/attendance/**'
+              - 'shared/**'
+              - 'package.json'
+              - 'Dockerfile'
+            sitelogs:
+              - 'services/sitelogs/**'
+              - 'shared/**'
+              - 'package.json'
+              - 'Dockerfile'
+            pm:
+              - 'services/pm/**'
+              - 'shared/**'
+              - 'package.json'
+              - 'Dockerfile'
+            whatsapp:
+              - 'services/whatsapp/**'
+              - 'shared/**'
+              - 'package.json'
+              - 'Dockerfile'
+            tickets:
+              - 'services/tickets/**'
+              - 'shared/**'
+              - 'package.json'
+              - 'Dockerfile'
+            notifications:
+              - 'services/notifications/**'
+              - 'shared/**'
+              - 'package.json'
+              - 'Dockerfile'
 
   # Build job for all changed services
   build:
     needs: changes
-    if: ${{ needs.changes.outputs.services != '[]' && needs.changes.outputs.services != '' }}
+    if: needs.changes.outputs.services != '[]' && needs.changes.outputs.services != ''
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -91,7 +121,7 @@ jobs:
         run: bun install
 
       - name: Run Tests
-        run: bunx turbo run test
+        run: bunx turbo run test --continue
         env:
           DATABASE_URL: postgresql://localhost
           JWT_SECRET: test-secret
