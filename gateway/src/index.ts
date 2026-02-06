@@ -84,6 +84,10 @@ app.use(
   "/api/complaints",
   createProxyMiddleware({ target: SERVICES.tickets, changeOrigin: true }),
 );
+app.use(
+  "/api/complaint-categories",
+  createProxyMiddleware({ target: SERVICES.tickets, changeOrigin: true }),
+);
 
 // Attendance Service Routes
 app.use(
@@ -138,6 +142,10 @@ app.use(
 );
 app.use(
   "/api/pm-instances",
+  createProxyMiddleware({ target: SERVICES.pm, changeOrigin: true }),
+);
+app.use(
+  "/api/pm-checklist",
   createProxyMiddleware({ target: SERVICES.pm, changeOrigin: true }),
 );
 app.use(

@@ -42,6 +42,7 @@ app.get("/health", (_req: Request, res: Response) => {
 
 // Routes
 app.use("/api/pm-checklists", pmChecklistRoutes);
+app.use("/api/pm-checklist", pmChecklistRoutes);
 app.use("/api/pm-instances", pmInstancesRoutes);
 app.use("/api/tasks", tasksRoutes);
 
