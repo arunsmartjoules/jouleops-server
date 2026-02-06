@@ -113,6 +113,10 @@ jobs:
   # Test Job
   test:
     runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: postgresql://localhost
+      JWT_SECRET: test-secret
+      SUPABASE_URL: https://test.supabase.co
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
@@ -122,7 +126,3 @@ jobs:
 
       - name: Run Tests
         run: bunx turbo run test --continue
-        env:
-          DATABASE_URL: postgresql://localhost
-          JWT_SECRET: test-secret
-          SUPABASE_URL: https://test.supabase.co

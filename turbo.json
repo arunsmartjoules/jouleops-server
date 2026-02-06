@@ -19,7 +19,12 @@
             ]
         },
         "test": {
-            "cache": false
+            "cache": false,
+            "env": [
+                "DATABASE_URL",
+                "SUPABASE_URL",
+                "JWT_SECRET"
+            ]
         },
         "lint": {
             "cache": true
