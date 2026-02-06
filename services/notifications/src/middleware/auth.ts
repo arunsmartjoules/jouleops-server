@@ -1,0 +1,118 @@
+import jwt from "jsonwebtoken";
+import type { Request, Response, NextFunction } from "express";
+
+export interface AuthRequest extends Request {
+  user?: {
+    user_id: string;
+    id?: string;
+    role: string;
+    email: string;
+    is_admin?: boolean;
+    is_superadmin?: boolean;
+    jti?: string;
+  };
+}
+
+/**
+ * Verify JWT token and attach user to request
+ */
+export const verifyToken = async (
+  req: AuthRequest,
+  res: Response,
+  next: NextFunction,
+) => {
+  try {
+    const authHeader = req.headers.authorization;
+
+    if (!authHeader) {
+      return res.status(401).json({
+        success: false,
+        error: "No token provided",
+      });
+    }
+
+    const token = authHeader.split(" ")[1]; // Bearer TOKEN
+
+    if (!token) {
+      return res.status(401).json({
+        success: false,
+        error: "Invalid token format",
+      });
+    }
+
+    const secret = process.env.JWT_SECRET;
+    if (!secret) {
+      throw new Error("JWT_SECRET is not defined");
+    }
+
+    const decoded = jwt.verify(token, secret) as any;
+
+    // Ensure user_id and id are consistent (backward compatibility)
+    if (!decoded.user_id && decoded.id) decoded.user_id = decoded.id;
+    if (!decoded.id && decoded.user_id) decoded.id = decoded.user_id;
+
+    req.user = decoded;
+    next();
+  } catch (error: any) {
+    console.error("JWT Verification Error:", error.message, error.name);
+
+    if (error.name === "TokenExpiredError") {
+      return res.status(401).json({
+        success: false,
+        error: "Token expired",
+      });
+    }
+
+    return res.status(401).json({
+      success: false,
+      error: "Invalid token",
+    });
+  }
+};
+
+/**
+ * Check if user has specific role(s)
+ */
+export const requireRole = (roles: string[] | string) => {
+  return (req: AuthRequest, res: Response, next: NextFunction) => {
+    if (!req.user) {
+      return res.status(401).json({
+        success: false,
+        error: "Authentication required",
+      });
+    }
+
+    // Superadmins have access to everything
+    if (req.user.is_superadmin) {
+      return next();
+    }
+
+    // Normalize user role
+    const userRole = req.user.role ? req.user.role.toLowerCase() : "";
+
+    // Normalize allowed roles
+    const allowedRoles = (Array.isArray(roles) ? roles : [roles]).map((r) =>
+      r.toLowerCase(),
+    );
+
+    if (!allowedRoles.includes(userRole)) {
+      return res.status(403).json({
+        success: false,
+        error: "Insufficient permissions",
+      });
+    }
+
+    next();
+  };
+};
+
+/**
+ * Require admin role
+ */
+export const requireAdmin = requireRole(["admin", "superadmin"]);
+
+export default {
+  verifyToken,
+  requireRole,
+  requireAdmin,
+};

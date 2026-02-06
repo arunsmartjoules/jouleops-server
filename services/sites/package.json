@@ -1,0 +1,20 @@
+{
+    "name": "@smartops/sites",
+    "version": "1.0.0",
+    "private": true,
+    "type": "module",
+    "main": "src/index.ts",
+    "scripts": {
+        "dev": "bun --hot src/index.ts",
+        "start": "bun src/index.ts",
+        "build": "bun build ./src/index.ts --outdir ./dist",
+        "test": "bun test"
+    },
+    "dependencies": {
+        "@smartops/shared": "workspace:*"
+    },
+    "devDependencies": {
+        "@types/supertest": "^6.0.3",
+        "supertest": "^7.2.2"
+    }
+}

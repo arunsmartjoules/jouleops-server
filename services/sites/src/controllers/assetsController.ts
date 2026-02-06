@@ -1,0 +1,263 @@
+/**
+ * Assets Controller
+ *
+ * Uses direct PostgreSQL via repositories.
+ * Standardized API responses via apiResponse helpers.
+ */
+
+import assetsRepository from "../repositories/assetsRepository";
+import type { Request, Response } from "express";
+import {
+  sendSuccess,
+  sendCreated,
+  sendError,
+  sendNotFound,
+  sendServerError,
+} from "@smartops/shared";
+
+const VALID_STATUSES = ["Active", "Under Maintenance", "Inactive", "Disposed"];
+
+export const create = async (req: Request, res: Response) => {
+  try {
+    const asset = await assetsRepository.createAsset(req.body);
+    return sendCreated(res, asset);
+  } catch (error: any) {
+    console.error("Create asset error:", error);
+    return sendServerError(res, error);
+  }
+};
+
+export const getById = async (req: Request, res: Response) => {
+  try {
+    const { assetId } = req.params;
+    if (!assetId) {
+      return sendError(res, "Asset ID is required");
+    }
+    const asset = await assetsRepository.getAssetById(assetId);
+    if (!asset) {
+      return sendNotFound(res, "Asset");
+    }
+    return sendSuccess(res, asset);
+  } catch (error: any) {
+    console.error("Get asset error:", error);
+    return sendServerError(res, error);
+  }
+};
+
+export const getAll = async (req: Request, res: Response) => {
+  try {
+    const { page, limit, asset_type, status, floor, sortBy, sortOrder } =
+      req.query;
+    const result = await assetsRepository.getAssetsBySite("all", {
+      page: parseInt(page as string) || 1,
+      limit: parseInt(limit as string) || 50,
+      asset_type: asset_type as string | undefined,
+      status: status as string | undefined,
+      floor: floor as string | undefined,
+      sortBy: sortBy as string | undefined,
+      sortOrder: sortOrder as "asc" | "desc" | undefined,
+    });
+    return sendSuccess(res, result.data, { pagination: result.pagination });
+  } catch (error: any) {
+    console.error("Get all assets error:", error);
+    return sendServerError(res, error);
+  }
+};
+
+export const getBySite = async (req: Request, res: Response) => {
+  try {
+    const { siteId } = req.params;
+    if (!siteId) {
+      return sendError(res, "Site ID is required");
+    }
+    const { page, limit, asset_type, status, floor, sortBy, sortOrder } =
+      req.query;
+    const result = await assetsRepository.getAssetsBySite(siteId, {
+      page: parseInt(page as string) || 1,
+      limit: parseInt(limit as string) || 50,
+      asset_type: asset_type as string | undefined,
+      status: status as string | undefined,
+      floor: floor as string | undefined,
+      sortBy: sortBy as string | undefined,
+      sortOrder: sortOrder as "asc" | "desc" | undefined,
+    });
+    return sendSuccess(res, result.data, { pagination: result.pagination });
+  } catch (error: any) {
+    console.error("Get assets error:", error);
+    return sendServerError(res, error);
+  }
+};
+
+export const getByType = async (req: Request, res: Response) => {
+  try {
+    const { siteId, assetType } = req.params;
+    if (!siteId || !assetType) {
+      return sendError(res, "Site ID and Asset Type are required");
+    }
+    const assets = await assetsRepository.getAssetsByType(siteId, assetType);
+    return sendSuccess(res, assets);
+  } catch (error: any) {
+    console.error("Get assets error:", error);
+    return sendServerError(res, error);
+  }
+};
+
+export const getByLocation = async (req: Request, res: Response) => {
+  try {
+    const { siteId, location } = req.params;
+    if (!siteId || !location) {
+      return sendError(res, "Site ID and Location are required");
+    }
+    const assets = await assetsRepository.getAssetsByLocation(siteId, location);
+    return sendSuccess(res, assets);
+  } catch (error: any) {
+    console.error("Get assets error:", error);
+    return sendServerError(res, error);
+  }
+};
+
+export const search = async (req: Request, res: Response) => {
+  try {
+    const { siteId } = req.params;
+    if (!siteId) {
+      return sendError(res, "Site ID is required");
+    }
+    const { q } = req.query;
+    if (!q) {
+      return sendError(res, "Search query (q) is required");
+    }
+
+    const assets = await assetsRepository.searchAssets(siteId, q as string);
+    return sendSuccess(res, assets);
+  } catch (error: any) {
+    console.error("Search assets error:", error);
+    return sendServerError(res, error);
+  }
+};
+
+export const getUnderWarranty = async (req: Request, res: Response) => {
+  try {
+    const { siteId } = req.params;
+    if (!siteId) {
+      return sendError(res, "Site ID is required");
+    }
+    const assets = await assetsRepository.getAssetsUnderWarranty(siteId);
+    return sendSuccess(res, assets);
+  } catch (error: any) {
+    console.error("Get assets error:", error);
+    return sendServerError(res, error);
+  }
+};
+
+export const getWarrantyExpiring = async (req: Request, res: Response) => {
+  try {
+    const { siteId } = req.params;
+    if (!siteId) {
+      return sendError(res, "Site ID is required");
+    }
+    const { days } = req.query;
+    const assets = await assetsRepository.getAssetsWarrantyExpiring(
+      siteId,
+      parseInt(days as string) || 30,
+    );
+    return sendSuccess(res, assets);
+  } catch (error: any) {
+    console.error("Get assets error:", error);
+    return sendServerError(res, error);
+  }
+};
+
+export const update = async (req: Request, res: Response) => {
+  try {
+    const { assetId } = req.params;
+    if (!assetId) {
+      return sendError(res, "Asset ID is required");
+    }
+    const existing = await assetsRepository.getAssetById(assetId);
+    if (!existing) {
+      return sendNotFound(res, "Asset");
+    }
+
+    const asset = await assetsRepository.updateAsset(assetId, req.body);
+    return sendSuccess(res, asset);
+  } catch (error: any) {
+    console.error("Update asset error:", error);
+    return sendServerError(res, error);
+  }
+};
+
+export const updateStatus = async (req: Request, res: Response) => {
+  try {
+    const { assetId } = req.params;
+    if (!assetId) {
+      return sendError(res, "Asset ID is required");
+    }
+    const { status } = req.body;
+    if (!status || !VALID_STATUSES.includes(status)) {
+      return sendError(
+        res,
+        `status must be one of: ${VALID_STATUSES.join(", ")}`,
+      );
+    }
+
+    const existing = await assetsRepository.getAssetById(assetId);
+    if (!existing) {
+      return sendNotFound(res, "Asset");
+    }
+
+    const asset = await assetsRepository.updateAssetStatus(assetId, status);
+    return sendSuccess(res, asset);
+  } catch (error: any) {
+    console.error("Update asset status error:", error);
+    return sendServerError(res, error);
+  }
+};
+
+export const remove = async (req: Request, res: Response) => {
+  try {
+    const { assetId } = req.params;
+    if (!assetId) {
+      return sendError(res, "Asset ID is required");
+    }
+    const existing = await assetsRepository.getAssetById(assetId);
+    if (!existing) {
+      return sendNotFound(res, "Asset");
+    }
+
+    await assetsRepository.deleteAsset(assetId);
+    return sendSuccess(res, null, { message: "Asset deleted successfully" });
+  } catch (error: any) {
+    console.error("Delete asset error:", error);
+    return sendServerError(res, error);
+  }
+};
+
+export const getStats = async (req: Request, res: Response) => {
+  try {
+    const { siteId } = req.params;
+    if (!siteId) {
+      return sendError(res, "Site ID is required");
+    }
+    const stats = await assetsRepository.getAssetStats(siteId);
+    return sendSuccess(res, stats);
+  } catch (error: any) {
+    console.error("Get stats error:", error);
+    return sendServerError(res, error);
+  }
+};
+
+export default {
+  create,
+  getById,
+  getAll,
+  getBySite,
+  getByType,
+  getByLocation,
+  search,
+  getUnderWarranty,
+  getWarrantyExpiring,
+  update,
+  updateStatus,
+  remove,
+  getStats,
+};

@@ -1,12 +1,18 @@
 {
   "name": "smartops-backend",
-  "module": "index.ts",
-  "type": "module",
   "private": true,
+  "workspaces": [
+    "gateway",
+    "services/*",
+    "shared"
+  ],
   "scripts": {
-    "dev": "bun --hot src/index.ts",
-    "start": "bun src/index.ts",
-    "test": "bun test"
+    "dev": "turbo run dev",
+    "dev:gateway": "bun --cwd gateway run dev",
+    "build": "turbo run build",
+    "start": "turbo run start",
+    "test": "turbo run test",
+    "lint": "turbo run lint"
   },
   "devDependencies": {
     "@types/bcryptjs": "^3.0.0",
@@ -16,13 +22,14 @@
     "@types/jsonwebtoken": "^9.0.10",
     "@types/morgan": "^1.9.10",
     "@types/node-cron": "^3.0.11",
-    "@types/uuid": "^11.0.0"
+    "@types/pg": "^8.16.0",
+    "@types/uuid": "^11.0.0",
+    "turbo": "^2.0.0"
   },
   "peerDependencies": {
     "typescript": "^5"
   },
   "dependencies": {
-    "@supabase/supabase-js": "^2.89.0",
     "@types/compression": "^1.8.1",
     "@types/multer": "^2.0.0",
     "bcryptjs": "^3.0.3",
@@ -33,10 +40,13 @@
     "express": "^5.2.1",
     "express-rate-limit": "^8.2.1",
     "helmet": "^8.1.0",
+    "http-proxy-middleware": "^3.0.5",
+    "ioredis": "^5.9.2",
     "jsonwebtoken": "^9.0.3",
     "morgan": "^1.10.1",
     "multer": "^2.0.2",
     "node-cron": "^4.2.1",
+    "pg": "^8.18.0",
     "resend": "^6.7.0",
     "uuid": "^13.0.0",
     "winston": "^3.19.0",

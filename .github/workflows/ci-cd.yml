@@ -1,0 +1,98 @@
+name: Microservices CI/CD
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  # Job to detect which services have changed
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      services: ${{ steps.filter.outputs.changes }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            gateway:
+              - 'gateway/**'
+              - 'shared/**'
+              - 'package.json'
+              - 'Dockerfile'
+            rbac:
+              - 'services/rbac/**'
+              - 'shared/**'
+              - 'package.json'
+              - 'Dockerfile'
+            profiles:
+              - 'services/profiles/**'
+              - 'shared/**'
+              - 'package.json'
+              - 'Dockerfile'
+            sites:
+              - 'services/sites/**'
+              - 'shared/**'
+              - 'package.json'
+              - 'Dockerfile'
+            email:
+              - 'services/email/**'
+              - 'shared/**'
+              - 'package.json'
+              - 'Dockerfile'
+
+  # Build job for all changed services
+  build:
+    needs: changes
+    if: ${{ needs.changes.outputs.services != '[]' && needs.changes.outputs.services != '' }}
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service: ${{ fromJSON(needs.changes.outputs.services) }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set Service Path
+        id: path
+        run: |
+          if [ "${{ matrix.service }}" == "gateway" ]; then
+            echo "path=gateway" >> $GITHUB_OUTPUT
+          else
+            echo "path=services/${{ matrix.service }}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker Image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile
+          build-args: |
+            SERVICE_NAME=${{ steps.path.outputs.path }}
+          push: false # Set to true and add tags/auth for production
+          tags: smartops-${{ matrix.service }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # Test Job
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+
+      - name: Install dependencies
+        run: bun install
+
+      - name: Run Tests
+        run: bunx turbo run test
+        env:
+          DATABASE_URL: postgresql://localhost
+          JWT_SECRET: test-secret
+          SUPABASE_URL: https://test.supabase.co
