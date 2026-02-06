@@ -4,7 +4,7 @@ WORKDIR /app
 
 # Stage 1: Dependencies
 FROM base AS deps
-COPY package.json bun.lockb ./
+COPY package.json bun.lock ./
 COPY shared/package.json shared/
 COPY gateway/package.json gateway/
 COPY services/rbac/package.json services/rbac/
