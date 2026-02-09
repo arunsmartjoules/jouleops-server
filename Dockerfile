@@ -10,14 +10,11 @@ COPY shared/package.json shared/
 COPY gateway/package.json gateway/
 COPY services/rbac/package.json services/rbac/
 COPY services/profiles/package.json services/profiles/
-COPY services/sites/package.json services/sites/
-COPY services/email/package.json services/email/
-COPY services/notifications/package.json services/notifications/
 COPY services/sitelogs/package.json services/sitelogs/
 COPY services/pm/package.json services/pm/
-COPY services/whatsapp/package.json services/whatsapp/
 COPY services/tickets/package.json services/tickets/
 COPY services/attendance/package.json services/attendance/
+COPY services/utility/package.json services/utility/
 
 RUN bun install --frozen-lockfile
 
@@ -37,6 +34,7 @@ COPY --from=builder /app /app
 WORKDIR /app/${SERVICE_NAME}
 
 # Default ports (mapping to your config)
-EXPOSE 3424
+# Expose all possible microservice ports
+EXPOSE 3420 3421 3422 3423 3424 3425 3426 3427
 
 CMD ["bun", "run", "start"]
