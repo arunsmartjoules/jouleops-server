@@ -57,22 +57,6 @@
         "@smartops/shared": "workspace:*",
       },
     },
-    "services/email": {
-      "name": "@smartops/email",
-      "version": "1.0.0",
-      "dependencies": {
-        "@smartops/shared": "workspace:*",
-        "resend": "^3.2.0",
-      },
-    },
-    "services/notifications": {
-      "name": "@smartops/notifications",
-      "version": "1.0.0",
-      "dependencies": {
-        "@smartops/shared": "workspace:*",
-        "node-cron": "^3.0.3",
-      },
-    },
     "services/pm": {
       "name": "@smartops/pm",
       "version": "1.0.0",
@@ -109,17 +93,6 @@
         "@smartops/shared": "workspace:*",
       },
     },
-    "services/sites": {
-      "name": "@smartops/sites",
-      "version": "1.0.0",
-      "dependencies": {
-        "@smartops/shared": "workspace:*",
-      },
-      "devDependencies": {
-        "@types/supertest": "^6.0.3",
-        "supertest": "^7.2.2",
-      },
-    },
     "services/tickets": {
       "name": "@smartops/tickets",
       "version": "1.0.0",
@@ -127,11 +100,13 @@
         "@smartops/shared": "workspace:*",
       },
     },
-    "services/whatsapp": {
-      "name": "@smartops/whatsapp",
+    "services/utility": {
+      "name": "@smartops/utility",
       "version": "1.0.0",
       "dependencies": {
         "@smartops/shared": "workspace:*",
+        "node-cron": "^3.0.3",
+        "resend": "^3.2.0",
       },
     },
     "shared": {
@@ -162,11 +137,7 @@
 
     "@smartops/attendance": ["@smartops/attendance@workspace:services/attendance"],
 
-    "@smartops/email": ["@smartops/email@workspace:services/email"],
-
     "@smartops/gateway": ["@smartops/gateway@workspace:gateway"],
-
-    "@smartops/notifications": ["@smartops/notifications@workspace:services/notifications"],
 
     "@smartops/pm": ["@smartops/pm@workspace:services/pm"],
 
@@ -178,11 +149,9 @@
 
     "@smartops/sitelogs": ["@smartops/sitelogs@workspace:services/sitelogs"],
 
-    "@smartops/sites": ["@smartops/sites@workspace:services/sites"],
-
     "@smartops/tickets": ["@smartops/tickets@workspace:services/tickets"],
 
-    "@smartops/whatsapp": ["@smartops/whatsapp@workspace:services/whatsapp"],
+    "@smartops/utility": ["@smartops/utility@workspace:services/utility"],
 
     "@so-ric/colorspace": ["@so-ric/colorspace@1.1.6", "", { "dependencies": { "color": "^5.0.2", "text-hex": "1.0.x" } }, "sha512-/KiKkpHNOBgkFJwu9sh48LkHSMYGyuTcSFK/qMBdnOAlrRJzRSXAOFB5qwzaVQuDl8wAvHVMkaASQDReTahxuw=="],
 
@@ -754,13 +723,13 @@
 
     "zod": ["zod@4.3.5", "", {}, "sha512-k7Nwx6vuWx1IJ9Bjuf4Zt1PEllcwe7cls3VNzm4CQ1/hgtFUK2bRNG3rvnpPUhFjmqJKAKtjV576KnUkHocg/g=="],
 
-    "@smartops/email/resend": ["resend@3.5.0", "", { "dependencies": { "@react-email/render": "0.0.16" } }, "sha512-bKu4LhXSecP6krvhfDzyDESApYdNfjirD5kykkT1xO0Cj9TKSiGh5Void4pGTs3Am+inSnp4dg0B5XzdwHBJOQ=="],
-
-    "@smartops/notifications/node-cron": ["node-cron@3.0.3", "", { "dependencies": { "uuid": "8.3.2" } }, "sha512-dOal67//nohNgYWb+nWmg5dkFdIwDm8EpeGYMekPMrngV3637lqnX0lbUcCtgibHTz6SEz7DAIjKvKDFYCnO1A=="],
-
     "@smartops/rbac/@types/bcryptjs": ["@types/bcryptjs@2.4.6", "", {}, "sha512-9xlo6R2qDs5uixm0bcIqCeMCE6HiQsIyel9KQySStiyqNl2tnj2mP3DX1Nf56MD6KMenNNlBBsy3LJ7gUEQPXQ=="],
 
     "@smartops/rbac/bcryptjs": ["bcryptjs@2.4.3", "", {}, "sha512-V/Hy/X9Vt7f3BbPJEi8BdVFMByHi+jNXrYkW3huaybV/kQ0KJg0Y6PkEMbn+zeT+i+SiKZ/HMqJGIIt4LZDqNQ=="],
+
+    "@smartops/utility/node-cron": ["node-cron@3.0.3", "", { "dependencies": { "uuid": "8.3.2" } }, "sha512-dOal67//nohNgYWb+nWmg5dkFdIwDm8EpeGYMekPMrngV3637lqnX0lbUcCtgibHTz6SEz7DAIjKvKDFYCnO1A=="],
+
+    "@smartops/utility/resend": ["resend@3.5.0", "", { "dependencies": { "@react-email/render": "0.0.16" } }, "sha512-bKu4LhXSecP6krvhfDzyDESApYdNfjirD5kykkT1xO0Cj9TKSiGh5Void4pGTs3Am+inSnp4dg0B5XzdwHBJOQ=="],
 
     "accepts/negotiator": ["negotiator@1.0.0", "", {}, "sha512-8Ofs/AUQh8MaEcrlq5xOX0CQ9ypTF5dl78mjlMNfOK08fzpgTHQRQPBxcPlEtIw0yRpws+Zo/3r+5WRby7u3Gg=="],
 
@@ -806,7 +775,7 @@
 
     "wrap-ansi-cjs/strip-ansi": ["strip-ansi@6.0.1", "", { "dependencies": { "ansi-regex": "^5.0.1" } }, "sha512-Y38VPSHcqkFrCpFnQ9vuSXmquuv5oXOKpGeT6aGrr3o3Gc9AlVa6JBfUSOCnbxGGZF+/0ooI7KrPuUSztUdU5A=="],
 
-    "@smartops/notifications/node-cron/uuid": ["uuid@8.3.2", "", { "bin": { "uuid": "dist/bin/uuid" } }, "sha512-+NYs2QeMWy+GWFOEm9xnn6HCDp0l7QBD7ml8zLUmJ+93Q5NF0NocErnwkTkXVFNiX3/fpC6afS8Dhb/gz7R7eg=="],
+    "@smartops/utility/node-cron/uuid": ["uuid@8.3.2", "", { "bin": { "uuid": "dist/bin/uuid" } }, "sha512-+NYs2QeMWy+GWFOEm9xnn6HCDp0l7QBD7ml8zLUmJ+93Q5NF0NocErnwkTkXVFNiX3/fpC6afS8Dhb/gz7R7eg=="],
 
     "form-data/mime-types/mime-db": ["mime-db@1.52.0", "", {}, "sha512-sPU4uV7dYlvtWJxwwxHD0PuihVNiE7TyAbQ5SWxDCB9mUYvOgroQOwYQQOKPJ8CIbE+1ETVlOoK1UC2nU3gYvg=="],
 
