@@ -27,11 +27,7 @@ const SERVICES = {
   pm: process.env.PM_SERVICE_URL || "http://localhost:3424",
   rbac: process.env.RBAC_SERVICE_URL || "http://localhost:3425",
   profiles: process.env.PROFILES_SERVICE_URL || "http://localhost:3426",
-  sites: process.env.SITES_SERVICE_URL || "http://localhost:3427",
-  whatsapp: process.env.WHATSAPP_SERVICE_URL || "http://localhost:3428",
-  notifications:
-    process.env.NOTIFICATIONS_SERVICE_URL || "http://localhost:3429",
-  email: process.env.EMAIL_SERVICE_URL || "http://localhost:3430",
+  utility: process.env.UTILITY_SERVICE_URL || "http://localhost:3428",
 };
 
 const app = express();
@@ -58,7 +54,15 @@ app.get("/health", (_req: Request, res: Response) => {
     success: true,
     gateway: "online",
     timestamp: new Date().toISOString(),
-    services: Object.keys(SERVICES),
+    services: [
+      "tickets",
+      "attendance",
+      "sitelogs",
+      "pm",
+      "rbac",
+      "profiles",
+      "utility",
+    ],
   });
 });
 
@@ -95,7 +99,7 @@ app.use(
   createProxyMiddleware({ target: SERVICES.attendance, changeOrigin: true }),
 );
 
-// RBAC Service Routes
+// RBAC Service Routes (Auth, Admin, Site Users, Sites, Assets)
 app.use(
   "/api/auth",
   createProxyMiddleware({ target: SERVICES.rbac, changeOrigin: true }),
@@ -108,21 +112,19 @@ app.use(
   "/api/site-users",
   createProxyMiddleware({ target: SERVICES.rbac, changeOrigin: true }),
 );
+app.use(
+  "/api/sites",
+  createProxyMiddleware({ target: SERVICES.rbac, changeOrigin: true }),
+);
+app.use(
+  "/api/assets",
+  createProxyMiddleware({ target: SERVICES.rbac, changeOrigin: true }),
+);
 
 // Profiles Service Routes
 app.use(
   "/api/users",
   createProxyMiddleware({ target: SERVICES.profiles, changeOrigin: true }),
-);
-
-// Sites Service Routes
-app.use(
-  "/api/sites",
-  createProxyMiddleware({ target: SERVICES.sites, changeOrigin: true }),
-);
-app.use(
-  "/api/assets",
-  createProxyMiddleware({ target: SERVICES.sites, changeOrigin: true }),
 );
 
 // SiteLogs Service Routes
@@ -153,22 +155,18 @@ app.use(
   createProxyMiddleware({ target: SERVICES.pm, changeOrigin: true }),
 );
 
-// WhatsApp Service Routes
+// Utility Service Routes (WhatsApp, Notifications, Email)
 app.use(
   "/api/whatsapp",
-  createProxyMiddleware({ target: SERVICES.whatsapp, changeOrigin: true }),
+  createProxyMiddleware({ target: SERVICES.utility, changeOrigin: true }),
 );
-
-// Notifications Service Routes
 app.use(
   "/api/notifications",
-  createProxyMiddleware({ target: SERVICES.notifications, changeOrigin: true }),
+  createProxyMiddleware({ target: SERVICES.utility, changeOrigin: true }),
 );
-
-// Email Service Routes
 app.use(
   "/api/email",
-  createProxyMiddleware({ target: SERVICES.email, changeOrigin: true }),
+  createProxyMiddleware({ target: SERVICES.utility, changeOrigin: true }),
 );
 
 // =============================================================================

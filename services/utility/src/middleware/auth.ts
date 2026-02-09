@@ -111,8 +111,29 @@ export const requireRole = (roles: string[] | string) => {
  */
 export const requireAdmin = requireRole(["admin", "superadmin"]);
 
+/**
+ * Simple API Key verification for service-to-service comms
+ */
+export const verifyApiKey = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
+  const apiKey = req.headers["x-api-key"];
+  const validKey = process.env.INTERNAL_API_KEY || "smartops-internal-key";
+
+  if (!apiKey || apiKey !== validKey) {
+    return res.status(401).json({
+      success: false,
+      error: "Invalid or missing API Key",
+    });
+  }
+  next();
+};
+
 export default {
   verifyToken,
+  verifyApiKey,
   requireRole,
   requireAdmin,
 };

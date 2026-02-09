@@ -1,5 +1,6 @@
-# Use official Bun image
-FROM oven/bun:1.2-slim AS base
+# Use official Node image and install Bun
+FROM node:latest AS base
+RUN npm install -g bun@1.2.21
 WORKDIR /app
 
 # Stage 1: Dependencies

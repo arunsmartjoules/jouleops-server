@@ -9,16 +9,13 @@ The system is split into multiple specialized services, coordinated by an API Ga
 - **Gateway:** Entry point for all requests, handling routing and initial authentication.
 - **Shared:** Common utilities, database clients, middleware, and types used across all services.
 - **Services:**
-  - `rbac`: Authentication, Roles, and Permissions.
+  - `rbac`: Authentication, Roles, Permissions, and **Sites/Assets** management.
   - `profiles`: User information and profiles.
-  - `sites`: Site and asset management.
+  - `utility`: Consolidated messaging service (**Email, WhatsApp, Notifications**).
   - `tickets`: Complaints and category management.
   - `attendance`: Attendance tracking.
   - `pm`: Preventive Maintenance (checklists, tasks).
   - `sitelogs`: Performance logs and chiller readings.
-  - `notifications`: Push and in-app notifications.
-  - `email`: Transactional email service (Resend).
-  - `whatsapp`: WhatsApp integration.
 
 ## 🚀 Getting Started
 

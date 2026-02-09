@@ -8,7 +8,7 @@
     "shared"
   ],
   "scripts": {
-    "dev": "turbo run dev",
+    "dev": "turbo run dev --concurrency=15",
     "dev:gateway": "bun --cwd gateway run dev",
     "build": "turbo run build",
     "start": "turbo run start",

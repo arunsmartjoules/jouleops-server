@@ -9,23 +9,44 @@ services:
 
   # API Gateway
   gateway:
+    env_file: .env.local
     build:
       context: .
       dockerfile: Dockerfile
       args:
         SERVICE_NAME: gateway
-    ports:
-      - "3424:3424"
     environment:
-      - PORT=3424
+      - PORT=3420
+      - MONOLITH_URL=http://localhost:3400
+      - TICKETS_SERVICE_URL=http://tickets:3421
+      - ATTENDANCE_SERVICE_URL=http://attendance:3422
+      - SITELOGS_SERVICE_URL=http://sitelogs:3423
+      - PM_SERVICE_URL=http://pm:3424
       - RBAC_SERVICE_URL=http://rbac:3425
       - PROFILES_SERVICE_URL=http://profiles:3426
-      - SITES_SERVICE_URL=http://sites:3427
+      - UTILITY_SERVICE_URL=http://utility:3428
     depends_on:
       - rbac
+      - profiles
+      - tickets
+      - attendance
+      - sitelogs
+      - pm
+      - utility
+
+  # Entry Point (Reverse Proxy)
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "3420:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - gateway
 
   # RBAC Service
   rbac:
+    env_file: .env.local
     build:
       context: .
       dockerfile: Dockerfile
@@ -33,14 +54,13 @@ services:
         SERVICE_NAME: services/rbac
     environment:
       - PORT=3425
-      - DATABASE_URL=${DATABASE_URL}
-      - JWT_SECRET=${JWT_SECRET}
       - REDIS_URL=redis://redis:6379
     depends_on:
       - redis
 
   # Profiles Service
   profiles:
+    env_file: .env.local
     build:
       context: .
       dockerfile: Dockerfile
@@ -48,19 +68,58 @@ services:
         SERVICE_NAME: services/profiles
     environment:
       - PORT=3426
-      - DATABASE_URL=${DATABASE_URL}
-    depends_on:
-      - rbac
 
-  # Sites Service
-  sites:
+  # Utility Service (Email, WhatsApp, Notifications)
+  utility:
+    env_file: .env.local
     build:
       context: .
       dockerfile: Dockerfile
       args:
-        SERVICE_NAME: services/sites
+        SERVICE_NAME: services/utility
     environment:
-      - PORT=3427
-      - DATABASE_URL=${DATABASE_URL}
-    depends_on:
-      - rbac
+      - PORT=3428
+
+  # Tickets Service
+  tickets:
+    env_file: .env.local
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        SERVICE_NAME: services/tickets
+    environment:
+      - PORT=3421
+
+  # Attendance Service
+  attendance:
+    env_file: .env.local
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        SERVICE_NAME: services/attendance
+    environment:
+      - PORT=3422
+
+  # SiteLogs Service
+  sitelogs:
+    env_file: .env.local
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        SERVICE_NAME: services/sitelogs
+    environment:
+      - PORT=3423
+
+  # PM Service
+  pm:
+    env_file: .env.local
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        SERVICE_NAME: services/pm
+    environment:
+      - PORT=3424

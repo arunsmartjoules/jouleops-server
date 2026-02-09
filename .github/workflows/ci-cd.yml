@@ -33,13 +33,8 @@ jobs:
               - 'shared/**'
               - 'package.json'
               - 'Dockerfile'
-            sites:
-              - 'services/sites/**'
-              - 'shared/**'
-              - 'package.json'
-              - 'Dockerfile'
-            email:
-              - 'services/email/**'
+            utility:
+              - 'services/utility/**'
               - 'shared/**'
               - 'package.json'
               - 'Dockerfile'
@@ -58,18 +53,8 @@ jobs:
               - 'shared/**'
               - 'package.json'
               - 'Dockerfile'
-            whatsapp:
-              - 'services/whatsapp/**'
-              - 'shared/**'
-              - 'package.json'
-              - 'Dockerfile'
             tickets:
               - 'services/tickets/**'
-              - 'shared/**'
-              - 'package.json'
-              - 'Dockerfile'
-            notifications:
-              - 'services/notifications/**'
               - 'shared/**'
               - 'package.json'
               - 'Dockerfile'

@@ -18,6 +18,8 @@ import { errorHandler, AppError } from "@smartops/shared";
 import authRoutes from "./routes/auth.ts";
 import adminRoutes from "./routes/admin.ts";
 import siteUsersRoutes from "./routes/siteUsers.ts";
+import sitesRoutes from "./routes/sites.ts";
+import assetsRoutes from "./routes/assets.ts";
 
 const PORT = process.env.RBAC_PORT || 3425;
 
@@ -44,6 +46,8 @@ app.get("/health", (_req: Request, res: Response) => {
 app.use("/api/auth", authRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/site-users", siteUsersRoutes);
+app.use("/api/sites", sitesRoutes);
+app.use("/api/assets", assetsRoutes);
 
 // 404 Handler
 app.use((req: Request, _res: Response, next: NextFunction) => {
@@ -65,7 +69,8 @@ if (import.meta.main) {
 ╠════════════════════════════════════════════════════════════╣
 ║  Service running on port ${PORT}                              ║
 ║  Health: http://localhost:${PORT}/health                      ║
-║  Routes: /api/auth, /api/admin, /api/site-users            ║
+║  Routes: /api/auth, /api/admin, /api/site-users,            ║
+║          /api/sites, /api/assets                            ║
 ╚════════════════════════════════════════════════════════════╝
     `);
   });

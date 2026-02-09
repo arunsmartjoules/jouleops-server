@@ -1,8 +1,8 @@
 /**
- * Email Service
+ * Utility Service
  *
- * Handles email sending and verification codes.
- * Port: 3430
+ * Consolidated service for messaging (Email, WhatsApp, Notifications).
+ * Port: 3428
  */
 
 import express from "express";
@@ -16,8 +16,13 @@ import { errorHandler, AppError } from "@smartops/shared";
 
 // Import routes
 import emailRoutes from "./routes/email.ts";
+import whatsappRoutes from "./routes/whatsapp.ts";
+import notificationRoutes from "./routes/notifications.ts";
 
-const PORT = process.env.EMAIL_PORT || 3430;
+// Import jobs
+import { initAttendanceReminders } from "./jobs/attendanceReminderJob.ts";
+
+const PORT = process.env.UTILITY_PORT || 3428;
 
 const app = express();
 
@@ -32,18 +37,21 @@ app.use(express.json());
 app.get("/health", (_req: Request, res: Response) => {
   res.json({
     success: true,
-    service: "email",
+    service: "utility",
     port: PORT,
     timestamp: new Date().toISOString(),
+    modules: ["email", "whatsapp", "notifications"],
   });
 });
 
 // Routes
 app.use("/api/email", emailRoutes);
+app.use("/api/whatsapp", whatsappRoutes);
+app.use("/api/notifications", notificationRoutes);
 
 // 404 Handler
 app.use((req: Request, _res: Response, next: NextFunction) => {
-  next(new AppError(`Can't find ${req.originalUrl} on Email service!`, 404));
+  next(new AppError(`Can't find ${req.originalUrl} on Utility service!`, 404));
 });
 
 // Error Handler
@@ -53,11 +61,18 @@ app.use(errorHandler);
 app.listen(Number(PORT), "0.0.0.0", () => {
   console.log(`
 ╔════════════════════════════════════════════════════════════╗
-║              SmartOps Email Service                        ║
+║              SmartOps Utility Service                      ║
 ╠════════════════════════════════════════════════════════════╣
-║  Service running on port ${PORT}                               ║
+║  Service running on port ${PORT}                              ║
 ║  Health: http://localhost:${PORT}/health                      ║
-║  Routes: /api/email                                         ║
+║  Routes: /api/email, /api/whatsapp, /api/notifications       ║
 ╚════════════════════════════════════════════════════════════╝
   `);
+
+  // Initialize attendance reminders (previously in notifications service)
+  try {
+    initAttendanceReminders();
+  } catch (error) {
+    console.error("Failed to initialize attendance reminders:", error);
+  }
 });
