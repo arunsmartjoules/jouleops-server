@@ -5,7 +5,7 @@
  * Standardized API responses via apiResponse helpers.
  */
 
-import pmChecklistRepository from "../repositories/pmChecklistRepository";
+import pmChecklistRepository from "../repositories/pmChecklistRepository.ts";
 import type { Request, Response } from "express";
 import {
   sendSuccess,

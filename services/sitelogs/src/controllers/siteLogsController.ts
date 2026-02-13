@@ -5,7 +5,7 @@
  * Standardized API responses via apiResponse helpers.
  */
 
-import siteLogsRepository from "../repositories/siteLogsRepository";
+import siteLogsRepository from "../repositories/siteLogsRepository.ts";
 import type { Request, Response } from "express";
 import {
   sendSuccess,

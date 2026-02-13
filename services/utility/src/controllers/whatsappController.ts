@@ -5,8 +5,8 @@
  * Standardized API responses via apiResponse helpers.
  */
 
-import whatsappRepository from "../repositories/whatsappRepository";
-import { logActivity } from "../repositories/logsRepository";
+import whatsappRepository from "../repositories/whatsappRepository.ts";
+import { logActivity } from "../repositories/logsRepository.ts";
 import type { Request, Response } from "express";
 import {
   sendSuccess,

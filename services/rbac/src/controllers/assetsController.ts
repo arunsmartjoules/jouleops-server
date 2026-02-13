@@ -5,7 +5,7 @@
  * Standardized API responses via apiResponse helpers.
  */
 
-import assetsRepository from "../repositories/assetsRepository";
+import assetsRepository from "../repositories/assetsRepository.ts";
 import type { Request, Response } from "express";
 import {
   sendSuccess,

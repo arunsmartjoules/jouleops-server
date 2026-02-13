@@ -11,9 +11,9 @@ import bcrypt from "bcryptjs";
 import { v4 as uuidv4 } from "uuid";
 import type { Request, Response } from "express";
 
-import usersRepository from "../repositories/usersRepository";
-import authRepository from "../repositories/authRepository";
-import { logActivity } from "../repositories/logsRepository";
+import usersRepository from "../repositories/usersRepository.ts";
+import authRepository from "../repositories/authRepository.ts";
+import { logActivity } from "../repositories/logsRepository.ts";
 import {
   sendSuccess,
   sendCreated,

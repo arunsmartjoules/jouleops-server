@@ -62,11 +62,13 @@ app.use((req: Request, _res: Response, next: NextFunction) => {
 app.use(errorHandler);
 
 // Start Server
-const server = app.listen(Number(PORT), "0.0.0.0", () => {
-  logger.info(`SmartOps PM Service running on port ${PORT}`);
-  logger.info(`Health check: http://localhost:${PORT}/health`);
-  logger.info(`Routes: /api/pm-checklists, /api/pm-instances, /api/tasks`);
-});
+if (import.meta.main) {
+  const server = app.listen(Number(PORT), "0.0.0.0", () => {
+    logger.info(`SmartOps PM Service running on port ${PORT}`);
+    logger.info(`Health check: http://localhost:${PORT}/health`);
+    logger.info(`Routes: /api/pm-checklists, /api/pm-instances, /api/tasks`);
+  });
 
-// Graceful Shutdown
-setupGracefulShutdown(server);
+  // Graceful Shutdown
+  setupGracefulShutdown(server);
+}

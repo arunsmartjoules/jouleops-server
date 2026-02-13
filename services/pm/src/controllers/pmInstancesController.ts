@@ -5,7 +5,7 @@
  * Standardized API responses via apiResponse helpers.
  */
 
-import pmInstancesRepository from "../repositories/pmInstancesRepository";
+import pmInstancesRepository from "../repositories/pmInstancesRepository.ts";
 import type { Request, Response } from "express";
 import {
   sendSuccess,

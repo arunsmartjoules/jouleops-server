@@ -5,7 +5,7 @@
  * Standardized API responses via apiResponse helpers.
  */
 
-import tasksRepository from "../repositories/tasksRepository";
+import tasksRepository from "../repositories/tasksRepository.ts";
 import type { Request, Response } from "express";
 import {
   sendSuccess,

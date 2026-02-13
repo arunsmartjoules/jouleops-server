@@ -5,7 +5,7 @@
  * Standardized API responses via apiResponse helpers.
  */
 
-import chillerReadingsRepository from "../repositories/chillerReadingsRepository";
+import chillerReadingsRepository from "../repositories/chillerReadingsRepository.ts";
 import type { Request, Response } from "express";
 import {
   sendSuccess,

@@ -5,8 +5,8 @@
  * Standardized API responses via apiResponse helpers.
  */
 
-import sitesRepository from "../repositories/sitesRepository";
-import { logActivity } from "../repositories/logsRepository";
+import sitesRepository from "../repositories/sitesRepository.ts";
+import { logActivity } from "../repositories/logsRepository.ts";
 import type { Request, Response } from "express";
 import {
   sendSuccess,

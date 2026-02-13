@@ -5,7 +5,7 @@
  * Standardized API responses via apiResponse helpers.
  */
 
-import complaintsRepository from "../repositories/complaintsRepository";
+import complaintsRepository from "../repositories/complaintsRepository.ts";
 import type { Request, Response } from "express";
 import {
   sendSuccess,

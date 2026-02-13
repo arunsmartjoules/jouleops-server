@@ -30,6 +30,15 @@
         "start": {
             "dependsOn": [
                 "build"
+            ],
+            "env": [
+                "DATABASE_URL",
+                "SUPABASE_URL",
+                "JWT_SECRET",
+                "INTERNAL_API_KEY",
+                "REDIS_URL",
+                "PORT",
+                "NODE_ENV"
             ]
         },
         "test": {

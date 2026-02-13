@@ -5,8 +5,8 @@
  * Standardized API responses via apiResponse helpers.
  */
 
-import usersRepository from "../repositories/usersRepository";
-import { logActivity } from "../repositories/logsRepository";
+import usersRepository from "../repositories/usersRepository.ts";
+import { logActivity } from "../repositories/logsRepository.ts";
 import type { Request, Response } from "express";
 import {
   sendSuccess,
