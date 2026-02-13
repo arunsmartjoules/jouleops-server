@@ -220,13 +220,23 @@ export const validateLocation = async (req: AuthRequest, res: Response) => {
       nearestSite = allowedSites[0] || null;
     }
 
+    const filteredAllowedSites = isWFH
+      ? userSites
+      : allowedSites.filter((s) => s.isWithinRange);
+
+    const isValid = isWFH || filteredAllowedSites.length > 0;
+
     return sendSuccess(res, {
+      isValid,
       isWFH,
-      allowedSites: isWFH
-        ? userSites
-        : allowedSites.filter((s) => s.isWithinRange),
+      allowedSites: filteredAllowedSites,
       nearestSite,
       allSites: userSites,
+      message: isValid
+        ? isWFH
+          ? "Work From Home enabled"
+          : "Location validated"
+        : "You are not within range of any assigned site",
     });
   } catch (error: any) {
     console.error("Validate location error:", error);
@@ -427,6 +437,23 @@ export const remove = async (req: Request, res: Response) => {
   }
 };
 
+export const getAll = async (req: Request, res: Response) => {
+  try {
+    const { page, limit, date_from, date_to, status } = req.query;
+    const result = await attendanceRepository.getAllAttendance({
+      page: parseInt(page as string) || 1,
+      limit: parseInt(limit as string) || 30,
+      date_from: date_from as string | undefined,
+      date_to: date_to as string | undefined,
+      status: status as string | undefined,
+    });
+    return sendSuccess(res, result.data, { pagination: result.pagination });
+  } catch (error: any) {
+    console.error("Get all attendance error:", error);
+    return sendServerError(res, error);
+  }
+};
+
 export default {
   create,
   checkIn,
@@ -441,4 +468,5 @@ export default {
   remove,
   validateLocation,
   getUserSites,
+  getAll,
 };

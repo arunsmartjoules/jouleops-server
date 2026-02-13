@@ -6,12 +6,15 @@
  */
 
 import express from "express";
-import cors from "cors";
 import helmet from "helmet";
-import morgan from "morgan";
-import compression from "compression";
-
-import { errorHandler, AppError } from "@smartops/shared";
+import {
+  errorHandler,
+  AppError,
+  correlationId,
+  logger,
+  setupGracefulShutdown,
+  dbHealthCheck,
+} from "@smartops/shared";
 
 // Import routes (copied from monolith)
 import complaintsRoutes from "./routes/complaints.ts";
@@ -22,19 +25,23 @@ const PORT = process.env.TICKETS_PORT || 3421;
 const app = express();
 
 // Middleware
-app.use(compression());
-app.use(cors());
 app.use(helmet());
-app.use(morgan("combined"));
+app.use(correlationId);
 app.use(express.json());
 
-// Health check
-app.get("/health", (req, res) => {
-  res.json({
-    success: true,
+// Standardized Health check
+app.get("/health", async (_req, res) => {
+  const db = await dbHealthCheck();
+  const status = db.connected ? 200 : 503;
+
+  res.status(status).json({
+    success: status === 200,
     service: "tickets",
-    port: PORT,
     timestamp: new Date().toISOString(),
+    uptime: process.uptime(),
+    checks: {
+      database: db,
+    },
   });
 });
 
@@ -52,13 +59,10 @@ app.use((req, res, next) => {
 app.use(errorHandler);
 
 // Start Server
-app.listen(Number(PORT), "0.0.0.0", () => {
-  console.log(`
-╔════════════════════════════════════════════════════════════╗
-║              SmartOps Tickets Service                      ║
-╠════════════════════════════════════════════════════════════╣
-║  Service running on port ${PORT}                              ║
-║  Health: http://localhost:${PORT}/health                      ║
-╚════════════════════════════════════════════════════════════╝
-  `);
+const server = app.listen(Number(PORT), "0.0.0.0", () => {
+  logger.info(`SmartOps Tickets Service running on port ${PORT}`);
+  logger.info(`Health check: http://localhost:${PORT}/health`);
 });
+
+// Graceful Shutdown
+setupGracefulShutdown(server);

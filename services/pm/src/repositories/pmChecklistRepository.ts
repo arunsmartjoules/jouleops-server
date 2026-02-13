@@ -152,6 +152,41 @@ export async function getPMChecklistByMaintenanceType(
 }
 
 /**
+ * Get all PM checklists (for admin/monitoring)
+ */
+export async function getAllPMChecklists(
+  options: GetPMChecklistOptions = {},
+): Promise<PMChecklist[]> {
+  const { asset_type = null, status = "Active" } = options;
+
+  const conditions: string[] = [];
+  const params: any[] = [];
+  let paramIndex = 1;
+
+  if (asset_type) {
+    conditions.push(`asset_type = $${paramIndex}`);
+    params.push(asset_type);
+    paramIndex++;
+  }
+
+  if (status && status !== "All") {
+    conditions.push(`status = $${paramIndex}`);
+    params.push(status);
+    paramIndex++;
+  }
+
+  const whereClause =
+    conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
+
+  return query<PMChecklist>(
+    `SELECT * FROM pm_checklist
+     ${whereClause}
+     ORDER BY site_id, sequence_no ASC`,
+    params,
+  );
+}
+
+/**
  * Update PM checklist
  */
 export async function updatePMChecklist(
@@ -288,6 +323,7 @@ export default {
   getPMChecklistById,
   getPMChecklistBySite,
   getPMChecklistByMaintenanceType,
+  getAllPMChecklists,
   updatePMChecklist,
   deletePMChecklist,
   createChecklistResponse,

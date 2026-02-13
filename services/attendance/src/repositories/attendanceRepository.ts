@@ -303,6 +303,84 @@ export async function getAttendanceByUser(
 }
 
 /**
+ * Get all attendance logs with pagination and filters
+ */
+export async function getAllAttendance(
+  options: GetAttendanceOptions = {},
+): Promise<{
+  data: AttendanceLog[];
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+  };
+}> {
+  const {
+    page = 1,
+    limit = 30,
+    date_from = null,
+    date_to = null,
+    status = null,
+  } = options;
+  const offset = (page - 1) * limit;
+
+  const conditions: string[] = [];
+  const params: any[] = [];
+  let paramIndex = 1;
+
+  if (date_from) {
+    conditions.push(`date >= $${paramIndex}`);
+    params.push(date_from);
+    paramIndex++;
+  }
+
+  if (date_to) {
+    conditions.push(`date <= $${paramIndex}`);
+    params.push(date_to);
+    paramIndex++;
+  }
+
+  if (status) {
+    conditions.push(`status = $${paramIndex}`);
+    params.push(status);
+    paramIndex++;
+  }
+
+  const whereClause =
+    conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
+
+  // Get count
+  const countResult = await queryOne<{ count: string }>(
+    `SELECT COUNT(*) as count FROM attendance_logs ${whereClause}`,
+    params,
+  );
+  const total = parseInt(countResult?.count || "0", 10);
+
+  // Get data with user info
+  const data = await query<AttendanceLog>(
+    `SELECT al.*, u.name as user_name, s.name as site_name
+     FROM attendance_logs al
+     LEFT JOIN users u ON al.user_id = u.user_id
+     LEFT JOIN sites s ON al.site_id = s.site_id
+     ${whereClause}
+     ORDER BY al.date DESC, al.check_in_time DESC
+     LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`,
+    [...params, limit, offset],
+  );
+
+  return {
+    data,
+    pagination: {
+      page,
+      limit,
+      total,
+      totalPages: Math.ceil(total / limit),
+    },
+  };
+}
+
+/**
  * Get attendance by site for a specific date
  */
 export async function getAttendanceBySite(
@@ -423,6 +501,7 @@ export default {
   getTodayAttendance,
   getAttendanceByUser,
   getAttendanceBySite,
+  getAllAttendance,
   getAttendanceReport,
   updateAttendanceLog,
   deleteAttendanceLog,

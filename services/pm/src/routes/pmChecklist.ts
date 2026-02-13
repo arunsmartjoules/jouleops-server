@@ -21,6 +21,7 @@ router.get(
   verifyToken,
   pmChecklistController.getByMaintenanceType,
 );
+router.get("/", verifyToken, pmChecklistController.getAll);
 router.get("/:checklistId", verifyToken, pmChecklistController.getById);
 router.put(
   "/:checklistId",

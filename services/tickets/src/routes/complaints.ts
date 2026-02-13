@@ -2,6 +2,13 @@ import express from "express";
 import complaintsController from "../controllers/complaintsController.ts";
 import { verifyToken, verifyApiKey } from "../middleware/auth.ts";
 
+import {
+  validate,
+  createComplaintSchema,
+  updateComplaintSchema,
+  updateComplaintStatusSchema,
+} from "@smartops/shared";
+
 const router = express.Router();
 
 /**
@@ -13,7 +20,12 @@ const router = express.Router();
 router.get("/", verifyToken, complaintsController.getAll);
 
 // Public routes (with API key for n8n)
-router.post("/", verifyApiKey, complaintsController.create);
+router.post(
+  "/",
+  verifyApiKey,
+  validate(createComplaintSchema),
+  complaintsController.create,
+);
 router.get(
   "/message/:messageId",
   verifyApiKey,
@@ -29,10 +41,16 @@ router.get(
 router.get("/site/:siteId", verifyToken, complaintsController.getBySite);
 router.get("/site/:siteId/stats", verifyToken, complaintsController.getStats);
 router.get("/:ticketId", verifyToken, complaintsController.getById);
-router.put("/:ticketId", verifyToken, complaintsController.update);
+router.put(
+  "/:ticketId",
+  verifyToken,
+  validate(updateComplaintSchema),
+  complaintsController.update,
+);
 router.patch(
   "/:ticketId/status",
   verifyToken,
+  validate(updateComplaintStatusSchema),
   complaintsController.updateStatus,
 );
 router.delete("/:ticketId", verifyToken, complaintsController.remove);

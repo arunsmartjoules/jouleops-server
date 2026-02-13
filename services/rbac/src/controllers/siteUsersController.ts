@@ -68,33 +68,68 @@ export const getByUser = async (req: Request, res: Response) => {
 
 export const assignUser = async (req: AuthRequest, res: Response) => {
   try {
-    const { site_id, user_id, user_ids, role_at_site, is_primary } = req.body;
+    const { site_id, user_id, site_ids, user_ids, role_at_site, is_primary } =
+      req.body;
 
+    const sitesToAssign = site_ids || (site_id ? [site_id] : []);
     const usersToAssign = user_ids || (user_id ? [user_id] : []);
 
-    if (!site_id || usersToAssign.length === 0) {
-      return sendError(res, "Site ID and at least one User ID are required");
+    if (sitesToAssign.length === 0 || usersToAssign.length === 0) {
+      return sendError(
+        res,
+        "At least one Site ID and one User ID are required",
+      );
     }
 
     const results = [];
     const errors = [];
 
-    for (const uid of usersToAssign) {
-      try {
-        const data = await siteUsersRepository.assignUser(
-          site_id,
-          uid,
-          role_at_site || "staff",
-          is_primary || false,
-        );
-        results.push(data);
-      } catch (err: any) {
-        console.error(
-          `Assignment failed for user ${uid} at site ${site_id}:`,
-          err.message,
-        );
-        errors.push({ user_id: uid, error: err.message });
+    // Case 1: Multiple users to one site (Old behavior)
+    if (sitesToAssign.length === 1) {
+      const sid = sitesToAssign[0];
+      for (const uid of usersToAssign) {
+        try {
+          const data = await siteUsersRepository.assignUser(
+            sid,
+            uid,
+            role_at_site || "staff",
+            is_primary || false,
+          );
+          results.push(data);
+        } catch (err: any) {
+          console.error(
+            `Assignment failed for user ${uid} at site ${sid}:`,
+            err.message,
+          );
+          errors.push({ user_id: uid, error: err.message });
+        }
       }
+    }
+    // Case 2: One user to multiple sites (New behavior)
+    else if (usersToAssign.length === 1) {
+      const uid = usersToAssign[0];
+      for (const sid of sitesToAssign) {
+        try {
+          const data = await siteUsersRepository.assignUser(
+            sid,
+            uid,
+            role_at_site || "staff",
+            is_primary || false,
+          );
+          results.push(data);
+        } catch (err: any) {
+          console.error(
+            `Assignment failed for user ${uid} at site ${sid}:`,
+            err.message,
+          );
+          errors.push({ site_id: sid, error: err.message });
+        }
+      }
+    } else {
+      return sendError(
+        res,
+        "Cannot perform bulk assignment for both sites and users simultaneously",
+      );
     }
 
     if (req.user) {
@@ -102,21 +137,21 @@ export const assignUser = async (req: AuthRequest, res: Response) => {
         user_id: req.user.user_id,
         action: "SITE_USER_ASSIGN",
         module: "SITE_USERS",
-        description: `Assigned ${results.length} user(s) to site ${site_id}`,
-        metadata: { site_id, user_ids: usersToAssign, role_at_site },
+        description: `Assigned ${results.length} mapping(s)`,
+        metadata: {
+          site_ids: sitesToAssign,
+          user_ids: usersToAssign,
+          role_at_site,
+        },
         ip_address: req.ip,
       });
     }
 
-    return sendSuccess(
-      res,
-      {
-        assigned: results.length,
-        results,
-        errors: errors.length > 0 ? errors : undefined,
-      },
-      { status: 201 },
-    );
+    return sendSuccess(res, {
+      assigned: results.length,
+      results,
+      errors: errors.length > 0 ? errors : undefined,
+    });
   } catch (error: any) {
     console.error("Assign user error:", error);
     return sendServerError(res, error);

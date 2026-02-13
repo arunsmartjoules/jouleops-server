@@ -2,6 +2,12 @@ import express from "express";
 import chillerReadingsController from "../controllers/chillerReadingsController.ts";
 import { verifyToken, verifyApiKey } from "../middleware/auth.ts";
 
+import {
+  validate,
+  createChillerReadingSchema,
+  updateChillerReadingSchema,
+} from "@smartops/shared";
+
 const router = express.Router();
 
 /**
@@ -10,7 +16,12 @@ const router = express.Router();
  */
 
 router.get("/", verifyToken, chillerReadingsController.getAll);
-router.post("/", verifyApiKey, chillerReadingsController.create);
+router.post(
+  "/",
+  verifyApiKey,
+  validate(createChillerReadingSchema),
+  chillerReadingsController.create,
+);
 router.get("/site/:siteId", verifyToken, chillerReadingsController.getBySite);
 router.get(
   "/site/:siteId/shift/:dateShift",
@@ -33,7 +44,12 @@ router.get(
   chillerReadingsController.getAverages,
 );
 router.get("/:id", verifyToken, chillerReadingsController.getById);
-router.put("/:id", verifyToken, chillerReadingsController.update);
+router.put(
+  "/:id",
+  verifyToken,
+  validate(updateChillerReadingSchema),
+  chillerReadingsController.update,
+);
 router.delete("/:id", verifyToken, chillerReadingsController.remove);
 
 export default router;

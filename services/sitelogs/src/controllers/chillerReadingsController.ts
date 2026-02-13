@@ -12,69 +12,54 @@ import {
   sendCreated,
   sendError,
   sendNotFound,
-  sendServerError,
+  asyncHandler,
 } from "@smartops/shared";
 
-export const create = async (req: Request, res: Response) => {
-  try {
-    const reading = await chillerReadingsRepository.createChillerReading(
-      req.body,
-    );
-    return sendCreated(res, reading);
-  } catch (error: any) {
-    console.error("Create chiller reading error:", error);
-    return sendServerError(res, error);
-  }
-};
+export const create = asyncHandler(async (req: Request, res: Response) => {
+  const reading = await chillerReadingsRepository.createChillerReading(
+    req.body,
+  );
+  return sendCreated(res, reading);
+});
 
-export const getById = async (req: Request, res: Response) => {
-  try {
-    const { id } = req.params;
-    if (!id) {
-      return sendError(res, "ID is required");
-    }
-    const reading = await chillerReadingsRepository.getChillerReadingById(
-      parseInt(id),
-    );
-    if (!reading) {
-      return sendNotFound(res, "Chiller reading");
-    }
-    return sendSuccess(res, reading);
-  } catch (error: any) {
-    console.error("Get chiller reading error:", error);
-    return sendServerError(res, error);
+export const getById = asyncHandler(async (req: Request, res: Response) => {
+  const { id } = req.params;
+  if (!id) {
+    return sendError(res, "ID is required");
   }
-};
-
-export const getBySite = async (req: Request, res: Response) => {
-  try {
-    const { siteId } = req.params;
-    if (!siteId) {
-      return sendError(res, "Site ID is required");
-    }
-    const { page, limit, chiller_id, date_from, date_to, sortBy, sortOrder } =
-      req.query;
-    const result = await chillerReadingsRepository.getChillerReadingsBySite(
-      siteId,
-      {
-        page: parseInt(page as string) || 1,
-        limit: parseInt(limit as string) || 20,
-        chiller_id: chiller_id as string | undefined,
-        date_from: date_from as string | undefined,
-        date_to: date_to as string | undefined,
-        sortBy: sortBy as string | undefined,
-        sortOrder: sortOrder as "asc" | "desc" | undefined,
-      },
-    );
-    return sendSuccess(res, result.data, { pagination: result.pagination });
-  } catch (error: any) {
-    console.error("Get chiller readings error:", error);
-    return sendServerError(res, error);
+  const reading = await chillerReadingsRepository.getChillerReadingById(
+    parseInt(id),
+  );
+  if (!reading) {
+    return sendNotFound(res, "Chiller reading");
   }
-};
+  return sendSuccess(res, reading);
+});
 
-export const getByChiller = async (req: Request, res: Response) => {
-  try {
+export const getBySite = asyncHandler(async (req: Request, res: Response) => {
+  const { siteId } = req.params;
+  if (!siteId) {
+    return sendError(res, "Site ID is required");
+  }
+  const { page, limit, chiller_id, date_from, date_to, sortBy, sortOrder } =
+    req.query;
+  const result = await chillerReadingsRepository.getChillerReadingsBySite(
+    siteId,
+    {
+      page: parseInt(page as string) || 1,
+      limit: parseInt(limit as string) || 20,
+      chiller_id: chiller_id as string | undefined,
+      date_from: date_from as string | undefined,
+      date_to: date_to as string | undefined,
+      sortBy: sortBy as string | undefined,
+      sortOrder: sortOrder as "asc" | "desc" | undefined,
+    },
+  );
+  return sendSuccess(res, result.data, { pagination: result.pagination });
+});
+
+export const getByChiller = asyncHandler(
+  async (req: Request, res: Response) => {
     const { chillerId } = req.params;
     if (!chillerId) {
       return sendError(res, "Chiller ID is required");
@@ -87,32 +72,24 @@ export const getByChiller = async (req: Request, res: Response) => {
         date_to: date_to as string | undefined,
       });
     return sendSuccess(res, readings);
-  } catch (error: any) {
-    console.error("Get chiller readings error:", error);
-    return sendServerError(res, error);
-  }
-};
+  },
+);
 
-export const getLatest = async (req: Request, res: Response) => {
-  try {
-    const { chillerId } = req.params;
-    if (!chillerId) {
-      return sendError(res, "Chiller ID is required");
-    }
-    const reading =
-      await chillerReadingsRepository.getLatestReadingByChiller(chillerId);
-    if (!reading) {
-      return sendNotFound(res, "Readings");
-    }
-    return sendSuccess(res, reading);
-  } catch (error: any) {
-    console.error("Get latest reading error:", error);
-    return sendServerError(res, error);
+export const getLatest = asyncHandler(async (req: Request, res: Response) => {
+  const { chillerId } = req.params;
+  if (!chillerId) {
+    return sendError(res, "Chiller ID is required");
   }
-};
+  const reading =
+    await chillerReadingsRepository.getLatestReadingByChiller(chillerId);
+  if (!reading) {
+    return sendNotFound(res, "Readings");
+  }
+  return sendSuccess(res, reading);
+});
 
-export const getByDateShift = async (req: Request, res: Response) => {
-  try {
+export const getByDateShift = asyncHandler(
+  async (req: Request, res: Response) => {
     const { siteId, dateShift } = req.params;
     if (!siteId || !dateShift) {
       return sendError(res, "Site ID and Date Shift are required");
@@ -122,86 +99,70 @@ export const getByDateShift = async (req: Request, res: Response) => {
       dateShift,
     );
     return sendSuccess(res, readings);
-  } catch (error: any) {
-    console.error("Get readings error:", error);
-    return sendServerError(res, error);
+  },
+);
+
+export const update = asyncHandler(async (req: Request, res: Response) => {
+  const { id } = req.params;
+  if (!id) {
+    return sendError(res, "ID is required");
   }
-};
-
-export const update = async (req: Request, res: Response) => {
-  try {
-    const { id } = req.params;
-    if (!id) {
-      return sendError(res, "ID is required");
-    }
-    const existing = await chillerReadingsRepository.getChillerReadingById(
-      parseInt(id),
-    );
-    if (!existing) {
-      return sendNotFound(res, "Chiller reading");
-    }
-
-    const reading = await chillerReadingsRepository.updateChillerReading(
-      parseInt(id),
-      req.body,
-    );
-    return sendSuccess(res, reading);
-  } catch (error: any) {
-    console.error("Update chiller reading error:", error);
-    return sendServerError(res, error);
+  const existing = await chillerReadingsRepository.getChillerReadingById(
+    parseInt(id),
+  );
+  if (!existing) {
+    return sendNotFound(res, "Chiller reading");
   }
-};
 
-export const remove = async (req: Request, res: Response) => {
-  try {
-    const { id } = req.params;
-    if (!id) {
-      return sendError(res, "ID is required");
-    }
-    const existing = await chillerReadingsRepository.getChillerReadingById(
-      parseInt(id),
-    );
-    if (!existing) {
-      return sendNotFound(res, "Chiller reading");
-    }
+  const reading = await chillerReadingsRepository.updateChillerReading(
+    parseInt(id),
+    req.body,
+  );
+  return sendSuccess(res, reading);
+});
 
-    await chillerReadingsRepository.deleteChillerReading(parseInt(id));
-    return sendSuccess(res, null, {
-      message: "Chiller reading deleted successfully",
-    });
-  } catch (error: any) {
-    console.error("Delete chiller reading error:", error);
-    return sendServerError(res, error);
+export const remove = asyncHandler(async (req: Request, res: Response) => {
+  const { id } = req.params;
+  if (!id) {
+    return sendError(res, "ID is required");
   }
-};
-
-export const getAverages = async (req: Request, res: Response) => {
-  try {
-    const { chillerId } = req.params;
-    if (!chillerId) {
-      return sendError(res, "Chiller ID is required");
-    }
-    const { date_from, date_to } = req.query;
-    if (!date_from || !date_to) {
-      return sendError(res, "date_from and date_to are required");
-    }
-
-    const averages = await chillerReadingsRepository.getChillerAverages(
-      chillerId,
-      date_from as string,
-      date_to as string,
-    );
-    return sendSuccess(res, averages);
-  } catch (error: any) {
-    console.error("Get averages error:", error);
-    return sendServerError(res, error);
+  const existing = await chillerReadingsRepository.getChillerReadingById(
+    parseInt(id),
+  );
+  if (!existing) {
+    return sendNotFound(res, "Chiller reading");
   }
-};
 
-export const getAll = async (req: Request, res: Response) => {
-  req.params.siteId = "all";
-  return getBySite(req, res);
-};
+  await chillerReadingsRepository.deleteChillerReading(parseInt(id));
+  return sendSuccess(res, null, {
+    message: "Chiller reading deleted successfully",
+  });
+});
+
+export const getAverages = asyncHandler(async (req: Request, res: Response) => {
+  const { chillerId } = req.params;
+  if (!chillerId) {
+    return sendError(res, "Chiller ID is required");
+  }
+  const { date_from, date_to } = req.query;
+  if (!date_from || !date_to) {
+    return sendError(res, "date_from and date_to are required");
+  }
+
+  const averages = await chillerReadingsRepository.getChillerAverages(
+    chillerId,
+    date_from as string,
+    date_to as string,
+  );
+  return sendSuccess(res, averages);
+});
+
+export const getAll = asyncHandler(
+  async (req: Request, res: Response, next) => {
+    req.params.siteId = "all";
+    return getBySite(req, res, next);
+  },
+);
 
 export default {
   create,

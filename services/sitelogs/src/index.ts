@@ -7,12 +7,15 @@
 
 import express from "express";
 import type { Request, Response, NextFunction } from "express";
-import cors from "cors";
 import helmet from "helmet";
-import morgan from "morgan";
-import compression from "compression";
-
-import { errorHandler, AppError } from "@smartops/shared";
+import {
+  errorHandler,
+  AppError,
+  correlationId,
+  logger,
+  setupGracefulShutdown,
+  dbHealthCheck,
+} from "@smartops/shared";
 
 // Import routes
 import siteLogsRoutes from "./routes/siteLogs.ts";
@@ -23,19 +26,23 @@ const PORT = process.env.SITELOGS_PORT || 3423;
 const app = express();
 
 // Middleware
-app.use(compression());
-app.use(cors());
 app.use(helmet());
-app.use(morgan("combined"));
+app.use(correlationId);
 app.use(express.json());
 
-// Health check
-app.get("/health", (_req: Request, res: Response) => {
-  res.json({
-    success: true,
+// Standardized Health check
+app.get("/health", async (_req: Request, res: Response) => {
+  const db = await dbHealthCheck();
+  const status = db.connected ? 200 : 503;
+
+  res.status(status).json({
+    success: status === 200,
     service: "sitelogs",
-    port: PORT,
     timestamp: new Date().toISOString(),
+    uptime: process.uptime(),
+    checks: {
+      database: db,
+    },
   });
 });
 
@@ -52,14 +59,11 @@ app.use((req: Request, _res: Response, next: NextFunction) => {
 app.use(errorHandler);
 
 // Start Server
-app.listen(Number(PORT), "0.0.0.0", () => {
-  console.log(`
-╔════════════════════════════════════════════════════════════╗
-║              SmartOps SiteLogs Service                     ║
-╠════════════════════════════════════════════════════════════╣
-║  Service running on port ${PORT}                              ║
-║  Health: http://localhost:${PORT}/health                      ║
-║  Routes: /api/site-logs, /api/chiller-readings              ║
-╚════════════════════════════════════════════════════════════╝
-  `);
+const server = app.listen(Number(PORT), "0.0.0.0", () => {
+  logger.info(`SmartOps SiteLogs Service running on port ${PORT}`);
+  logger.info(`Health check: http://localhost:${PORT}/health`);
+  logger.info(`Routes available: /api/site-logs, /api/chiller-readings`);
 });
+
+// Graceful Shutdown
+setupGracefulShutdown(server);

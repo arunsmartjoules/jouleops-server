@@ -20,8 +20,9 @@ export interface ChillerReading {
   condenser_outlet_temp?: number;
   evaporator_inlet_temp?: number;
   evaporator_outlet_temp?: number;
-  compressor_load_percent?: number;
+  compressor_load_percentage?: number;
   // Additional fields as needed
+  status?: string;
   created_at?: Date;
   updated_at?: Date;
 }
@@ -35,7 +36,8 @@ export interface CreateChillerReadingInput {
   condenser_outlet_temp?: number;
   evaporator_inlet_temp?: number;
   evaporator_outlet_temp?: number;
-  compressor_load_percent?: number;
+  compressor_load_percentage?: number;
+  status?: string;
 }
 
 export interface GetChillerReadingsOptions {
@@ -54,7 +56,7 @@ export interface ChillerAverages {
   condenser_outlet_temp: number;
   evaporator_inlet_temp: number;
   evaporator_outlet_temp: number;
-  compressor_load_percent: number;
+  compressor_load_percentage: number;
 }
 
 // ============================================================================
@@ -322,7 +324,7 @@ export async function getChillerAverages(
     condenser_outlet_temp: 0,
     evaporator_inlet_temp: 0,
     evaporator_outlet_temp: 0,
-    compressor_load_percent: 0,
+    compressor_load_percentage: 0,
   };
 
   data.forEach((reading) => {
@@ -330,7 +332,8 @@ export async function getChillerAverages(
     averages.condenser_outlet_temp += reading.condenser_outlet_temp || 0;
     averages.evaporator_inlet_temp += reading.evaporator_inlet_temp || 0;
     averages.evaporator_outlet_temp += reading.evaporator_outlet_temp || 0;
-    averages.compressor_load_percent += reading.compressor_load_percent || 0;
+    averages.compressor_load_percentage +=
+      reading.compressor_load_percentage || 0;
   });
 
   // Calculate averages
@@ -346,8 +349,8 @@ export async function getChillerAverages(
   averages.evaporator_outlet_temp = +(
     averages.evaporator_outlet_temp / data.length
   ).toFixed(2);
-  averages.compressor_load_percent = +(
-    averages.compressor_load_percent / data.length
+  averages.compressor_load_percentage = +(
+    averages.compressor_load_percentage / data.length
   ).toFixed(2);
 
   return averages;

@@ -10,6 +10,7 @@ const router = express.Router();
  */
 
 router.post("/", verifyToken, attendanceLogsController.create);
+router.get("/", verifyToken, attendanceLogsController.getAll);
 router.post("/check-in", verifyToken, attendanceLogsController.checkIn);
 router.post("/:id/check-out", verifyToken, attendanceLogsController.checkOut);
 

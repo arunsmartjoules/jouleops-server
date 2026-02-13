@@ -7,12 +7,16 @@
 
 import express from "express";
 import type { Request, Response, NextFunction } from "express";
-import cors from "cors";
 import helmet from "helmet";
-import morgan from "morgan";
-import compression from "compression";
-
-import { errorHandler, AppError } from "@smartops/shared";
+import {
+  errorHandler,
+  AppError,
+  correlationId,
+  logger,
+  setupGracefulShutdown,
+  dbHealthCheck,
+  redisHealthCheck,
+} from "@smartops/shared";
 
 // Import routes
 import attendanceRoutes from "./routes/attendance.ts";
@@ -22,19 +26,24 @@ const PORT = process.env.ATTENDANCE_PORT || 3422;
 const app = express();
 
 // Middleware
-app.use(compression());
-app.use(cors());
 app.use(helmet());
-app.use(morgan("combined"));
+app.use(correlationId);
 app.use(express.json());
 
-// Health check
-app.get("/health", (_req: Request, res: Response) => {
-  res.json({
-    success: true,
+// Standardized Health check
+app.get("/health", async (_req: Request, res: Response) => {
+  const [db, redis] = await Promise.all([dbHealthCheck(), redisHealthCheck()]);
+  const status = db.connected && redis.connected ? 200 : 503;
+
+  res.status(status).json({
+    success: status === 200,
     service: "attendance",
-    port: PORT,
     timestamp: new Date().toISOString(),
+    uptime: process.uptime(),
+    checks: {
+      database: db,
+      redis: redis,
+    },
   });
 });
 
@@ -52,13 +61,10 @@ app.use((req: Request, _res: Response, next: NextFunction) => {
 app.use(errorHandler);
 
 // Start Server
-app.listen(Number(PORT), "0.0.0.0", () => {
-  console.log(`
-╔════════════════════════════════════════════════════════════╗
-║              SmartOps Attendance Service                   ║
-╠════════════════════════════════════════════════════════════╣
-║  Service running on port ${PORT}                              ║
-║  Health: http://localhost:${PORT}/health                      ║
-╚════════════════════════════════════════════════════════════╝
-  `);
+const server = app.listen(Number(PORT), "0.0.0.0", () => {
+  logger.info(`SmartOps Attendance Service running on port ${PORT}`);
+  logger.info(`Health check: http://localhost:${PORT}/health`);
 });
+
+// Graceful Shutdown
+setupGracefulShutdown(server);

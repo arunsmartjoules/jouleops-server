@@ -7,6 +7,7 @@
 
 import { Pool } from "pg";
 import type { PoolClient, QueryResult } from "pg";
+import { logger } from "../utils/logger.ts";
 
 // Build connection string from Supabase URL or use DATABASE_URL directly
 const getDatabaseUrl = (): string => {
@@ -43,21 +44,20 @@ const getDatabaseUrl = (): string => {
 // Create connection pool with sensible defaults
 const pool = new Pool({
   connectionString: getDatabaseUrl(),
-  max: 20, // Maximum number of connections
-  idleTimeoutMillis: 30000, // Close idle connections after 30s
-  connectionTimeoutMillis: 5000, // Fail if can't connect in 5s
+  max: parseInt(process.env.DB_MAX_POOL_SIZE || "20"),
+  idleTimeoutMillis: parseInt(process.env.DB_IDLE_TIMEOUT_MS || "30000"),
+  connectionTimeoutMillis: parseInt(process.env.DB_CONN_TIMEOUT_MS || "5000"),
   allowExitOnIdle: true,
 });
 
 // Log pool errors
 pool.on("error", (err) => {
-  console.error("Unexpected error on idle database client", err);
+  logger.error("Unexpected error on idle database client", { error: err });
 });
 
 // Log when pool creates a new connection (useful for debugging)
 pool.on("connect", () => {
-  // Uncomment for debugging connection issues
-  // console.log("New database connection established");
+  logger.debug("New database connection established");
 });
 
 /**

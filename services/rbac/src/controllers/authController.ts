@@ -8,7 +8,6 @@
 
 import jwt from "jsonwebtoken";
 import bcrypt from "bcryptjs";
-import crypto from "crypto";
 import { v4 as uuidv4 } from "uuid";
 import type { Request, Response } from "express";
 
@@ -20,8 +19,7 @@ import {
   sendCreated,
   sendError,
   sendNotFound,
-  sendForbidden,
-  sendServerError,
+  asyncHandler,
 } from "@smartops/shared";
 
 interface AuthRequest extends Request {
@@ -36,47 +34,153 @@ interface AuthRequest extends Request {
 // Login
 // ============================================================================
 
-export const login = async (req: Request, res: Response) => {
-  try {
-    const { email, password } = req.body;
+export const login = asyncHandler(async (req: Request, res: Response) => {
+  const { email, password } = req.body || {};
 
-    if (!email || !password) {
-      return sendError(res, "Email and password are required");
-    }
+  if (!email || !password) {
+    return sendError(res, "Email and password are required");
+  }
 
-    // Find user by email (uncached to get password)
-    const user = await usersRepository.getUserByEmail(email);
+  // Find user by email (uncached to get password)
+  const user = await usersRepository.getUserByEmail(email);
 
-    if (!user) {
-      return res.status(401).json({
-        success: false,
-        error: "Invalid email or password",
-      });
-    }
+  if (!user) {
+    return res.status(401).json({
+      success: false,
+      error: "Invalid email or password",
+    });
+  }
 
-    // Check password
-    if (!user.password) {
-      return res.status(401).json({
-        success: false,
-        error: "Authentication not configured for this user",
-      });
-    }
+  // Check password
+  if (!user.password) {
+    return res.status(401).json({
+      success: false,
+      error: "Authentication not configured for this user",
+    });
+  }
 
-    const isPasswordValid = await bcrypt.compare(password, user.password);
-    if (!isPasswordValid) {
-      return res.status(401).json({
-        success: false,
-        error: "Invalid email or password",
-      });
-    }
+  const isPasswordValid = await bcrypt.compare(password, user.password);
+  if (!isPasswordValid) {
+    return res.status(401).json({
+      success: false,
+      error: "Invalid email or password",
+    });
+  }
 
-    // Generate JWT
-    const secret = process.env.JWT_SECRET;
-    if (!secret) {
-      throw new Error("JWT_SECRET is not defined");
-    }
+  // Generate JWT
+  const secret = process.env.JWT_SECRET;
+  if (!secret) {
+    throw new Error("JWT_SECRET is not defined");
+  }
 
-    const tokenPayload = {
+  const tokenPayload = {
+    user_id: user.user_id,
+    role: user.role,
+    email: user.email,
+    is_admin:
+      user.role === "Admin" ||
+      user.role === "admin" ||
+      user.is_superadmin ||
+      false,
+    is_superadmin: user.is_superadmin || false,
+    jti: uuidv4(),
+  };
+
+  const token = jwt.sign(tokenPayload, secret, { expiresIn: "24h" });
+
+  // Generate refresh token
+  const refreshToken = jwt.sign(
+    { user_id: user.user_id, type: "refresh" },
+    process.env.JWT_REFRESH_SECRET || secret,
+    { expiresIn: "30d" },
+  );
+
+  // Store refresh token
+  await authRepository.storeRefreshToken({
+    user_id: user.user_id,
+    token: refreshToken,
+    expires_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+    device_info: req.headers["user-agent"] as string,
+  });
+
+  // Log successful login
+  await logActivity({
+    user_id: user.user_id,
+    action: "LOGIN_SUCCESS",
+    module: "AUTH",
+    description: `User ${user.email} logged in`,
+    ip_address: req.ip,
+    device_info: req.headers["user-agent"] as string,
+  });
+
+  return sendSuccess(res, {
+    token,
+    refresh_token: refreshToken,
+    expires_in: 86400,
+    user: {
+      id: user.user_id,
+      email: user.email,
+      name: user.name,
+      role: user.role,
+      is_superadmin: user.is_superadmin || false,
+      department: user.department,
+      designation: user.designation,
+      work_location_type: user.work_location_type,
+    },
+  });
+});
+
+// ============================================================================
+// Signup
+// ============================================================================
+
+export const signup = asyncHandler(async (req: Request, res: Response) => {
+  const { email, password, name } = req.body;
+
+  if (!email || !password || !name) {
+    return sendError(res, "Email, password, and name are required");
+  }
+
+  // Check if user already exists
+  const existingUser = await usersRepository.getUserByEmail(email);
+
+  if (existingUser && existingUser.password) {
+    return sendError(res, "Account already registered. Please sign in.");
+  }
+
+  // Hash password
+  const salt = await bcrypt.genSalt(10);
+  const hashedPassword = await bcrypt.hash(password, salt);
+
+  let user;
+
+  if (existingUser) {
+    // Scenario A: User exists but has no password (Claiming)
+    user = await usersRepository.updateUser(existingUser.user_id, {
+      password: hashedPassword,
+      name: name || existingUser.name,
+      is_active: true,
+    });
+  } else {
+    // Scenario B: Entirely new user (Registering)
+    user = await usersRepository.createUser({
+      user_id: uuidv4(),
+      email,
+      password: hashedPassword,
+      name,
+      role: "staff",
+      is_active: true,
+    });
+  }
+
+  // Generate JWT
+  const secret = process.env.JWT_SECRET;
+  if (!secret) {
+    throw new Error("JWT_SECRET is not defined");
+  }
+
+  const token = jwt.sign(
+    {
       user_id: user.user_id,
       role: user.role,
       email: user.email,
@@ -87,172 +191,56 @@ export const login = async (req: Request, res: Response) => {
         false,
       is_superadmin: user.is_superadmin || false,
       jti: uuidv4(),
-    };
+    },
+    secret,
+    { expiresIn: "24h" },
+  );
 
-    const token = jwt.sign(tokenPayload, secret, { expiresIn: "15m" });
+  // Generate refresh token
+  const refreshToken = jwt.sign(
+    { user_id: user.user_id, type: "refresh" },
+    process.env.JWT_REFRESH_SECRET || secret,
+    { expiresIn: "30d" },
+  );
 
-    // Generate refresh token
-    const refreshToken = jwt.sign(
-      { user_id: user.user_id, type: "refresh" },
-      process.env.JWT_REFRESH_SECRET || secret,
-      { expiresIn: "30d" },
-    );
+  // Store refresh token
+  await authRepository.storeRefreshToken({
+    user_id: user.user_id,
+    token: refreshToken,
+    expires_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+    device_info: req.headers["user-agent"] as string,
+  });
 
-    // Store refresh token
-    await authRepository.storeRefreshToken({
-      user_id: user.user_id,
-      token: refreshToken,
-      expires_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
-      device_info: req.headers["user-agent"] as string,
-    });
+  // Log signup
+  await logActivity({
+    user_id: user.user_id,
+    action: existingUser ? "SIGNUP_CLAIM" : "SIGNUP_REGISTER",
+    module: "AUTH",
+    description: `User ${user.email} ${existingUser ? "claimed account" : "registered"}`,
+    ip_address: req.ip,
+    device_info: req.headers["user-agent"] as string,
+  });
 
-    // Log successful login
-    await logActivity({
-      user_id: user.user_id,
-      action: "LOGIN_SUCCESS",
-      module: "AUTH",
-      description: `User ${user.email} logged in`,
-      ip_address: req.ip,
-      device_info: req.headers["user-agent"] as string,
-    });
-
-    return sendSuccess(res, {
-      token,
-      refresh_token: refreshToken,
-      expires_in: 900,
-      user: {
-        id: user.user_id,
-        email: user.email,
-        name: user.name,
-        role: user.role,
-        is_superadmin: user.is_superadmin || false,
-        department: user.department,
-        designation: user.designation,
-        work_location_type: user.work_location_type,
-      },
-    });
-  } catch (error: any) {
-    console.error("Login error:", error);
-    return sendServerError(res, error);
-  }
-};
-
-// ============================================================================
-// Signup
-// ============================================================================
-
-export const signup = async (req: Request, res: Response) => {
-  try {
-    const { email, password, name } = req.body;
-
-    if (!email || !password || !name) {
-      return sendError(res, "Email, password, and name are required");
-    }
-
-    // Check if user already exists
-    const existingUser = await usersRepository.getUserByEmail(email);
-
-    if (existingUser && existingUser.password) {
-      return sendError(res, "Account already registered. Please sign in.");
-    }
-
-    // Hash password
-    const salt = await bcrypt.genSalt(10);
-    const hashedPassword = await bcrypt.hash(password, salt);
-
-    let user;
-
-    if (existingUser) {
-      // Scenario A: User exists but has no password (Claiming)
-      user = await usersRepository.updateUser(existingUser.user_id, {
-        password: hashedPassword,
-        name: name || existingUser.name,
-        is_active: true,
-      });
-    } else {
-      // Scenario B: Entirely new user (Registering)
-      user = await usersRepository.createUser({
-        user_id: uuidv4(),
-        email,
-        password: hashedPassword,
-        name,
-        role: "staff",
-        is_active: true,
-      });
-    }
-
-    // Generate JWT
-    const secret = process.env.JWT_SECRET;
-    if (!secret) {
-      throw new Error("JWT_SECRET is not defined");
-    }
-
-    const token = jwt.sign(
-      {
-        user_id: user.user_id,
-        role: user.role,
-        email: user.email,
-        is_admin:
-          user.role === "Admin" ||
-          user.role === "admin" ||
-          user.is_superadmin ||
-          false,
-        is_superadmin: user.is_superadmin || false,
-        jti: uuidv4(),
-      },
-      secret,
-      { expiresIn: "15m" },
-    );
-
-    // Generate refresh token
-    const refreshToken = jwt.sign(
-      { user_id: user.user_id, type: "refresh" },
-      process.env.JWT_REFRESH_SECRET || secret,
-      { expiresIn: "30d" },
-    );
-
-    // Store refresh token
-    await authRepository.storeRefreshToken({
-      user_id: user.user_id,
-      token: refreshToken,
-      expires_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
-      device_info: req.headers["user-agent"] as string,
-    });
-
-    // Log signup
-    await logActivity({
-      user_id: user.user_id,
-      action: existingUser ? "SIGNUP_CLAIM" : "SIGNUP_REGISTER",
-      module: "AUTH",
-      description: `User ${user.email} ${existingUser ? "claimed account" : "registered"}`,
-      ip_address: req.ip,
-      device_info: req.headers["user-agent"] as string,
-    });
-
-    return sendCreated(res, {
-      token,
-      refresh_token: refreshToken,
-      expires_in: 900,
-      user: {
-        id: user.user_id,
-        email: user.email,
-        name: user.name,
-        role: user.role,
-        is_superadmin: user.is_superadmin || false,
-      },
-    });
-  } catch (error: any) {
-    console.error("Signup error:", error);
-    return sendServerError(res, error);
-  }
-};
+  return sendCreated(res, {
+    token,
+    refresh_token: refreshToken,
+    expires_in: 86400,
+    user: {
+      id: user.user_id,
+      email: user.email,
+      name: user.name,
+      role: user.role,
+      is_superadmin: user.is_superadmin || false,
+    },
+  });
+});
 
 // ============================================================================
 // Get Profile
 // ============================================================================
 
-export const getProfile = async (req: AuthRequest, res: Response) => {
-  try {
+export const getProfile = asyncHandler(
+  async (req: AuthRequest, res: Response) => {
     const user = await usersRepository.getUserById(req.user!.user_id);
 
     if (!user) {
@@ -263,62 +251,54 @@ export const getProfile = async (req: AuthRequest, res: Response) => {
     const { password, ...userWithoutPassword } = user;
 
     return sendSuccess(res, userWithoutPassword);
-  } catch (error: any) {
-    console.error("Get profile error:", error);
-    return sendServerError(res, error);
-  }
-};
+  },
+);
 
 // ============================================================================
 // Logout
 // ============================================================================
 
-export const logout = async (req: AuthRequest, res: Response) => {
-  try {
-    if (req.user) {
-      await logActivity({
-        user_id: req.user.user_id,
-        action: "LOGOUT_SUCCESS",
-        module: "AUTH",
-        description: `User ${req.user.email} logged out`,
-        ip_address: req.ip,
-        device_info: req.headers["user-agent"] as string,
-      });
-    }
+export const logout = asyncHandler(async (req: AuthRequest, res: Response) => {
+  if (req.user) {
+    await logActivity({
+      user_id: req.user.user_id,
+      action: "LOGOUT_SUCCESS",
+      module: "AUTH",
+      description: `User ${req.user.email} logged out`,
+      ip_address: req.ip,
+      device_info: req.headers["user-agent"] as string,
+    });
+  }
 
-    const { refresh_token } = req.body;
-    if (refresh_token) {
-      await authRepository.revokeRefreshToken(refresh_token);
-    }
+  const { refresh_token } = req.body;
+  if (refresh_token) {
+    await authRepository.revokeRefreshToken(refresh_token);
+  }
 
-    // Blacklist access token if present
-    const authHeader = req.headers.authorization;
-    if (authHeader) {
-      const token = authHeader.split(" ")[1];
-      if (token) {
-        const decoded: any = jwt.decode(token);
-        if (decoded && decoded.jti && decoded.exp) {
-          const expiresIn = decoded.exp - Math.floor(Date.now() / 1000);
-          if (expiresIn > 0) {
-            await authRepository.blacklistToken(decoded.jti, expiresIn);
-          }
+  // Blacklist access token if present
+  const authHeader = req.headers.authorization;
+  if (authHeader) {
+    const token = authHeader.split(" ")[1];
+    if (token) {
+      const decoded: any = jwt.decode(token);
+      if (decoded && decoded.jti && decoded.exp) {
+        const expiresIn = decoded.exp - Math.floor(Date.now() / 1000);
+        if (expiresIn > 0) {
+          await authRepository.blacklistToken(decoded.jti, expiresIn);
         }
       }
     }
-
-    return sendSuccess(res, null, { message: "Logged out successfully" });
-  } catch (error: any) {
-    console.error("Logout error:", error);
-    return sendServerError(res, error);
   }
-};
+
+  return sendSuccess(res, null, { message: "Logged out successfully" });
+});
 
 // ============================================================================
 // Change Password
 // ============================================================================
 
-export const changePassword = async (req: AuthRequest, res: Response) => {
-  try {
+export const changePassword = asyncHandler(
+  async (req: AuthRequest, res: Response) => {
     const { currentPassword, newPassword } = req.body;
     const userId = req.user?.user_id;
 
@@ -379,18 +359,15 @@ export const changePassword = async (req: AuthRequest, res: Response) => {
     });
 
     return sendSuccess(res, null, { message: "Password changed successfully" });
-  } catch (error: any) {
-    console.error("Change password error:", error);
-    return sendServerError(res, error);
-  }
-};
+  },
+);
 
 // ============================================================================
 // Reset Password (with employee code)
 // ============================================================================
 
-export const resetPassword = async (req: Request, res: Response) => {
-  try {
+export const resetPassword = asyncHandler(
+  async (req: Request, res: Response) => {
     const { email, employeeCode, newPassword } = req.body;
 
     if (!email || !employeeCode || !newPassword) {
@@ -434,18 +411,15 @@ export const resetPassword = async (req: Request, res: Response) => {
     });
 
     return sendSuccess(res, null, { message: "Password reset successfully" });
-  } catch (error: any) {
-    console.error("Reset password error:", error);
-    return sendServerError(res, error);
-  }
-};
+  },
+);
 
 // ============================================================================
 // Refresh Token
 // ============================================================================
 
-export const refreshToken = async (req: Request, res: Response) => {
-  try {
+export const refreshToken = asyncHandler(
+  async (req: Request, res: Response) => {
     const { refresh_token } = req.body;
 
     if (!refresh_token) {
@@ -503,33 +477,22 @@ export const refreshToken = async (req: Request, res: Response) => {
         jti: uuidv4(),
       },
       process.env.JWT_SECRET!,
-      { expiresIn: "15m" },
+      { expiresIn: "24h" },
     );
 
     return sendSuccess(res, {
       token: newAccessToken,
-      expires_in: 900, // 15 minutes in seconds
+      expires_in: 86400, // 24 hours in seconds
     });
-  } catch (error: any) {
-    console.error("Refresh token error:", error);
-
-    if (error.name === "TokenExpiredError") {
-      return res.status(401).json({
-        success: false,
-        error: "Refresh token expired",
-      });
-    }
-
-    return sendServerError(res, error);
-  }
-};
+  },
+);
 
 // ============================================================================
 // Email Verification Endpoints
 // ============================================================================
 
-export const sendVerificationCode = async (req: Request, res: Response) => {
-  try {
+export const sendVerificationCode = asyncHandler(
+  async (req: Request, res: Response) => {
     const { email } = req.body;
 
     if (!email) {
@@ -545,14 +508,11 @@ export const sendVerificationCode = async (req: Request, res: Response) => {
     return sendSuccess(res, null, {
       message: "Verification code sent to your email",
     });
-  } catch (error: any) {
-    console.error("Send verification code error:", error);
-    return sendServerError(res, error);
-  }
-};
+  },
+);
 
-export const verifySignupCode = async (req: Request, res: Response) => {
-  try {
+export const verifySignupCode = asyncHandler(
+  async (req: Request, res: Response) => {
     const { email, code } = req.body;
 
     if (!email || !code) {
@@ -569,14 +529,11 @@ export const verifySignupCode = async (req: Request, res: Response) => {
     emailService.deleteVerificationCode(email);
 
     return sendSuccess(res, null, { message: "Email verified successfully" });
-  } catch (error: any) {
-    console.error("Verify code error:", error);
-    return sendServerError(res, error);
-  }
-};
+  },
+);
 
-export const sendPasswordResetCode = async (req: Request, res: Response) => {
-  try {
+export const sendPasswordResetCode = asyncHandler(
+  async (req: Request, res: Response) => {
     const { email } = req.body;
 
     if (!email) {
@@ -605,14 +562,11 @@ export const sendPasswordResetCode = async (req: Request, res: Response) => {
     return sendSuccess(res, null, {
       message: "If the email exists, a reset code has been sent",
     });
-  } catch (error: any) {
-    console.error("Send password reset code error:", error);
-    return sendServerError(res, error);
-  }
-};
+  },
+);
 
-export const resetPasswordWithCode = async (req: Request, res: Response) => {
-  try {
+export const resetPasswordWithCode = asyncHandler(
+  async (req: Request, res: Response) => {
     const { email, code, newPassword } = req.body;
 
     if (!email || !code || !newPassword) {
@@ -656,11 +610,8 @@ export const resetPasswordWithCode = async (req: Request, res: Response) => {
     });
 
     return sendSuccess(res, null, { message: "Password reset successfully" });
-  } catch (error: any) {
-    console.error("Reset password with code error:", error);
-    return sendServerError(res, error);
-  }
-};
+  },
+);
 
 // ============================================================================
 // Export

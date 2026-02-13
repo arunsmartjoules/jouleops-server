@@ -7,12 +7,16 @@
 
 import express from "express";
 import type { Request, Response, NextFunction } from "express";
-import cors from "cors";
 import helmet from "helmet";
-import morgan from "morgan";
-import compression from "compression";
-
-import { errorHandler, AppError } from "@smartops/shared";
+import {
+  errorHandler,
+  AppError,
+  correlationId,
+  logger,
+  setupGracefulShutdown,
+  dbHealthCheck,
+  redisHealthCheck,
+} from "@smartops/shared";
 
 // Import routes
 import emailRoutes from "./routes/email.ts";
@@ -27,20 +31,24 @@ const PORT = process.env.UTILITY_PORT || 3428;
 const app = express();
 
 // Middleware
-app.use(compression());
-app.use(cors());
 app.use(helmet());
-app.use(morgan("combined"));
+app.use(correlationId);
 app.use(express.json());
 
-// Health check
-app.get("/health", (_req: Request, res: Response) => {
-  res.json({
-    success: true,
+// Standardized Health check
+app.get("/health", async (_req: Request, res: Response) => {
+  const [db, redis] = await Promise.all([dbHealthCheck(), redisHealthCheck()]);
+  const status = db.connected && redis.connected ? 200 : 503;
+
+  res.status(status).json({
+    success: status === 200,
     service: "utility",
-    port: PORT,
     timestamp: new Date().toISOString(),
-    modules: ["email", "whatsapp", "notifications"],
+    uptime: process.uptime(),
+    checks: {
+      database: db,
+      redis: redis,
+    },
   });
 });
 
@@ -58,21 +66,18 @@ app.use((req: Request, _res: Response, next: NextFunction) => {
 app.use(errorHandler);
 
 // Start Server
-app.listen(Number(PORT), "0.0.0.0", () => {
-  console.log(`
-╔════════════════════════════════════════════════════════════╗
-║              SmartOps Utility Service                      ║
-╠════════════════════════════════════════════════════════════╣
-║  Service running on port ${PORT}                              ║
-║  Health: http://localhost:${PORT}/health                      ║
-║  Routes: /api/email, /api/whatsapp, /api/notifications       ║
-╚════════════════════════════════════════════════════════════╝
-  `);
+const server = app.listen(Number(PORT), "0.0.0.0", () => {
+  logger.info(`SmartOps Utility Service running on port ${PORT}`);
+  logger.info(`Health check: http://localhost:${PORT}/health`);
+  logger.info(`Routes: /api/email, /api/whatsapp, /api/notifications`);
 
-  // Initialize attendance reminders (previously in notifications service)
+  // Initialize attendance reminders
   try {
     initAttendanceReminders();
   } catch (error) {
-    console.error("Failed to initialize attendance reminders:", error);
+    logger.error("Failed to initialize attendance reminders", { error });
   }
 });
+
+// Graceful Shutdown
+setupGracefulShutdown(server);

@@ -1,5 +1,3 @@
-version: "3.8"
-
 services:
   # Shared Redis for Caching and Auth
   redis:
@@ -17,7 +15,7 @@ services:
         SERVICE_NAME: gateway
     environment:
       - PORT=3420
-      - MONOLITH_URL=http://localhost:3400
+      - MONOLITH_URL=http://host.docker.internal:3400
       - TICKETS_SERVICE_URL=http://tickets:3421
       - ATTENDANCE_SERVICE_URL=http://attendance:3422
       - SITELOGS_SERVICE_URL=http://sitelogs:3423

@@ -35,6 +35,6 @@ WORKDIR /app/${SERVICE_NAME}
 
 # Default ports (mapping to your config)
 # Expose all possible microservice ports
-EXPOSE 3420 3421 3422 3423 3424 3425 3426 3427
+EXPOSE 3420 3421 3422 3423 3424 3425 3426 3428
 
 CMD ["bun", "run", "start"]

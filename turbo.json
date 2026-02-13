@@ -3,7 +3,21 @@
     "tasks": {
         "dev": {
             "persistent": true,
-            "cache": false
+            "cache": false,
+            "env": [
+                "DATABASE_URL",
+                "SUPABASE_URL",
+                "JWT_SECRET",
+                "INTERNAL_API_KEY",
+                "REDIS_URL",
+                "PORT",
+                "NODE_ENV",
+                "SUPABASE_SERVICE_ROLE_KEY",
+                "SUPABASE_DB_PASSWORD",
+                "RESEND_API_KEY",
+                "WHAPI_TOKEN",
+                "JWT_EXPIRES_IN"
+            ]
         },
         "build": {
             "dependsOn": [

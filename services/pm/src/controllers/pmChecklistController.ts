@@ -83,6 +83,20 @@ export const getByMaintenanceType = async (req: Request, res: Response) => {
   }
 };
 
+export const getAll = async (req: Request, res: Response) => {
+  try {
+    const { asset_type, status } = req.query;
+    const checklists = await pmChecklistRepository.getAllPMChecklists({
+      asset_type: asset_type as string | undefined,
+      status: status as string | undefined,
+    });
+    return sendSuccess(res, checklists);
+  } catch (error: any) {
+    console.error("Get all PM checklists error:", error);
+    return sendServerError(res, error);
+  }
+};
+
 export const update = async (req: Request, res: Response) => {
   try {
     const { checklistId } = req.params;
@@ -178,6 +192,7 @@ export default {
   getById,
   getBySite,
   getByMaintenanceType,
+  getAll,
   update,
   remove,
   createResponse,

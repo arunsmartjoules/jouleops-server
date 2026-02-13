@@ -14,12 +14,21 @@ import compression from "compression";
 import rateLimit from "express-rate-limit";
 import { createProxyMiddleware } from "http-proxy-middleware";
 
-import { errorHandler, AppError } from "@smartops/shared";
+import {
+  errorHandler,
+  AppError,
+  correlationId,
+  logger,
+  setupGracefulShutdown,
+  dbHealthCheck,
+  redisHealthCheck,
+} from "@smartops/shared";
 
-// Environment config (inherit from root .env.local)
+// Environment config
 const PORT = process.env.GATEWAY_PORT || 3420;
+const NODE_ENV = process.env.NODE_ENV || "development";
 
-// Service registry - ports for each service
+// Service registry
 const SERVICES = {
   tickets: process.env.TICKETS_SERVICE_URL || "http://localhost:3421",
   attendance: process.env.ATTENDANCE_SERVICE_URL || "http://localhost:3422",
@@ -31,15 +40,18 @@ const SERVICES = {
 };
 
 const app = express();
+app.set("trust proxy", 1);
 
-// Global Middleware
+// Middleware
+app.use(correlationId);
 app.use(compression());
 app.use(cors());
 app.use(helmet());
-app.use(morgan("combined"));
-app.use(express.json());
 
-// Rate Limiting
+if (NODE_ENV === "development") {
+  app.use(morgan("dev"));
+}
+
 app.use(
   rateLimit({
     windowMs: 15 * 60 * 1000,
@@ -48,26 +60,24 @@ app.use(
   }),
 );
 
-// Health Check
-app.get("/health", (_req: Request, res: Response) => {
-  res.json({
-    success: true,
-    gateway: "online",
+// Standardized Health check
+app.get("/health", async (_req, res) => {
+  const [db, redis] = await Promise.all([dbHealthCheck(), redisHealthCheck()]);
+  const status = db.connected && redis.connected ? 200 : 503;
+
+  res.status(status).json({
+    success: status === 200,
+    service: "gateway",
     timestamp: new Date().toISOString(),
-    services: [
-      "tickets",
-      "attendance",
-      "sitelogs",
-      "pm",
-      "rbac",
-      "profiles",
-      "utility",
-    ],
+    uptime: process.uptime(),
+    checks: {
+      database: db,
+      redis: redis,
+    },
   });
 });
 
-// Ping
-app.get("/ping", (_req: Request, res: Response) => {
+app.get("/ping", (_req, res) => {
   res.json({
     success: true,
     message: "pong",
@@ -75,106 +85,81 @@ app.get("/ping", (_req: Request, res: Response) => {
   });
 });
 
-// =============================================================================
-// Route Proxies (when services are running independently)
-// =============================================================================
+// Proxies
+const proxyOptions = (target: string, prefix: string) => ({
+  target,
+  pathFilter: `${prefix}`,
+  changeOrigin: true,
+  onProxyReq: (proxyReq: any, req: any) => {
+    if (req.requestId) {
+      proxyReq.setHeader("X-Request-Id", req.requestId);
+    }
+    logger.info(
+      `[Proxy] ${req.method} ${req.originalUrl} -> ${proxyReq.protocol}//${proxyReq.host}${proxyReq.path}`,
+      {
+        requestId: req.requestId,
+        service: target,
+      },
+    );
+  },
+  onError: (err: any, req: any, res: any) => {
+    logger.error(`[Proxy Error] ${req.method} ${req.url} -> ${err.message}`, {
+      requestId: req.requestId,
+      error: err,
+    });
 
-// Tickets Service Routes
-app.use(
-  "/api/tickets",
-  createProxyMiddleware({ target: SERVICES.tickets, changeOrigin: true }),
-);
-app.use(
-  "/api/complaints",
-  createProxyMiddleware({ target: SERVICES.tickets, changeOrigin: true }),
-);
-app.use(
-  "/api/complaint-categories",
-  createProxyMiddleware({ target: SERVICES.tickets, changeOrigin: true }),
-);
+    // Align with shared/src/middleware/errorHandler.ts format
+    res.status(502).json({
+      success: false,
+      status: "fail",
+      error: "Service unreachable",
+      ...(NODE_ENV === "development" && {
+        message: err.message,
+        stack: err.stack,
+      }),
+    });
+  },
+});
 
-// Attendance Service Routes
+app.use(createProxyMiddleware(proxyOptions(SERVICES.tickets, "/api/tickets")));
 app.use(
-  "/api/attendance",
-  createProxyMiddleware({ target: SERVICES.attendance, changeOrigin: true }),
+  createProxyMiddleware(proxyOptions(SERVICES.tickets, "/api/complaints")),
 );
+app.use(
+  createProxyMiddleware(
+    proxyOptions(SERVICES.tickets, "/api/complaint-categories"),
+  ),
+);
+app.use(
+  createProxyMiddleware(proxyOptions(SERVICES.attendance, "/api/attendance")),
+);
+app.use(createProxyMiddleware(proxyOptions(SERVICES.rbac, "/api/auth")));
+app.use(createProxyMiddleware(proxyOptions(SERVICES.rbac, "/api/admin")));
+app.use(createProxyMiddleware(proxyOptions(SERVICES.rbac, "/api/site-users")));
+app.use(createProxyMiddleware(proxyOptions(SERVICES.rbac, "/api/sites")));
+app.use(createProxyMiddleware(proxyOptions(SERVICES.rbac, "/api/assets")));
+app.use(createProxyMiddleware(proxyOptions(SERVICES.profiles, "/api/users")));
+app.use(
+  createProxyMiddleware(proxyOptions(SERVICES.sitelogs, "/api/site-logs")),
+);
+app.use(
+  createProxyMiddleware(
+    proxyOptions(SERVICES.sitelogs, "/api/chiller-readings"),
+  ),
+);
+app.use(createProxyMiddleware(proxyOptions(SERVICES.pm, "/api/pm-checklists")));
+app.use(createProxyMiddleware(proxyOptions(SERVICES.pm, "/api/pm-instances")));
+app.use(createProxyMiddleware(proxyOptions(SERVICES.pm, "/api/pm-checklist")));
+app.use(createProxyMiddleware(proxyOptions(SERVICES.pm, "/api/tasks")));
+app.use(createProxyMiddleware(proxyOptions(SERVICES.utility, "/api/whatsapp")));
+app.use(
+  createProxyMiddleware(proxyOptions(SERVICES.utility, "/api/notifications")),
+);
+app.use(createProxyMiddleware(proxyOptions(SERVICES.utility, "/api/email")));
 
-// RBAC Service Routes (Auth, Admin, Site Users, Sites, Assets)
-app.use(
-  "/api/auth",
-  createProxyMiddleware({ target: SERVICES.rbac, changeOrigin: true }),
-);
-app.use(
-  "/api/admin",
-  createProxyMiddleware({ target: SERVICES.rbac, changeOrigin: true }),
-);
-app.use(
-  "/api/site-users",
-  createProxyMiddleware({ target: SERVICES.rbac, changeOrigin: true }),
-);
-app.use(
-  "/api/sites",
-  createProxyMiddleware({ target: SERVICES.rbac, changeOrigin: true }),
-);
-app.use(
-  "/api/assets",
-  createProxyMiddleware({ target: SERVICES.rbac, changeOrigin: true }),
-);
-
-// Profiles Service Routes
-app.use(
-  "/api/users",
-  createProxyMiddleware({ target: SERVICES.profiles, changeOrigin: true }),
-);
-
-// SiteLogs Service Routes
-app.use(
-  "/api/site-logs",
-  createProxyMiddleware({ target: SERVICES.sitelogs, changeOrigin: true }),
-);
-app.use(
-  "/api/chiller-readings",
-  createProxyMiddleware({ target: SERVICES.sitelogs, changeOrigin: true }),
-);
-
-// PM Service Routes
-app.use(
-  "/api/pm-checklists",
-  createProxyMiddleware({ target: SERVICES.pm, changeOrigin: true }),
-);
-app.use(
-  "/api/pm-instances",
-  createProxyMiddleware({ target: SERVICES.pm, changeOrigin: true }),
-);
-app.use(
-  "/api/pm-checklist",
-  createProxyMiddleware({ target: SERVICES.pm, changeOrigin: true }),
-);
-app.use(
-  "/api/tasks",
-  createProxyMiddleware({ target: SERVICES.pm, changeOrigin: true }),
-);
-
-// Utility Service Routes (WhatsApp, Notifications, Email)
-app.use(
-  "/api/whatsapp",
-  createProxyMiddleware({ target: SERVICES.utility, changeOrigin: true }),
-);
-app.use(
-  "/api/notifications",
-  createProxyMiddleware({ target: SERVICES.utility, changeOrigin: true }),
-);
-app.use(
-  "/api/email",
-  createProxyMiddleware({ target: SERVICES.utility, changeOrigin: true }),
-);
-
-// =============================================================================
-// Fallback: Proxy to monolith for non-migrated routes
-// =============================================================================
+app.use(express.json());
 
 const MONOLITH_URL = process.env.MONOLITH_URL || "http://localhost:3400";
-
 app.use(
   "/api",
   createProxyMiddleware({
@@ -184,23 +169,16 @@ app.use(
   }),
 );
 
-// 404 Handler
-app.use((req: Request, _res: Response, next: NextFunction) => {
+app.use((req, res, next) => {
   next(new AppError(`Can't find ${req.originalUrl} on this server!`, 404));
 });
 
-// Error Handler
 app.use(errorHandler);
 
-// Start Server
-app.listen(Number(PORT), "0.0.0.0", () => {
-  console.log(`
-╔════════════════════════════════════════════════════════════╗
-║              SmartOps API Gateway                          ║
-╠════════════════════════════════════════════════════════════╣
-║  Gateway running on port ${PORT}                              ║
-║  Proxying to monolith: ${MONOLITH_URL}                     
-║  Health: http://localhost:${PORT}/health                      ║
-╚════════════════════════════════════════════════════════════╝
-  `);
+const server = app.listen(Number(PORT), "0.0.0.0", () => {
+  logger.info(`SmartOps API Gateway running on port ${PORT}`);
+  logger.info(`Proxying to monolith: ${MONOLITH_URL}`);
+  logger.info(`Health check: http://localhost:${PORT}/health`);
 });
+
+setupGracefulShutdown(server);

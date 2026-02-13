@@ -13,26 +13,29 @@ import { query, queryOne } from "@smartops/shared";
 export interface SiteLog {
   id: number;
   site_id: string;
-  user_id?: string;
+  executor_id?: string;
   log_name?: string;
   log_data?: Record<string, any>;
   notes?: string;
+  status?: string;
   created_at?: Date;
   updated_at?: Date;
 }
 
 export interface CreateSiteLogInput {
   site_id: string;
-  user_id?: string;
+  executor_id?: string;
   log_name?: string;
   log_data?: Record<string, any>;
   notes?: string;
+  status?: string;
 }
 
 export interface UpdateSiteLogInput {
   log_name?: string;
   log_data?: Record<string, any>;
   notes?: string;
+  status?: string;
 }
 
 export interface GetSiteLogsOptions {

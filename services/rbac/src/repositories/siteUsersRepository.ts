@@ -19,13 +19,17 @@ export interface SiteUser {
   updated_at?: Date;
   // Joined fields
   site_name?: string;
+  site_code?: string;
   user_name?: string;
   user_email?: string;
   user_phone?: string;
+  user_employee_code?: string;
+  user_department?: string;
+  user_designation?: string;
 }
 
 /**
- * Get all site-user mappings with optional filters
+ * Get all site-user mappings grouped by site
  */
 export async function getAll(options: {
   page?: number;
@@ -52,16 +56,16 @@ export async function getAll(options: {
   if (search) {
     params.push(`%${search}%`);
     conditions.push(
-      `(u.name ILIKE $${params.length} OR u.email ILIKE $${params.length} OR s.name ILIKE $${params.length})`,
+      `(u.name ILIKE $${params.length} OR u.email ILIKE $${params.length} OR s.name ILIKE $${params.length} OR s.site_code ILIKE $${params.length})`,
     );
   }
 
   const whereClause =
     conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
 
-  // Count query
+  // Count query (distinct users that have site assignments matching the filters)
   const countQuery = `
-    SELECT COUNT(*) as count
+    SELECT COUNT(DISTINCT u.user_id) as count
     FROM site_user su
     JOIN users u ON su.user_id = u.user_id
     JOIN sites s ON su.site_id = s.site_id
@@ -70,20 +74,29 @@ export async function getAll(options: {
   const countResult = await queryOne(countQuery, params);
   const total = parseInt(countResult?.count || "0");
 
-  // Data query
+  // Data query (Grouped by user)
   params.push(limit, offset);
   const dataQuery = `
     SELECT 
-      su.*,
-      u.name as user_name,
-      u.email as user_email,
-      u.phone as user_phone,
-      s.name as site_name
+      u.user_id,
+      MAX(u.name) as user_name,
+      MAX(u.email) as user_email,
+      MAX(u.employee_code) as user_employee_code,
+      MAX(u.department) as user_department,
+      MAX(u.designation) as user_designation,
+      json_agg(json_build_object(
+        'site_id', s.site_id,
+        'site_name', s.name,
+        'site_code', s.site_code,
+        'role_at_site', su.role_at_site,
+        'is_primary', su.is_primary
+      ) ORDER BY su.is_primary DESC, s.name) as sites
     FROM site_user su
     JOIN users u ON su.user_id = u.user_id
     JOIN sites s ON su.site_id = s.site_id
     ${whereClause}
-    ORDER BY su.created_at DESC
+    GROUP BY u.user_id
+    ORDER BY MAX(su.created_at) DESC
     LIMIT $${params.length - 1} OFFSET $${params.length}
   `;
   const data = await query(dataQuery, params);
@@ -113,12 +126,15 @@ export async function getBySite(siteId: string) {
           u.name as user_name,
           u.email as user_email,
           u.phone as user_phone,
+          u.employee_code as user_employee_code,
+          u.department as user_department,
+          u.designation as user_designation,
           u.role,
           u.is_active
         FROM site_user su
         JOIN users u ON su.user_id = u.user_id
         WHERE su.site_id = $1
-        ORDER BY su.is_primary DESC, u.full_name
+        ORDER BY su.is_primary DESC, u.name
       `;
       return query(sql, [siteId]);
     },
@@ -138,6 +154,7 @@ export async function getByUser(userId: string) {
         SELECT 
           su.*,
           s.name as site_name,
+          s.site_code,
           s.address,
           s.city,
           s.latitude,

@@ -5,6 +5,7 @@
  * Redis is non-authoritative - database is source of truth.
  */
 
+import { logger } from "../utils/logger.ts";
 import Redis from "ioredis";
 
 const getRedisUrl = (): string => {
@@ -17,7 +18,7 @@ export const redis = new Redis(getRedisUrl(), {
   maxRetriesPerRequest: 1, // Fail fast
   retryStrategy: (times) => {
     if (times > 3) {
-      console.error("Redis: Max retry attempts reached, giving up");
+      logger.error("Redis: Max retry attempts reached, giving up");
       return null; // Stop retrying
     }
     const delay = Math.min(times * 100, 1000);
@@ -30,19 +31,21 @@ export const redis = new Redis(getRedisUrl(), {
 
 // Event handlers
 redis.on("connect", () => {
-  console.log("Redis: Connected");
+  logger.info("Redis: Connected");
 });
 
 redis.on("ready", () => {
-  console.log("Redis: Ready to receive commands");
+  logger.info("Redis: Ready to receive commands");
 });
 
 redis.on("error", (err) => {
-  console.error("Redis error:", err.message);
+  if (!err.message.includes("ECONNREFUSED")) {
+    logger.error("Redis error", { error: err.message });
+  }
 });
 
 redis.on("close", () => {
-  console.log("Redis: Connection closed");
+  logger.info("Redis: Connection closed");
 });
 
 /**

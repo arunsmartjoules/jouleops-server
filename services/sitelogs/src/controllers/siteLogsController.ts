@@ -11,85 +11,62 @@ import {
   sendSuccess,
   sendCreated,
   sendError,
-  sendServerError,
+  asyncHandler,
 } from "@smartops/shared";
 
-export const create = async (req: Request, res: Response) => {
-  try {
-    const result = await siteLogsRepository.createLog(req.body);
-    return sendCreated(res, result);
-  } catch (error: any) {
-    console.error("Create site log error:", error);
-    return sendServerError(res, error);
+export const create = asyncHandler(async (req: Request, res: Response) => {
+  const result = await siteLogsRepository.createLog(req.body);
+  return sendCreated(res, result);
+});
+
+export const getBySite = asyncHandler(async (req: Request, res: Response) => {
+  const { siteId } = req.params;
+  const { page, limit, type } = req.query;
+
+  if (!siteId) {
+    return sendError(res, "Site ID is required");
   }
-};
 
-export const getBySite = async (req: Request, res: Response) => {
-  try {
-    const { siteId } = req.params;
-    const { page, limit, type } = req.query;
+  const result = await siteLogsRepository.getLogsBySite(siteId, {
+    page: parseInt(page as string) || 1,
+    limit: parseInt(limit as string) || 20,
+    log_name: type as string | undefined,
+  });
+  return sendSuccess(res, result.data, { pagination: result.pagination });
+});
 
-    if (!siteId) {
-      return sendError(res, "Site ID is required");
-    }
+export const getAll = asyncHandler(
+  async (req: Request, res: Response, next) => {
+    req.params.siteId = "all";
+    return getBySite(req, res, next);
+  },
+);
 
-    const result = await siteLogsRepository.getLogsBySite(siteId, {
-      page: parseInt(page as string) || 1,
-      limit: parseInt(limit as string) || 20,
-      log_name: type as string | undefined,
-    });
-    return sendSuccess(res, result.data, { pagination: result.pagination });
-  } catch (error: any) {
-    console.error("Get site logs error:", error);
-    return sendServerError(res, error);
+export const update = asyncHandler(async (req: Request, res: Response) => {
+  const { id } = req.params;
+  if (!id) {
+    return sendError(res, "Log ID is required");
   }
-};
+  const result = await siteLogsRepository.updateLog(parseInt(id), req.body);
+  return sendSuccess(res, result);
+});
 
-export const getAll = async (req: Request, res: Response) => {
-  req.params.siteId = "all";
-  return getBySite(req, res);
-};
-
-export const update = async (req: Request, res: Response) => {
-  try {
-    const { id } = req.params;
-    if (!id) {
-      return sendError(res, "Log ID is required");
-    }
-    const result = await siteLogsRepository.updateLog(parseInt(id), req.body);
-    return sendSuccess(res, result);
-  } catch (error: any) {
-    console.error("Update site log error:", error);
-    return sendServerError(res, error);
+export const remove = asyncHandler(async (req: Request, res: Response) => {
+  const { id } = req.params;
+  if (!id) {
+    return sendError(res, "Log ID is required");
   }
-};
+  await siteLogsRepository.deleteLog(parseInt(id));
+  return sendSuccess(res, null, { message: "Log deleted successfully" });
+});
 
-export const remove = async (req: Request, res: Response) => {
-  try {
-    const { id } = req.params;
-    if (!id) {
-      return sendError(res, "Log ID is required");
-    }
-    await siteLogsRepository.deleteLog(parseInt(id));
-    return sendSuccess(res, null, { message: "Log deleted successfully" });
-  } catch (error: any) {
-    console.error("Delete site log error:", error);
-    return sendServerError(res, error);
+export const bulkRemove = asyncHandler(async (req: Request, res: Response) => {
+  const { ids } = req.body;
+  if (!ids || !Array.isArray(ids)) {
+    return sendError(res, "Invalid IDs provided");
   }
-};
-
-export const bulkRemove = async (req: Request, res: Response) => {
-  try {
-    const { ids } = req.body;
-    if (!ids || !Array.isArray(ids)) {
-      return sendError(res, "Invalid IDs provided");
-    }
-    const result = await siteLogsRepository.deleteLogs(ids);
-    return sendSuccess(res, result);
-  } catch (error: any) {
-    console.error("Bulk delete site log error:", error);
-    return sendServerError(res, error);
-  }
-};
+  const result = await siteLogsRepository.deleteLogs(ids);
+  return sendSuccess(res, result);
+});
 
 export default { create, getBySite, getAll, update, remove, bulkRemove };

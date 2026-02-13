@@ -3,7 +3,13 @@
  */
 
 // Database
-export { query, queryOne, transaction, pool } from "./lib/db.ts";
+export {
+  query,
+  queryOne,
+  transaction,
+  pool,
+  healthCheck as dbHealthCheck,
+} from "./lib/db.ts";
 
 // Redis & Caching
 export {
@@ -40,9 +46,17 @@ export {
 
 // Errors
 export { AppError } from "./utils/AppError.ts";
+export { asyncHandler } from "./utils/asyncHandler.ts";
+export { logger, logWithRequest } from "./utils/logger.ts";
+export { setupGracefulShutdown } from "./utils/shutdown.ts";
+
+// Schemas
+export * from "./types/schemas.ts";
 
 // Middleware
 export { errorHandler } from "./middleware/errorHandler.ts";
+export { validate } from "./middleware/validate.ts";
+export { correlationId } from "./middleware/correlationId.ts";
 
 // Types
 export type { AuthRequest } from "./types/express.ts";

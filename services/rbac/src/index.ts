@@ -7,12 +7,16 @@
 
 import express from "express";
 import type { Request, Response, NextFunction } from "express";
-import cors from "cors";
 import helmet from "helmet";
-import morgan from "morgan";
-import compression from "compression";
-
-import { errorHandler, AppError } from "@smartops/shared";
+import {
+  errorHandler,
+  AppError,
+  correlationId,
+  logger,
+  setupGracefulShutdown,
+  dbHealthCheck,
+  redisHealthCheck,
+} from "@smartops/shared";
 
 // Import routes
 import authRoutes from "./routes/auth.ts";
@@ -26,19 +30,24 @@ const PORT = process.env.RBAC_PORT || 3425;
 const app = express();
 
 // Middleware
-app.use(compression());
-app.use(cors());
 app.use(helmet());
-app.use(morgan("combined"));
+app.use(correlationId);
 app.use(express.json());
 
-// Health check
-app.get("/health", (_req: Request, res: Response) => {
-  res.json({
-    success: true,
+// Standardized Health check
+app.get("/health", async (_req: Request, res: Response) => {
+  const [db, redis] = await Promise.all([dbHealthCheck(), redisHealthCheck()]);
+  const status = db.connected && redis.connected ? 200 : 503;
+
+  res.status(status).json({
+    success: status === 200,
     service: "rbac",
-    port: PORT,
     timestamp: new Date().toISOString(),
+    uptime: process.uptime(),
+    checks: {
+      database: db,
+      redis: redis,
+    },
   });
 });
 
@@ -62,16 +71,14 @@ export { app };
 
 // Start Server
 if (import.meta.main) {
-  app.listen(Number(PORT), "0.0.0.0", () => {
-    console.log(`
-╔════════════════════════════════════════════════════════════╗
-║              SmartOps RBAC Service                         ║
-╠════════════════════════════════════════════════════════════╣
-║  Service running on port ${PORT}                              ║
-║  Health: http://localhost:${PORT}/health                      ║
-║  Routes: /api/auth, /api/admin, /api/site-users,            ║
-║          /api/sites, /api/assets                            ║
-╚════════════════════════════════════════════════════════════╝
-    `);
+  const server = app.listen(Number(PORT), "0.0.0.0", () => {
+    logger.info(`SmartOps RBAC Service running on port ${PORT}`);
+    logger.info(`Health check: http://localhost:${PORT}/health`);
+    logger.info(
+      `Routes: /api/auth, /api/admin, /api/site-users, /api/sites, /api/assets`,
+    );
   });
+
+  // Graceful Shutdown
+  setupGracefulShutdown(server);
 }
