@@ -23,8 +23,10 @@ export const errorHandler = (
     );
   }
 
-  const statusCode = error instanceof AppError ? error.statusCode : 500;
-  const status = error instanceof AppError ? error.status : "error";
+  const statusCode =
+    error instanceof AppError ? error.statusCode : error.statusCode || 500;
+  const status =
+    error instanceof AppError ? error.status : error.status || "error";
   const message = error.message || "Internal Server Error";
 
   if (statusCode === 500) {

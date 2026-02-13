@@ -20,6 +20,9 @@ const getDatabaseUrl = (): string => {
   // Database URL format: postgresql://postgres.[project-ref]:[password]@aws-0-[region].pooler.supabase.com:6543/postgres
   const supabaseUrl = process.env.SUPABASE_URL;
   if (!supabaseUrl) {
+    if (process.env.NODE_ENV === "test") {
+      return "postgresql://postgres:password@localhost:5432/postgres";
+    }
     throw new Error("DATABASE_URL or SUPABASE_URL must be set");
   }
 
