@@ -102,6 +102,15 @@ jobs:
       DATABASE_URL: postgresql://localhost
       JWT_SECRET: test-secret
       SUPABASE_URL: https://test.supabase.co
+      INTERNAL_API_KEY: test-internal-key
+      REDIS_URL: redis://localhost:6379
+      PORT: 3420
+      NODE_ENV: test
+      RESEND_API_KEY: re_123456789
+      WHAPI_TOKEN: wh_123456789
+      SUPABASE_SERVICE_ROLE_KEY: sb_123456789
+      SUPABASE_DB_PASSWORD: test-password
+      JWT_EXPIRES_IN: 1d
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2

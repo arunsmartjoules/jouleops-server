@@ -38,7 +38,12 @@
                 "INTERNAL_API_KEY",
                 "REDIS_URL",
                 "PORT",
-                "NODE_ENV"
+                "NODE_ENV",
+                "RESEND_API_KEY",
+                "WHAPI_TOKEN",
+                "SUPABASE_SERVICE_ROLE_KEY",
+                "SUPABASE_DB_PASSWORD",
+                "JWT_EXPIRES_IN"
             ]
         },
         "test": {
