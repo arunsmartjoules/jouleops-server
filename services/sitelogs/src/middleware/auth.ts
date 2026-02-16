@@ -127,6 +127,36 @@ export const verifyApiKey = async (
 };
 
 /**
+ * Unified authentication (Verify API Key OR JWT Token)
+ */
+export const verifyAnyAuth = async (
+  req: AuthRequest,
+  res: Response,
+  next: NextFunction,
+) => {
+  const authHeader = req.headers.authorization;
+  const apiKey = req.headers["x-api-key"];
+
+  // 1. Try API Key first (Internal Service Auth)
+  if (apiKey) {
+    const validKey = process.env.INTERNAL_API_KEY || "jouleops-internal-key";
+    if (apiKey === validKey) {
+      return next();
+    }
+  }
+
+  // 2. Fallback to JWT
+  if (authHeader) {
+    return verifyToken(req, res, next);
+  }
+
+  return res.status(401).json({
+    success: false,
+    error: "No authentication provided (Token or API Key required)",
+  });
+};
+
+/**
  * Require admin role
  */
 export const requireAdmin = requireRole(["admin", "superadmin"]);

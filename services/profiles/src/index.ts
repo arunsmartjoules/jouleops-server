@@ -63,5 +63,9 @@ const server = app.listen(Number(PORT), "0.0.0.0", () => {
   logger.info(`Routes: /api/users`);
 });
 
+server.timeout = 300000;
+server.keepAliveTimeout = 65000;
+server.headersTimeout = 66000;
+
 // Graceful Shutdown
 setupGracefulShutdown(server);

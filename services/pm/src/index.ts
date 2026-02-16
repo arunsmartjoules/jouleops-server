@@ -69,6 +69,10 @@ if (import.meta.main) {
     logger.info(`Routes: /api/pm-checklists, /api/pm-instances, /api/tasks`);
   });
 
+  server.timeout = 300000;
+  server.keepAliveTimeout = 65000;
+  server.headersTimeout = 66000;
+
   // Graceful Shutdown
   setupGracefulShutdown(server);
 }

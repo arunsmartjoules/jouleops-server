@@ -1,6 +1,6 @@
 import express from "express";
 import pmChecklistController from "../controllers/pmChecklistController.ts";
-import { verifyToken, verifyApiKey, requireRole } from "../middleware/auth.ts";
+import { verifyAnyAuth, requireRole } from "../middleware/auth.ts";
 
 const router = express.Router();
 
@@ -11,41 +11,41 @@ const router = express.Router();
 
 router.post(
   "/",
-  verifyToken,
+  verifyAnyAuth,
   requireRole(["admin", "superadmin"]),
   pmChecklistController.create,
 );
-router.get("/site/:siteId", verifyToken, pmChecklistController.getBySite);
+router.get("/site/:siteId", verifyAnyAuth, pmChecklistController.getBySite);
 router.get(
   "/maintenance-type/:maintenanceType",
-  verifyToken,
+  verifyAnyAuth,
   pmChecklistController.getByMaintenanceType,
 );
-router.get("/", verifyToken, pmChecklistController.getAll);
-router.get("/:checklistId", verifyToken, pmChecklistController.getById);
+router.get("/", verifyAnyAuth, pmChecklistController.getAll);
+router.get("/:checklistId", verifyAnyAuth, pmChecklistController.getById);
 router.put(
   "/:checklistId",
-  verifyToken,
+  verifyAnyAuth,
   requireRole(["admin", "superadmin"]),
   pmChecklistController.update,
 );
 router.delete(
   "/:checklistId",
-  verifyToken,
+  verifyAnyAuth,
   requireRole(["admin", "superadmin"]),
   pmChecklistController.remove,
 );
 
 // Checklist Responses
-router.post("/responses", verifyApiKey, pmChecklistController.createResponse);
+router.post("/responses", verifyAnyAuth, pmChecklistController.createResponse);
 router.get(
   "/responses/instance/:instanceId",
-  verifyToken,
+  verifyAnyAuth,
   pmChecklistController.getResponses,
 );
 router.put(
   "/responses/:responseId",
-  verifyToken,
+  verifyAnyAuth,
   pmChecklistController.updateResponse,
 );
 

@@ -4,17 +4,27 @@ import { z } from "zod";
  * Site Log Schemas
  */
 export const createSiteLogSchema = z.object({
-  site_id: z.string().uuid(),
-  log_name: z.string().min(1),
-  log_value: z.string().optional(),
-  unit: z.string().optional(),
-  executor_id: z.string().uuid(),
-  status: z
-    .enum(["Pending", "In Progress", "Completed", "Cancelled"])
-    .optional()
-    .default("Pending"),
-  remarks: z.string().optional(),
-  metadata: z.record(z.string(), z.any()).optional(),
+  site_id: z.string().min(1),
+  executor_id: z.string().optional().nullable(),
+  log_name: z.string().optional().nullable(),
+  temperature: z.number().optional().nullable(),
+  rh: z.number().optional().nullable(),
+  tds: z.number().optional().nullable(),
+  ph: z.number().optional().nullable(),
+  hardness: z.number().optional().nullable(),
+  chemical_dosing: z.string().optional().nullable(),
+  remarks: z.string().optional().nullable(),
+  entry_time: z.string().datetime().optional().nullable(),
+  end_time: z.string().datetime().optional().nullable(),
+  signature: z.string().optional().nullable(),
+  attachment: z.string().optional().nullable(),
+  task_line_id: z.string().optional().nullable(),
+  log_id: z.string().optional().nullable(),
+  sequence_no: z.string().optional().nullable(),
+  scheduled_date: z.string().optional().nullable(),
+  main_remarks: z.string().optional().nullable(),
+  task_name: z.string().optional().nullable(),
+  status: z.string().optional().default("Pending"),
 });
 
 export const updateSiteLogSchema = createSiteLogSchema
@@ -25,27 +35,89 @@ export const updateSiteLogSchema = createSiteLogSchema
  * Chiller Reading Schemas
  */
 export const createChillerReadingSchema = z.object({
-  site_id: z.string().uuid(),
-  chiller_id: z.string().uuid(),
-  reading_time: z.string().datetime().optional(),
-  evaporator_inlet_temp: z.number().optional(),
-  evaporator_outlet_temp: z.number().optional(),
-  condenser_inlet_temp: z.number().optional(),
-  condenser_outlet_temp: z.number().optional(),
-  evaporator_pressure: z.number().optional(),
-  condenser_pressure: z.number().optional(),
-  compressor_load_percentage: z.number().min(0).max(100).optional(),
-  power_consumption_kw: z.number().optional(),
-  status: z
-    .enum(["Pending", "In Progress", "Completed", "Cancelled"])
-    .optional()
-    .default("Pending"),
-  remarks: z.string().optional(),
-  executor_id: z.string().uuid(),
+  site_id: z.string().min(1),
+  chiller_id: z.string().min(1).optional().nullable(),
+  equipment_id: z.string().optional().nullable(),
+  log_id: z.string().optional().nullable(),
+  executor_id: z.string().min(1).optional().nullable(),
+  reading_time: z.string().datetime().optional().nullable(),
+  startdatetime: z.string().datetime().optional().nullable(),
+  start_datetime: z.string().datetime().optional().nullable(),
+  enddatetime: z.string().datetime().optional().nullable(),
+  date_shift: z.string().optional().nullable(),
+  compressor_load_percentage: z.number().optional().nullable(),
+  compressor_load_percent: z.number().optional().nullable(),
+  set_point_celsius: z.number().optional().nullable(),
+  set_point: z.number().optional().nullable(),
+  condenser_inlet_temp: z.number().optional().nullable(),
+  condenser_outlet_temp: z.number().optional().nullable(),
+  evaporator_inlet_temp: z.number().optional().nullable(),
+  evaporator_outlet_temp: z.number().optional().nullable(),
+  compressor_suction_temp: z.number().optional().nullable(),
+  motor_temperature: z.number().optional().nullable(),
+  saturated_condenser_temp: z.number().optional().nullable(),
+  saturated_suction_temp: z.number().optional().nullable(),
+  discharge_pressure: z.number().optional().nullable(),
+  main_suction_pressure: z.number().optional().nullable(),
+  oil_pressure: z.number().optional().nullable(),
+  oil_pressure_difference: z.number().optional().nullable(),
+  condenser_inlet_pressure: z.number().optional().nullable(),
+  condenser_outlet_pressure: z.number().optional().nullable(),
+  evaporator_inlet_pressure: z.number().optional().nullable(),
+  evaporator_outlet_pressure: z.number().optional().nullable(),
+  inline_btu_meter: z.number().optional().nullable(),
+  status: z.string().optional().default("Pending"),
+  remarks: z.string().optional().nullable(),
+  reviewed_by: z.string().optional().nullable(),
+  signature_text: z.string().optional().nullable(),
+  attachments: z.string().optional().nullable(),
+  sla_status: z.string().optional().nullable(),
+  flag_incident: z.boolean().optional().default(false),
+  delete: z.boolean().optional().default(false),
+  sync: z.boolean().optional().default(false),
+  lastsync: z.string().datetime().optional().nullable(),
+  deletedat: z.string().datetime().optional().nullable(),
+  createdat: z.string().datetime().optional().nullable(),
+  updatedat: z.string().datetime().optional().nullable(),
 });
 
 export const updateChillerReadingSchema = createChillerReadingSchema
   .omit({ site_id: true, chiller_id: true })
+  .partial();
+
+/**
+ * PM Instance Schemas
+ */
+export const createPMInstanceSchema = z.object({
+  instance_id: z.string().min(1),
+  site_id: z.string().min(1),
+  asset_id: z.string().optional().nullable(),
+  maintenance_id: z.string().optional().nullable(),
+  checklist_version: z.string().optional().nullable(),
+  title: z.string().optional().nullable(),
+  description: z.string().optional().nullable(),
+  location: z.string().optional().nullable(),
+  asset_type: z.string().optional().nullable(),
+  floor: z.string().optional().nullable(),
+  frequency: z.string().optional().nullable(),
+  start_due_date: z.string().optional().nullable(),
+  start_datetime: z.string().datetime().optional().nullable(),
+  end_datetime: z.string().datetime().optional().nullable(),
+  status: z.string().optional().default("Pending"),
+  progress: z.string().optional().nullable(),
+  estimated_duration: z.string().optional().nullable(),
+  inventory_id: z.string().optional().nullable(),
+  created_by: z.string().optional().nullable(),
+  updated_by: z.string().optional().nullable(),
+  assigned_to: z.string().optional().nullable(),
+  teams: z.string().optional().nullable(),
+  teams_name: z.string().optional().nullable(),
+  assigned_to_name: z.string().optional().nullable(),
+  remarks: z.string().optional().nullable(),
+});
+
+export const updatePMInstanceSchema = createPMInstanceSchema
+  .omit({ instance_id: true, site_id: true })
   .partial();
 
 /**
@@ -71,26 +143,45 @@ export const changePasswordSchema = z.object({
  * Ticket/Complaint Schemas
  */
 export const createComplaintSchema = z.object({
-  ticket_id: z.string().uuid(),
   ticket_no: z.string().min(1),
-  site_id: z.string().uuid(),
+  site_id: z.string().min(1), // Relaxed from UUID since it can be alphanumeric code
   title: z.string().min(1),
-  description: z.string().optional(),
-  category: z.string().optional(),
   status: z.string().optional().default("Open"),
-  priority: z
-    .enum(["Low", "Medium", "High", "Critical"])
-    .optional()
-    .default("Medium"),
+  category: z.string().optional(),
+  location: z.string().optional(),
+  area_asset: z.string().optional(),
+  created_user: z.string().optional(),
   message_id: z.string().optional(),
+  sender_id: z.string().optional(),
   group_id: z.string().optional(),
-  reported_by: z.string().optional(),
-  assigned_to: z.string().uuid().optional(),
+  internal_remarks: z.string().optional(),
+  customer_inputs: z.string().optional(),
+  notes: z.string().optional(),
+  contact_name: z.string().optional(),
+  contact_number: z.string().optional(),
+  current_temperature: z.number().optional().nullable(),
+  current_rh: z.number().optional().nullable(),
+  standard_temperature: z.number().optional().nullable(),
+  standard_rh: z.number().optional().nullable(),
+  spare_type: z.string().optional().nullable(),
+  spare_quantity: z.number().optional().nullable(),
+  start_datetime: z.string().datetime().optional().nullable(),
+  end_datetime: z.string().datetime().optional().nullable(),
+  responded_at: z.string().datetime().optional().nullable(),
+  resolved_at: z.string().datetime().optional().nullable(),
+  flag_incident: z.boolean().optional().default(false),
+  assigned_to: z.string().optional().nullable(),
+  escalation_source: z.string().optional().nullable(),
+  sub_ticket_id: z.string().optional().nullable(),
+  reason: z.string().optional().nullable(),
+  support_users: z.string().optional().nullable(), // Store as stringified JSON if needed
+  support_users_name: z.string().optional().nullable(),
+  attachments: z.string().optional().nullable(),
+  remarks: z.string().optional().nullable(),
 });
 
 export const updateComplaintSchema = createComplaintSchema
   .omit({
-    ticket_id: true,
     ticket_no: true,
     site_id: true,
   })
@@ -99,4 +190,24 @@ export const updateComplaintSchema = createComplaintSchema
 export const updateComplaintStatusSchema = z.object({
   status: z.string().min(1),
   remarks: z.string().optional(),
+});
+
+/**
+ * Attendance Schemas
+ */
+export const attendanceSchema = z.object({
+  user_id: z.string().min(1),
+  site_id: z.string().min(1),
+  date: z.string().optional(),
+  check_in_time: z.string().datetime().optional().nullable(),
+  check_out_time: z.string().datetime().optional().nullable(),
+  check_in_latitude: z.number().optional().nullable(),
+  check_in_longitude: z.number().optional().nullable(),
+  check_out_latitude: z.number().optional().nullable(),
+  check_out_longitude: z.number().optional().nullable(),
+  check_in_address: z.string().optional().nullable(),
+  check_out_address: z.string().optional().nullable(),
+  shift_id: z.string().optional().nullable(),
+  status: z.string().optional().default("Present"),
+  remarks: z.string().optional().nullable(),
 });

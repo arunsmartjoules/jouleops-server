@@ -16,53 +16,79 @@ const buildKey = (prefix: string, id: string) => `${prefix}${id}`;
 // ============================================================================
 
 export interface Complaint {
-  id: number;
-  ticket_id: string;
+  id: string; // UUID in database
   ticket_no: string;
   site_id: string;
   title: string;
-  description?: string;
-  category?: string;
   status: string;
-  priority?: string;
+  category?: string;
+  location?: string;
+  area_asset?: string;
+  created_user?: string;
   message_id?: string;
+  sender_id?: string;
   group_id?: string;
-  reported_by?: string;
-  assigned_to?: string;
-  remarks?: string;
   internal_remarks?: string;
+  customer_inputs?: string;
+  notes?: string;
+  contact_name?: string;
+  contact_number?: string;
+  current_temperature?: number;
+  current_rh?: number;
+  standard_temperature?: number;
+  standard_rh?: number;
+  spare_type?: string;
+  spare_quantity?: number;
+  start_datetime?: Date;
+  end_datetime?: Date;
+  responded_at?: Date;
   resolved_at?: Date;
-  closed_at?: Date;
+  flag_incident: boolean;
+  assigned_to?: string;
+  escalation_source?: string;
+  sub_ticket_id?: string;
+  reason?: string;
+  support_users?: string;
+  support_users_name?: string;
+  attachments?: string;
+  remarks?: string;
   created_at: Date;
-  updated_at?: Date;
+  updated_at: Date;
 }
 
 export interface CreateComplaintInput {
-  ticket_id: string;
   ticket_no: string;
   site_id: string;
   title: string;
-  description?: string;
-  category?: string;
   status?: string;
-  priority?: string;
+  category?: string;
+  location?: string;
+  area_asset?: string;
+  created_user?: string;
   message_id?: string;
+  sender_id?: string;
   group_id?: string;
-  reported_by?: string;
+  internal_remarks?: string;
+  current_temperature?: number;
+  current_rh?: number;
+  flag_incident?: boolean;
   assigned_to?: string;
+  support_users?: string;
 }
 
 export interface UpdateComplaintInput {
   title?: string;
-  description?: string;
-  category?: string;
   status?: string;
-  priority?: string;
+  category?: string;
+  location?: string;
+  area_asset?: string;
   assigned_to?: string;
   remarks?: string;
   internal_remarks?: string;
   resolved_at?: Date;
-  closed_at?: Date;
+  end_datetime?: Date;
+  reason?: string;
+  support_users?: string;
 }
 
 export interface GetComplaintsOptions {
@@ -108,20 +134,17 @@ export async function createComplaint(
 }
 
 /**
- * Get complaint by ticket_id (UUID)
+ * Get complaint by ID (UUID)
  */
-export async function getComplaintByTicketId(
-  ticketId: string,
-): Promise<Complaint | null> {
-  const cacheKey = buildKey(CACHE_PREFIX.TICKET, ticketId);
+export async function getComplaintById(id: string): Promise<Complaint | null> {
+  const cacheKey = buildKey(CACHE_PREFIX.TICKET, id);
 
   return cached(
     cacheKey,
     async () => {
-      return queryOne<Complaint>(
-        `SELECT * FROM complaints WHERE ticket_id = $1`,
-        [ticketId],
-      );
+      return queryOne<Complaint>(`SELECT * FROM complaints WHERE id = $1`, [
+        id,
+      ]);
     },
     TTL.SHORT,
   );
@@ -139,13 +162,6 @@ export async function getComplaintByTicketNo(
 }
 
 /**
- * Get complaint by ID (numeric id field)
- */
-export async function getComplaintById(id: number): Promise<Complaint | null> {
-  return queryOne<Complaint>(`SELECT * FROM complaints WHERE id = $1`, [id]);
-}
-
-/**
  * Flexible get complaint - tries multiple ID fields
  */
 export async function getComplaint(
@@ -157,19 +173,7 @@ export async function getComplaint(
     );
 
   if (isUuid) {
-    // Try ticket_id first
-    const byTicketId = await queryOne<Complaint>(
-      `SELECT * FROM complaints WHERE ticket_id = $1`,
-      [identifier],
-    );
-    if (byTicketId) return byTicketId;
-
-    // Try Supabase id field
-    const byId = await queryOne<Complaint>(
-      `SELECT * FROM complaints WHERE id::text = $1`,
-      [identifier],
-    );
-    if (byId) return byId;
+    return getComplaintById(identifier);
   }
 
   // Try ticket_no
@@ -304,7 +308,7 @@ export async function getRecentComplaintsByGroup(
  * Update a complaint
  */
 export async function updateComplaint(
-  id: number,
+  id: string,
   updateData: UpdateComplaintInput,
 ): Promise<Complaint> {
   const entries = Object.entries(updateData).filter(
@@ -332,7 +336,7 @@ export async function updateComplaint(
   }
 
   // Invalidate cache
-  await del(buildKey(CACHE_PREFIX.TICKET, complaint.ticket_id));
+  await del(buildKey(CACHE_PREFIX.TICKET, complaint.id));
 
   return complaint;
 }
@@ -341,7 +345,7 @@ export async function updateComplaint(
  * Update complaint status with timestamps
  */
 export async function updateComplaintStatus(
-  id: number,
+  id: string,
   status: string,
   remarks?: string,
 ): Promise<Complaint> {
@@ -371,22 +375,11 @@ export async function deleteComplaint(identifier: string): Promise<boolean> {
     );
 
   if (isUuid) {
-    // Try ticket_id first
-    const byTicketId = await queryOne<{ id: number }>(
-      `DELETE FROM complaints WHERE ticket_id = $1 RETURNING id`,
+    const deleted = await queryOne<{ id: string }>(
+      `DELETE FROM complaints WHERE id = $1 RETURNING id`,
       [identifier],
     );
-    if (byTicketId) {
-      await del(buildKey(CACHE_PREFIX.TICKET, identifier));
-      return true;
-    }
-
-    // Try id field
-    const byId = await queryOne<{ id: number }>(
-      `DELETE FROM complaints WHERE id::text = $1 RETURNING id`,
-      [identifier],
-    );
-    if (byId) {
+    if (deleted) {
       await del(buildKey(CACHE_PREFIX.TICKET, identifier));
       return true;
     }
@@ -442,9 +435,8 @@ export async function getComplaintStats(siteId: string): Promise<{
 
 export default {
   createComplaint,
-  getComplaintByTicketId,
-  getComplaintByTicketNo,
   getComplaintById,
+  getComplaintByTicketNo,
   getComplaint,
   getComplaintByMessageId,
   getComplaintsBySite,

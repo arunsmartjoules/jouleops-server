@@ -27,9 +27,7 @@ export const getById = asyncHandler(async (req: Request, res: Response) => {
   if (!id) {
     return sendError(res, "ID is required");
   }
-  const reading = await chillerReadingsRepository.getChillerReadingById(
-    parseInt(id),
-  );
+  const reading = await chillerReadingsRepository.getChillerReadingById(id);
   if (!reading) {
     return sendNotFound(res, "Chiller reading");
   }
@@ -107,15 +105,13 @@ export const update = asyncHandler(async (req: Request, res: Response) => {
   if (!id) {
     return sendError(res, "ID is required");
   }
-  const existing = await chillerReadingsRepository.getChillerReadingById(
-    parseInt(id),
-  );
+  const existing = await chillerReadingsRepository.getChillerReadingById(id);
   if (!existing) {
     return sendNotFound(res, "Chiller reading");
   }
 
   const reading = await chillerReadingsRepository.updateChillerReading(
-    parseInt(id),
+    id,
     req.body,
   );
   return sendSuccess(res, reading);
@@ -126,14 +122,12 @@ export const remove = asyncHandler(async (req: Request, res: Response) => {
   if (!id) {
     return sendError(res, "ID is required");
   }
-  const existing = await chillerReadingsRepository.getChillerReadingById(
-    parseInt(id),
-  );
+  const existing = await chillerReadingsRepository.getChillerReadingById(id);
   if (!existing) {
     return sendNotFound(res, "Chiller reading");
   }
 
-  await chillerReadingsRepository.deleteChillerReading(parseInt(id));
+  await chillerReadingsRepository.deleteChillerReading(id);
   return sendSuccess(res, null, {
     message: "Chiller reading deleted successfully",
   });

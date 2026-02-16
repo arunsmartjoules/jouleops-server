@@ -47,7 +47,7 @@ export const update = asyncHandler(async (req: Request, res: Response) => {
   if (!id) {
     return sendError(res, "Log ID is required");
   }
-  const result = await siteLogsRepository.updateLog(parseInt(id), req.body);
+  const result = await siteLogsRepository.updateLog(id, req.body);
   return sendSuccess(res, result);
 });
 
@@ -56,7 +56,7 @@ export const remove = asyncHandler(async (req: Request, res: Response) => {
   if (!id) {
     return sendError(res, "Log ID is required");
   }
-  await siteLogsRepository.deleteLog(parseInt(id));
+  await siteLogsRepository.deleteLog(id);
   return sendSuccess(res, null, { message: "Log deleted successfully" });
 });
 

@@ -90,6 +90,8 @@ const proxyOptions = (target: string, prefix: string) => ({
   target,
   pathFilter: `${prefix}`,
   changeOrigin: true,
+  proxyTimeout: 300000, // 5 minutes
+  timeout: 300000, // 5 minutes
   onProxyReq: (proxyReq: any, req: any) => {
     if (req.requestId) {
       proxyReq.setHeader("X-Request-Id", req.requestId);
@@ -180,5 +182,9 @@ const server = app.listen(Number(PORT), "0.0.0.0", () => {
   logger.info(`Proxying to monolith: ${MONOLITH_URL}`);
   logger.info(`Health check: http://localhost:${PORT}/health`);
 });
+
+server.timeout = 300000; // 5 minutes
+server.keepAliveTimeout = 65000; // Slightly more than standard ALBs (60s)
+server.headersTimeout = 66000;
 
 setupGracefulShutdown(server);

@@ -83,6 +83,10 @@ if (import.meta.main) {
     );
   });
 
+  server.timeout = 300000;
+  server.keepAliveTimeout = 65000;
+  server.headersTimeout = 66000;
+
   // Graceful Shutdown
   setupGracefulShutdown(server);
 }

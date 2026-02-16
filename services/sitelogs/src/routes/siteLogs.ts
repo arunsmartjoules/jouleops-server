@@ -1,6 +1,6 @@
 import express from "express";
 import siteLogsController from "../controllers/siteLogsController.ts";
-import { verifyToken } from "../middleware/auth.ts";
+import { verifyAnyAuth } from "../middleware/auth.ts";
 
 import {
   validate,
@@ -15,21 +15,21 @@ const router = express.Router();
  * Base path: /api/site-logs
  */
 
-router.post("/bulk-delete", verifyToken, siteLogsController.bulkRemove);
-router.get("/", verifyToken, siteLogsController.getAll);
+router.post("/bulk-delete", verifyAnyAuth, siteLogsController.bulkRemove);
+router.get("/", verifyAnyAuth, siteLogsController.getAll);
 router.post(
   "/",
-  verifyToken,
+  verifyAnyAuth,
   validate(createSiteLogSchema),
   siteLogsController.create,
 );
-router.get("/site/:siteId", verifyToken, siteLogsController.getBySite);
+router.get("/site/:siteId", verifyAnyAuth, siteLogsController.getBySite);
 router.put(
   "/:id",
-  verifyToken,
+  verifyAnyAuth,
   validate(updateSiteLogSchema),
   siteLogsController.update,
 );
-router.delete("/:id", verifyToken, siteLogsController.remove);
+router.delete("/:id", verifyAnyAuth, siteLogsController.remove);
 
 export default router;

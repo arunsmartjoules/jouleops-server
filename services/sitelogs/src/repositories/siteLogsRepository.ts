@@ -11,12 +11,27 @@ import { query, queryOne } from "@jouleops/shared";
 // ============================================================================
 
 export interface SiteLog {
-  id: number;
+  id: string; // UUID
   site_id: string;
   executor_id?: string;
   log_name?: string;
-  log_data?: Record<string, any>;
-  notes?: string;
+  temperature?: number;
+  rh?: number;
+  tds?: number;
+  ph?: number;
+  hardness?: number;
+  chemical_dosing?: string;
+  remarks?: string;
+  entry_time?: Date;
+  end_time?: Date;
+  signature?: string;
+  attachment?: string;
+  task_line_id?: string;
+  log_id?: string;
+  sequence_no?: string;
+  scheduled_date?: string;
+  main_remarks?: string;
+  task_name?: string;
   status?: string;
   created_at?: Date;
   updated_at?: Date;
@@ -26,15 +41,46 @@ export interface CreateSiteLogInput {
   site_id: string;
   executor_id?: string;
   log_name?: string;
-  log_data?: Record<string, any>;
-  notes?: string;
+  temperature?: number;
+  rh?: number;
+  tds?: number;
+  ph?: number;
+  hardness?: number;
+  chemical_dosing?: string;
+  remarks?: string;
+  entry_time?: Date;
+  end_time?: Date;
+  signature?: string;
+  attachment?: string;
+  task_line_id?: string;
+  log_id?: string;
+  sequence_no?: string;
+  scheduled_date?: string;
+  main_remarks?: string;
+  task_name?: string;
   status?: string;
 }
 
 export interface UpdateSiteLogInput {
+  executor_id?: string;
   log_name?: string;
-  log_data?: Record<string, any>;
-  notes?: string;
+  temperature?: number;
+  rh?: number;
+  tds?: number;
+  ph?: number;
+  hardness?: number;
+  chemical_dosing?: string;
+  remarks?: string;
+  entry_time?: Date;
+  end_time?: Date;
+  signature?: string;
+  attachment?: string;
+  task_line_id?: string;
+  log_id?: string;
+  sequence_no?: string;
+  scheduled_date?: string;
+  main_remarks?: string;
+  task_name?: string;
   status?: string;
 }
 
@@ -55,10 +101,7 @@ export async function createLog(data: CreateSiteLogInput): Promise<SiteLog> {
   const columns = Object.keys(data).filter(
     (k) => data[k as keyof CreateSiteLogInput] !== undefined,
   );
-  const values = columns.map((k) => {
-    const val = data[k as keyof CreateSiteLogInput];
-    return k === "log_data" && val ? JSON.stringify(val) : val;
-  });
+  const values = columns.map((k) => data[k as keyof CreateSiteLogInput]);
   const placeholders = columns.map((_, i) => `$${i + 1}`);
 
   const sql = `
@@ -143,7 +186,7 @@ export async function getLogsBySite(
  * Update a site log
  */
 export async function updateLog(
-  id: number,
+  id: string,
   updateData: UpdateSiteLogInput,
 ): Promise<SiteLog> {
   const entries = Object.entries(updateData).filter(
@@ -155,9 +198,7 @@ export async function updateLog(
   }
 
   const setClauses = entries.map(([key], i) => `${key} = $${i + 1}`);
-  const values = entries.map(([key, value]) =>
-    key === "log_data" && value ? JSON.stringify(value) : value,
-  );
+  const values = entries.map(([, value]) => value);
 
   const log = await queryOne<SiteLog>(
     `UPDATE site_logs
@@ -177,8 +218,8 @@ export async function updateLog(
 /**
  * Delete a site log
  */
-export async function deleteLog(id: number): Promise<boolean> {
-  const result = await queryOne<{ id: number }>(
+export async function deleteLog(id: string): Promise<boolean> {
+  const result = await queryOne<{ id: string }>(
     `DELETE FROM site_logs WHERE id = $1 RETURNING id`,
     [id],
   );
@@ -188,14 +229,14 @@ export async function deleteLog(id: number): Promise<boolean> {
 /**
  * Delete multiple site logs
  */
-export async function deleteLogs(ids: number[]): Promise<{ count: number }> {
+export async function deleteLogs(ids: string[]): Promise<{ count: number }> {
   if (!ids || ids.length === 0) {
     return { count: 0 };
   }
 
   const placeholders = ids.map((_, i) => `$${i + 1}`).join(", ");
 
-  const results = await query<{ id: number }>(
+  const results = await query<{ id: string }>(
     `DELETE FROM site_logs WHERE id IN (${placeholders}) RETURNING id`,
     ids,
   );

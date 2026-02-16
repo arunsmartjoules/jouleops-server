@@ -11,33 +11,68 @@ import { query, queryOne } from "@jouleops/shared";
 // ============================================================================
 
 export interface ChillerReading {
-  id: number;
+  id: string; // UUID in database
   site_id: string;
-  chiller_id: string;
-  reading_time: Date;
+  chiller_id?: string;
+  equipment_id?: string;
+  log_id?: string;
+  executor_id?: string;
+  reading_time?: Date;
+  startdatetime?: Date;
+  start_datetime?: Date;
+  enddatetime?: Date;
   date_shift?: string;
+  compressor_load_percentage?: number;
+  compressor_load_percent?: number;
+  set_point_celsius?: number;
+  set_point?: number;
   condenser_inlet_temp?: number;
   condenser_outlet_temp?: number;
   evaporator_inlet_temp?: number;
   evaporator_outlet_temp?: number;
-  compressor_load_percentage?: number;
-  // Additional fields as needed
-  status?: string;
-  created_at?: Date;
-  updated_at?: Date;
+  compressor_suction_temp?: number;
+  motor_temperature?: number;
+  saturated_condenser_temp?: number;
+  saturated_suction_temp?: number;
+  discharge_pressure?: number;
+  main_suction_pressure?: number;
+  oil_pressure?: number;
+  oil_pressure_difference?: number;
+  condenser_inlet_pressure?: number;
+  condenser_outlet_pressure?: number;
+  evaporator_inlet_pressure?: number;
+  evaporator_outlet_pressure?: number;
+  inline_btu_meter?: number;
+  status: string;
+  remarks?: string;
+  reviewed_by?: string;
+  signature_text?: string;
+  attachments?: string;
+  sla_status?: string;
+  delete?: boolean;
+  sync?: boolean;
+  lastsync?: Date;
+  deletedat?: Date;
+  createdat?: Date;
+  updatedat?: Date;
+  created_at: Date;
+  updated_at: Date;
 }
 
 export interface CreateChillerReadingInput {
   site_id: string;
-  chiller_id: string;
+  chiller_id?: string;
+  equipment_id?: string;
+  log_id?: string;
+  executor_id?: string;
   reading_time?: Date;
   date_shift?: string;
+  compressor_load_percentage?: number;
+  status?: string;
   condenser_inlet_temp?: number;
   condenser_outlet_temp?: number;
   evaporator_inlet_temp?: number;
   evaporator_outlet_temp?: number;
-  compressor_load_percentage?: number;
-  status?: string;
 }
 
 export interface GetChillerReadingsOptions {
@@ -90,10 +125,10 @@ export async function createChillerReading(
 }
 
 /**
- * Get chiller reading by ID
+ * Get chiller reading by ID (UUID)
  */
 export async function getChillerReadingById(
-  id: number,
+  id: string,
 ): Promise<ChillerReading | null> {
   return queryOne<ChillerReading>(
     `SELECT * FROM chiller_readings WHERE id = $1`,
@@ -258,7 +293,7 @@ export async function getReadingsByDateShift(
  * Update a chiller reading
  */
 export async function updateChillerReading(
-  id: number,
+  id: string,
   updateData: Partial<ChillerReading>,
 ): Promise<ChillerReading> {
   const { created_at, ...allowedUpdates } = updateData as any;
@@ -290,10 +325,10 @@ export async function updateChillerReading(
 }
 
 /**
- * Delete a chiller reading
+ * Delete a chiller reading (UUID)
  */
-export async function deleteChillerReading(id: number): Promise<boolean> {
-  const result = await queryOne<{ id: number }>(
+export async function deleteChillerReading(id: string): Promise<boolean> {
+  const result = await queryOne<{ id: string }>(
     `DELETE FROM chiller_readings WHERE id = $1 RETURNING id`,
     [id],
   );

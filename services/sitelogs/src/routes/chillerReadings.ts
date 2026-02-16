@@ -1,6 +1,6 @@
 import express from "express";
 import chillerReadingsController from "../controllers/chillerReadingsController.ts";
-import { verifyToken, verifyApiKey } from "../middleware/auth.ts";
+import { verifyAnyAuth } from "../middleware/auth.ts";
 
 import {
   validate,
@@ -15,41 +15,42 @@ const router = express.Router();
  * Base path: /api/chiller-readings
  */
 
-router.get("/", verifyToken, chillerReadingsController.getAll);
+// Protected routes (accepts JWT or API Key)
+router.get("/", verifyAnyAuth, chillerReadingsController.getAll);
 router.post(
   "/",
-  verifyApiKey,
+  verifyAnyAuth,
   validate(createChillerReadingSchema),
   chillerReadingsController.create,
 );
-router.get("/site/:siteId", verifyToken, chillerReadingsController.getBySite);
+router.get("/site/:siteId", verifyAnyAuth, chillerReadingsController.getBySite);
 router.get(
   "/site/:siteId/shift/:dateShift",
-  verifyToken,
+  verifyAnyAuth,
   chillerReadingsController.getByDateShift,
 );
 router.get(
   "/chiller/:chillerId",
-  verifyToken,
+  verifyAnyAuth,
   chillerReadingsController.getByChiller,
 );
 router.get(
   "/chiller/:chillerId/latest",
-  verifyToken,
+  verifyAnyAuth,
   chillerReadingsController.getLatest,
 );
 router.get(
   "/chiller/:chillerId/averages",
-  verifyToken,
+  verifyAnyAuth,
   chillerReadingsController.getAverages,
 );
-router.get("/:id", verifyToken, chillerReadingsController.getById);
+router.get("/:id", verifyAnyAuth, chillerReadingsController.getById);
 router.put(
   "/:id",
-  verifyToken,
+  verifyAnyAuth,
   validate(updateChillerReadingSchema),
   chillerReadingsController.update,
 );
-router.delete("/:id", verifyToken, chillerReadingsController.remove);
+router.delete("/:id", verifyAnyAuth, chillerReadingsController.remove);
 
 export default router;

@@ -11,19 +11,32 @@ import { query, queryOne } from "@jouleops/shared";
 // ============================================================================
 
 export interface PMInstance {
+  id: string; // UUID
   instance_id: string;
   site_id: string;
   asset_id?: string;
+  maintenance_id?: string;
+  checklist_version?: string;
+  title?: string;
+  description?: string;
+  location?: string;
   asset_type?: string;
+  floor?: string;
   frequency?: string;
-  status: string;
-  progress?: number;
   start_due_date?: Date;
-  end_due_date?: Date;
   start_datetime?: Date;
   end_datetime?: Date;
-  assigned_to?: string;
+  status: string;
+  progress?: string;
+  estimated_duration?: string;
+  inventory_id?: string;
+  created_by?: string;
   updated_by?: string;
+  assigned_to?: string;
+  teams?: string;
+  teams_name?: string;
+  assigned_to_name?: string;
+  remarks?: string;
   created_at?: Date;
   updated_at?: Date;
 }
@@ -32,12 +45,25 @@ export interface CreatePMInstanceInput {
   instance_id: string;
   site_id: string;
   asset_id?: string;
+  maintenance_id?: string;
+  checklist_version?: string;
+  title?: string;
+  description?: string;
+  location?: string;
   asset_type?: string;
+  floor?: string;
   frequency?: string;
-  status?: string;
   start_due_date?: Date;
-  end_due_date?: Date;
+  status?: string;
+  progress?: string;
+  estimated_duration?: string;
+  inventory_id?: string;
+  created_by?: string;
   assigned_to?: string;
+  teams?: string;
+  teams_name?: string;
+  assigned_to_name?: string;
+  remarks?: string;
 }
 
 export interface GetPMInstancesOptions {
@@ -302,7 +328,7 @@ export async function updatePMInstanceStatus(
     updates.start_datetime = new Date();
   } else if (status === "Completed") {
     updates.end_datetime = new Date();
-    updates.progress = 100;
+    updates.progress = "100";
   }
 
   return updatePMInstance(instanceId, updates);
@@ -313,9 +339,9 @@ export async function updatePMInstanceStatus(
  */
 export async function updatePMInstanceProgress(
   instanceId: string,
-  progress: number,
+  progress: number | string,
 ): Promise<PMInstance> {
-  return updatePMInstance(instanceId, { progress });
+  return updatePMInstance(instanceId, { progress: progress.toString() });
 }
 
 /**
