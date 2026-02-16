@@ -16,7 +16,7 @@ if (result.error) {
 console.log("🚀 Starting Turbo Monorepo Dev Server...");
 
 // Spawn turbo
-const turbo = spawn("turbo", ["run", "dev", "--concurrency=8"], {
+const turbo = spawn("turbo", ["run", "dev", "--concurrency=10"], {
   stdio: "inherit",
   shell: true,
   env: {
@@ -29,6 +29,7 @@ const turbo = spawn("turbo", ["run", "dev", "--concurrency=8"], {
     RBAC_SERVICE_URL: "http://localhost:3425",
     PROFILES_SERVICE_URL: "http://localhost:3426",
     UTILITY_SERVICE_URL: "http://localhost:3428",
+    REDIS_URL: "redis://localhost:6379",
   }, // Explicitly pass loaded env vars with overrides
 });
 

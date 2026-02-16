@@ -1,4 +1,4 @@
-import { query, queryOne } from "@smartops/shared";
+import { query, queryOne } from "@jouleops/shared";
 
 /**
  * Register or update a push token for a user's device

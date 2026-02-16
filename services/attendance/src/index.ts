@@ -16,7 +16,7 @@ import {
   setupGracefulShutdown,
   dbHealthCheck,
   redisHealthCheck,
-} from "@smartops/shared";
+} from "@jouleops/shared";
 
 // Import routes
 import attendanceRoutes from "./routes/attendance.ts";
@@ -62,7 +62,7 @@ app.use(errorHandler);
 
 // Start Server
 const server = app.listen(Number(PORT), "0.0.0.0", () => {
-  logger.info(`SmartOps Attendance Service running on port ${PORT}`);
+  logger.info(`JouleOps Attendance Service running on port ${PORT}`);
   logger.info(`Health check: http://localhost:${PORT}/health`);
 });
 

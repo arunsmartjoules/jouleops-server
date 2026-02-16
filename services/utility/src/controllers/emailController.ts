@@ -1,6 +1,6 @@
 import type { Request, Response } from "express";
 import * as emailService from "../services/emailService.ts";
-import { sendSuccess, sendError, sendServerError } from "@smartops/shared";
+import { sendSuccess, sendError, sendServerError } from "@jouleops/shared";
 
 /**
  * Email Controller

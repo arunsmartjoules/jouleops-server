@@ -1,5 +1,5 @@
 {
-    "name": "@smartops/attendance",
+    "name": "@jouleops/attendance",
     "version": "1.0.0",
     "private": true,
     "type": "module",
@@ -10,6 +10,6 @@
         "build": "bun build ./src/index.ts --outdir ./dist --target bun"
     },
     "dependencies": {
-        "@smartops/shared": "workspace:*"
+        "@jouleops/shared": "workspace:*"
     }
 }

@@ -1,7 +1,7 @@
 import { describe, expect, it, mock, beforeEach } from "bun:test";
 
-// Mock @smartops/shared BEFORE importing the repository
-mock.module("@smartops/shared", () => ({
+// Mock@jouleops/shared BEFORE importing the repository
+mock.module("@jouleops/shared", () => ({
   queryOne: mock(() => Promise.resolve(null)),
   query: mock(() => Promise.resolve([])),
   cached: mock((key, fn) => fn()), // Bypass cache and execute function
@@ -11,7 +11,7 @@ mock.module("@smartops/shared", () => ({
 }));
 
 import * as usersRepository from "./usersRepository.ts";
-import { queryOne, query } from "@smartops/shared";
+import { queryOne, query } from "@jouleops/shared";
 
 const mockUser = {
   user_id: "user-1",

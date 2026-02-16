@@ -1,5 +1,5 @@
 {
-  "name": "smartops-backend",
+  "name": "jouleops-backend",
   "packageManager": "bun@1.2.21",
   "private": true,
   "workspaces": [

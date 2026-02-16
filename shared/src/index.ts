@@ -1,5 +1,5 @@
 /**
- * @smartops/shared - Shared utilities for microservices
+ *@jouleops/shared - Shared utilities for microservices
  */
 
 // Database

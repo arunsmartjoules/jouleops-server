@@ -6,7 +6,7 @@ process.env.SUPABASE_URL = "https://placeholder.supabase.co";
 import { describe, expect, it, mock } from "bun:test";
 
 // Mock the shared database functions BEFORE any other imports
-mock.module("@smartops/shared", () => {
+mock.module("@jouleops/shared", () => {
   const { z } = require("zod");
   const AppError = class extends Error {
     statusCode: number;
@@ -77,7 +77,7 @@ describe("RBAC Auth API", () => {
 
     it("should return 401 if user not found", async () => {
       // Import the mocked queryOne to set return value
-      const { queryOne } = await import("@smartops/shared");
+      const { queryOne } = await import("@jouleops/shared");
       (queryOne as any).mockResolvedValueOnce(null);
 
       const response = await request(app)

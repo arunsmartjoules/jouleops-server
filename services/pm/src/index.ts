@@ -15,7 +15,7 @@ import {
   logger,
   setupGracefulShutdown,
   dbHealthCheck,
-} from "@smartops/shared";
+} from "@jouleops/shared";
 
 // Import routes
 import pmChecklistRoutes from "./routes/pmChecklist.ts";
@@ -64,7 +64,7 @@ app.use(errorHandler);
 // Start Server
 if (import.meta.main) {
   const server = app.listen(Number(PORT), "0.0.0.0", () => {
-    logger.info(`SmartOps PM Service running on port ${PORT}`);
+    logger.info(`JouleOps PM Service running on port ${PORT}`);
     logger.info(`Health check: http://localhost:${PORT}/health`);
     logger.info(`Routes: /api/pm-checklists, /api/pm-instances, /api/tasks`);
   });

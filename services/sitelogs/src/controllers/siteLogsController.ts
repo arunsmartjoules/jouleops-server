@@ -12,7 +12,7 @@ import {
   sendCreated,
   sendError,
   asyncHandler,
-} from "@smartops/shared";
+} from "@jouleops/shared";
 
 export const create = asyncHandler(async (req: Request, res: Response) => {
   const result = await siteLogsRepository.createLog(req.body);

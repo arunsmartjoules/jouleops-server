@@ -6,7 +6,7 @@ import {
   validate,
   createSiteLogSchema,
   updateSiteLogSchema,
-} from "@smartops/shared";
+} from "@jouleops/shared";
 
 const router = express.Router();
 

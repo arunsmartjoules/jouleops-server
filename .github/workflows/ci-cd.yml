@@ -91,7 +91,7 @@ jobs:
           build-args: |
             SERVICE_NAME=${{ steps.path.outputs.path }}
           push: false # Set to true and add tags/auth for production
-          tags: smartops-${{ matrix.service }}:latest
+          tags: jouleops-${{ matrix.service }}:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
 

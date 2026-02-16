@@ -13,7 +13,7 @@ import {
   sendError,
   sendNotFound,
   asyncHandler,
-} from "@smartops/shared";
+} from "@jouleops/shared";
 
 export const create = asyncHandler(async (req: Request, res: Response) => {
   const reading = await chillerReadingsRepository.createChillerReading(

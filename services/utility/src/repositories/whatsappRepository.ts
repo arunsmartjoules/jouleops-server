@@ -4,8 +4,8 @@
  * Handles WhatsApp group mappings and message logs
  */
 
-import { query, queryOne } from "@smartops/shared";
-import { cached, del as cacheDel } from "@smartops/shared";
+import { query, queryOne } from "@jouleops/shared";
+import { cached, del as cacheDel } from "@jouleops/shared";
 
 const CACHE_TTL = 600; // 10 minutes
 

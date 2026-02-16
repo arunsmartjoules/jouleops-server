@@ -16,7 +16,7 @@ import {
   setupGracefulShutdown,
   dbHealthCheck,
   redisHealthCheck,
-} from "@smartops/shared";
+} from "@jouleops/shared";
 
 // Import routes
 import emailRoutes from "./routes/email.ts";
@@ -67,7 +67,7 @@ app.use(errorHandler);
 
 // Start Server
 const server = app.listen(Number(PORT), "0.0.0.0", () => {
-  logger.info(`SmartOps Utility Service running on port ${PORT}`);
+  logger.info(`JouleOps Utility Service running on port ${PORT}`);
   logger.info(`Health check: http://localhost:${PORT}/health`);
   logger.info(`Routes: /api/email, /api/whatsapp, /api/notifications`);
 

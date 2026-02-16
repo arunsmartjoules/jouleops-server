@@ -12,7 +12,7 @@ import {
   cacheDel as del,
   CACHE_PREFIX,
   TTL,
-} from "@smartops/shared";
+} from "@jouleops/shared";
 
 // Build cache key helper
 const buildKey = (prefix: string, id: string) => `${prefix}${id}`;

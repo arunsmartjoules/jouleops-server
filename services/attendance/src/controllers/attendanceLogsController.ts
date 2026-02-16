@@ -14,7 +14,7 @@ import {
   sendNotFound,
   sendForbidden,
   sendServerError,
-} from "@smartops/shared";
+} from "@jouleops/shared";
 
 interface AuthRequest extends Request {
   user?: {
@@ -128,7 +128,7 @@ export const checkOut = async (req: AuthRequest, res: Response) => {
       return sendError(res, "Attendance ID is required");
     }
 
-    const existing = await attendanceRepository.getAttendanceById(parseInt(id));
+    const existing = await attendanceRepository.getAttendanceById(id);
     if (!existing) {
       return sendNotFound(res, "Attendance record");
     }
@@ -153,7 +153,7 @@ export const checkOut = async (req: AuthRequest, res: Response) => {
       });
     }
 
-    const log = await attendanceRepository.checkOut(parseInt(id), {
+    const log = await attendanceRepository.checkOut(id, {
       latitude: latitude ? parseFloat(latitude) : undefined,
       longitude: longitude ? parseFloat(longitude) : undefined,
       address,
@@ -271,7 +271,7 @@ export const getById = async (req: AuthRequest, res: Response) => {
     if (!id) {
       return sendError(res, "Attendance ID is required");
     }
-    const log = await attendanceRepository.getAttendanceById(parseInt(id));
+    const log = await attendanceRepository.getAttendanceById(id);
     if (!log) {
       return sendNotFound(res, "Attendance log");
     }
@@ -400,15 +400,12 @@ export const update = async (req: Request, res: Response) => {
     if (!id) {
       return sendError(res, "Attendance ID is required");
     }
-    const existing = await attendanceRepository.getAttendanceById(parseInt(id));
+    const existing = await attendanceRepository.getAttendanceById(id);
     if (!existing) {
       return sendNotFound(res, "Attendance log");
     }
 
-    const log = await attendanceRepository.updateAttendanceLog(
-      parseInt(id),
-      req.body,
-    );
+    const log = await attendanceRepository.updateAttendanceLog(id, req.body);
     return sendSuccess(res, log);
   } catch (error: any) {
     console.error("Update attendance log error:", error);
@@ -422,12 +419,12 @@ export const remove = async (req: Request, res: Response) => {
     if (!id) {
       return sendError(res, "Attendance ID is required");
     }
-    const existing = await attendanceRepository.getAttendanceById(parseInt(id));
+    const existing = await attendanceRepository.getAttendanceById(id);
     if (!existing) {
       return sendNotFound(res, "Attendance log");
     }
 
-    await attendanceRepository.deleteAttendanceLog(parseInt(id));
+    await attendanceRepository.deleteAttendanceLog(id);
     return sendSuccess(res, null, {
       message: "Attendance log deleted successfully",
     });

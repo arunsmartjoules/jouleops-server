@@ -4,7 +4,7 @@
  * Handles complaint categories
  */
 
-import { query, queryOne, cached, cacheDel } from "@smartops/shared";
+import { query, queryOne, cached, cacheDel } from "@jouleops/shared";
 
 const CACHE_TTL = 3600; // 1 hour (categories rarely change)
 

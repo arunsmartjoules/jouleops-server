@@ -1,6 +1,6 @@
-# @smartops/shared
+#@jouleops/shared
 
-This package contains common code shared across all microservices in the SmartOps backend.
+This package contains common code shared across all microservices in the JouleOps backend.
 
 ## 📁 Structure
 
@@ -18,14 +18,14 @@ This package is a workspace dependency. To use it in a new service:
 
 ```json
 "dependencies": {
-  "@smartops/shared": "workspace:*"
+  "@jouleops/shared": "workspace:*"
 }
 ```
 
 2. Import it in your code:
 
 ```typescript
-import { queryOne, sendSuccess } from "@smartops/shared";
+import { queryOne, sendSuccess } from "@jouleops/shared";
 ```
 
 ## ⚠️ Important

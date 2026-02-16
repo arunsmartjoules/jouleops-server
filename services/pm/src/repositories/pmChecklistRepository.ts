@@ -4,7 +4,7 @@
  * Data access layer for pm_checklist and pm_checklist_responses tables.
  */
 
-import { query, queryOne } from "@smartops/shared";
+import { query, queryOne } from "@jouleops/shared";
 
 // ============================================================================
 // Types

@@ -1,4 +1,4 @@
-import { logger } from "@smartops/shared";
+import { logger } from "@jouleops/shared";
 import cron from "node-cron";
 import attendanceNotificationService from "../services/attendanceNotificationService.ts";
 import notificationSettingsService from "../services/notificationSettingsService.ts";

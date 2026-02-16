@@ -4,7 +4,7 @@
  * Data access layer for chiller_readings table.
  */
 
-import { query, queryOne } from "@smartops/shared";
+import { query, queryOne } from "@jouleops/shared";
 
 // ============================================================================
 // Types

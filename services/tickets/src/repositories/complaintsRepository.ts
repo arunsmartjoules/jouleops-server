@@ -5,8 +5,8 @@
  * Business logic (notifications) remains in the service layer.
  */
 
-import { query, queryOne } from "@smartops/shared";
-import { cached, cacheDel as del, CACHE_PREFIX, TTL } from "@smartops/shared";
+import { query, queryOne } from "@jouleops/shared";
+import { cached, cacheDel as del, CACHE_PREFIX, TTL } from "@jouleops/shared";
 
 // Build cache key helper
 const buildKey = (prefix: string, id: string) => `${prefix}${id}`;
@@ -222,7 +222,9 @@ export async function getComplaintsBySite(
   let paramIndex = 1;
 
   if (siteId !== "all") {
-    conditions.push(`site_id = $${paramIndex}`);
+    conditions.push(
+      `(site_id = $${paramIndex} OR site_id IN (SELECT site_code FROM sites WHERE site_id = $${paramIndex}))`,
+    );
     params.push(siteId);
     paramIndex++;
   }
@@ -416,7 +418,7 @@ export async function getComplaintStats(siteId: string): Promise<{
   const params: any[] = [];
 
   if (siteId !== "all") {
-    sql += ` WHERE site_id = $1`;
+    sql += ` WHERE (site_id = $1 OR site_id IN (SELECT site_code FROM sites WHERE site_id = $1))`;
     params.push(siteId);
   }
 

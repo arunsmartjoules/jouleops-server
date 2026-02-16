@@ -4,7 +4,7 @@
  * Data access layer for refresh_tokens and api_keys tables.
  */
 
-import { query, queryOne, redis } from "@smartops/shared";
+import { query, queryOne, redis } from "@jouleops/shared";
 import crypto from "crypto";
 
 // Track Redis availability
@@ -47,9 +47,9 @@ export interface ApiKey {
   created_at: Date;
 }
 
-// Token blacklist TTL (30 days in seconds)
-const TOKEN_BLACKLIST_TTL = 30 * 24 * 60 * 60;
-const REFRESH_TOKEN_TTL = 30 * 24 * 60 * 60; // 30 days
+// Token blacklist TTL (60 days in seconds)
+const TOKEN_BLACKLIST_TTL = 60 * 24 * 60 * 60;
+const REFRESH_TOKEN_TTL = 60 * 24 * 60 * 60; // 60 days
 
 // ============================================================================
 // Refresh Token Functions (Redis-based)

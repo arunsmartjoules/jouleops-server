@@ -4,14 +4,14 @@
  * Data access layer for attendance_logs and related tables.
  */
 
-import { query, queryOne } from "@smartops/shared";
+import { query, queryOne } from "@jouleops/shared";
 
 // ============================================================================
 // Types
 // ============================================================================
 
 export interface AttendanceLog {
-  id: number;
+  id: string;
   user_id: string;
   site_id: string;
   date: string;
@@ -182,7 +182,7 @@ export async function checkIn(data: CheckInInput): Promise<AttendanceLog> {
  * Check out
  */
 export async function checkOut(
-  attendanceId: number,
+  attendanceId: string,
   data: CheckOutInput,
 ): Promise<AttendanceLog> {
   const result = await queryOne<AttendanceLog>(
@@ -215,7 +215,7 @@ export async function checkOut(
  * Get attendance by ID
  */
 export async function getAttendanceById(
-  id: number,
+  id: string,
 ): Promise<AttendanceLog | null> {
   return queryOne<AttendanceLog>(
     `SELECT * FROM attendance_logs WHERE id = $1`,
@@ -258,18 +258,18 @@ export async function getAttendanceByUser(
   const { page = 1, limit = 30, date_from = null, date_to = null } = options;
   const offset = (page - 1) * limit;
 
-  const conditions: string[] = ["user_id = $1"];
+  const conditions: string[] = ["al.user_id = $1"];
   const params: any[] = [userId];
   let paramIndex = 2;
 
   if (date_from) {
-    conditions.push(`date >= $${paramIndex}`);
+    conditions.push(`al.date >= $${paramIndex}`);
     params.push(date_from);
     paramIndex++;
   }
 
   if (date_to) {
-    conditions.push(`date <= $${paramIndex}`);
+    conditions.push(`al.date <= $${paramIndex}`);
     params.push(date_to);
     paramIndex++;
   }
@@ -278,15 +278,21 @@ export async function getAttendanceByUser(
 
   // Get count
   const countResult = await queryOne<{ count: string }>(
-    `SELECT COUNT(*) as count FROM attendance_logs ${whereClause}`,
+    `SELECT COUNT(*) as count FROM attendance_logs al ${whereClause}`,
     params,
   );
   const total = parseInt(countResult?.count || "0", 10);
 
   // Get data
   const data = await query<AttendanceLog>(
-    `SELECT * FROM attendance_logs ${whereClause}
-     ORDER BY date DESC, check_in_time DESC
+    `SELECT al.*, 
+            jsonb_build_object('name', u.name, 'employee_code', u.employee_code) as users,
+            jsonb_build_object('name', s.name, 'site_code', s.site_code) as sites
+     FROM attendance_logs al
+     LEFT JOIN users u ON al.user_id = u.user_id
+     LEFT JOIN sites s ON al.site_id = s.site_id
+     ${whereClause}
+     ORDER BY al.date DESC, al.check_in_time DESC
      LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`,
     [...params, limit, offset],
   );
@@ -330,19 +336,19 @@ export async function getAllAttendance(
   let paramIndex = 1;
 
   if (date_from) {
-    conditions.push(`date >= $${paramIndex}`);
+    conditions.push(`al.date >= $${paramIndex}`);
     params.push(date_from);
     paramIndex++;
   }
 
   if (date_to) {
-    conditions.push(`date <= $${paramIndex}`);
+    conditions.push(`al.date <= $${paramIndex}`);
     params.push(date_to);
     paramIndex++;
   }
 
   if (status) {
-    conditions.push(`status = $${paramIndex}`);
+    conditions.push(`al.status = $${paramIndex}`);
     params.push(status);
     paramIndex++;
   }
@@ -352,14 +358,16 @@ export async function getAllAttendance(
 
   // Get count
   const countResult = await queryOne<{ count: string }>(
-    `SELECT COUNT(*) as count FROM attendance_logs ${whereClause}`,
+    `SELECT COUNT(*) as count FROM attendance_logs al ${whereClause}`,
     params,
   );
   const total = parseInt(countResult?.count || "0", 10);
 
   // Get data with user info
   const data = await query<AttendanceLog>(
-    `SELECT al.*, u.name as user_name, s.name as site_name
+    `SELECT al.*, 
+            jsonb_build_object('name', u.name, 'employee_code', u.employee_code) as users,
+            jsonb_build_object('name', s.name, 'site_code', s.site_code) as sites
      FROM attendance_logs al
      LEFT JOIN users u ON al.user_id = u.user_id
      LEFT JOIN sites s ON al.site_id = s.site_id
@@ -403,7 +411,12 @@ export async function getAttendanceBySite(
   const whereClause = `WHERE ${conditions.join(" AND ")}`;
 
   return query(
-    `SELECT al.*, u.name, u.phone, u.role
+    `SELECT al.*, 
+            jsonb_build_object(
+              'name', u.name, 
+              'phone', u.phone, 
+              'role', u.role
+            ) as users
      FROM attendance_logs al
      LEFT JOIN users u ON al.user_id = u.user_id
      ${whereClause}
@@ -434,8 +447,15 @@ export async function getAttendanceReport(
 
   return query(
     `SELECT al.*, 
-            u.name as user_name, u.user_id as user_user_id, u.employee_code,
-            s.name as site_name, s.site_code
+            jsonb_build_object(
+              'name', u.name, 
+              'user_id', u.user_id, 
+              'employee_code', u.employee_code
+            ) as users,
+            jsonb_build_object(
+              'name', s.name, 
+              'site_code', s.site_code
+            ) as sites
      FROM attendance_logs al
      LEFT JOIN users u ON al.user_id = u.user_id
      LEFT JOIN sites s ON al.site_id = s.site_id
@@ -449,7 +469,7 @@ export async function getAttendanceReport(
  * Update attendance log
  */
 export async function updateAttendanceLog(
-  id: number,
+  id: string,
   updateData: Partial<AttendanceLog>,
 ): Promise<AttendanceLog> {
   const { created_at, ...allowedUpdates } = updateData as any;
@@ -483,8 +503,8 @@ export async function updateAttendanceLog(
 /**
  * Delete attendance log
  */
-export async function deleteAttendanceLog(id: number): Promise<boolean> {
-  const result = await queryOne<{ id: number }>(
+export async function deleteAttendanceLog(id: string): Promise<boolean> {
+  const result = await queryOne<{ id: string }>(
     `DELETE FROM attendance_logs WHERE id = $1 RETURNING id`,
     [id],
   );

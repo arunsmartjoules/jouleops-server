@@ -1,4 +1,4 @@
-# SmartOps API Gateway
+# JouleOps API Gateway
 
 The Gateway is the single entry point for all frontend and external requests.
 

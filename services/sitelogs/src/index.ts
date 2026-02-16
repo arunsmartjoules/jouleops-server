@@ -15,7 +15,7 @@ import {
   logger,
   setupGracefulShutdown,
   dbHealthCheck,
-} from "@smartops/shared";
+} from "@jouleops/shared";
 
 // Import routes
 import siteLogsRoutes from "./routes/siteLogs.ts";
@@ -60,7 +60,7 @@ app.use(errorHandler);
 
 // Start Server
 const server = app.listen(Number(PORT), "0.0.0.0", () => {
-  logger.info(`SmartOps SiteLogs Service running on port ${PORT}`);
+  logger.info(`JouleOps SiteLogs Service running on port ${PORT}`);
   logger.info(`Health check: http://localhost:${PORT}/health`);
   logger.info(`Routes available: /api/site-logs, /api/chiller-readings`);
 });

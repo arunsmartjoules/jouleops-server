@@ -20,7 +20,7 @@ import {
   sendError,
   sendNotFound,
   asyncHandler,
-} from "@smartops/shared";
+} from "@jouleops/shared";
 
 interface AuthRequest extends Request {
   user?: {
@@ -86,20 +86,20 @@ export const login = asyncHandler(async (req: Request, res: Response) => {
     jti: uuidv4(),
   };
 
-  const token = jwt.sign(tokenPayload, secret, { expiresIn: "24h" });
+  const token = jwt.sign(tokenPayload, secret, { expiresIn: "7d" });
 
   // Generate refresh token
   const refreshToken = jwt.sign(
     { user_id: user.user_id, type: "refresh" },
     process.env.JWT_REFRESH_SECRET || secret,
-    { expiresIn: "30d" },
+    { expiresIn: "60d" },
   );
 
   // Store refresh token
   await authRepository.storeRefreshToken({
     user_id: user.user_id,
     token: refreshToken,
-    expires_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+    expires_at: new Date(Date.now() + 60 * 24 * 60 * 60 * 1000),
     device_info: req.headers["user-agent"] as string,
   });
 
@@ -116,7 +116,7 @@ export const login = asyncHandler(async (req: Request, res: Response) => {
   return sendSuccess(res, {
     token,
     refresh_token: refreshToken,
-    expires_in: 86400,
+    expires_in: 604800,
     user: {
       id: user.user_id,
       email: user.email,
@@ -193,21 +193,21 @@ export const signup = asyncHandler(async (req: Request, res: Response) => {
       jti: uuidv4(),
     },
     secret,
-    { expiresIn: "24h" },
+    { expiresIn: "7d" },
   );
 
   // Generate refresh token
   const refreshToken = jwt.sign(
     { user_id: user.user_id, type: "refresh" },
     process.env.JWT_REFRESH_SECRET || secret,
-    { expiresIn: "30d" },
+    { expiresIn: "60d" },
   );
 
   // Store refresh token
   await authRepository.storeRefreshToken({
     user_id: user.user_id,
     token: refreshToken,
-    expires_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+    expires_at: new Date(Date.now() + 60 * 24 * 60 * 60 * 1000),
     device_info: req.headers["user-agent"] as string,
   });
 
@@ -224,7 +224,7 @@ export const signup = asyncHandler(async (req: Request, res: Response) => {
   return sendCreated(res, {
     token,
     refresh_token: refreshToken,
-    expires_in: 86400,
+    expires_in: 604800,
     user: {
       id: user.user_id,
       email: user.email,
@@ -462,7 +462,12 @@ export const refreshToken = asyncHandler(
       });
     }
 
-    // Generate new access token
+    // --- IMPLEMENT REFRESH TOKEN ROTATION ---
+
+    // 1. Revoke the old refresh token immediately
+    await authRepository.revokeRefreshToken(refresh_token);
+
+    // 2. Issuing a NEW access token (7 days)
     const newAccessToken = jwt.sign(
       {
         user_id: user.user_id,
@@ -477,12 +482,28 @@ export const refreshToken = asyncHandler(
         jti: uuidv4(),
       },
       process.env.JWT_SECRET!,
-      { expiresIn: "24h" },
+      { expiresIn: "7d" },
     );
+
+    // 3. Issuing a NEW refresh token (60 days) - Sliding window effect
+    const newRefreshToken = jwt.sign(
+      { user_id: user.user_id, type: "refresh" },
+      secret,
+      { expiresIn: "60d" },
+    );
+
+    // 4. Store the NEW refresh token
+    await authRepository.storeRefreshToken({
+      user_id: user.user_id,
+      token: newRefreshToken,
+      expires_at: new Date(Date.now() + 60 * 24 * 60 * 60 * 1000),
+      device_info: req.headers["user-agent"] as string,
+    });
 
     return sendSuccess(res, {
       token: newAccessToken,
-      expires_in: 86400, // 24 hours in seconds
+      refresh_token: newRefreshToken,
+      expires_in: 604800, // 7 days in seconds
     });
   },
 );

@@ -6,7 +6,7 @@ import {
   validate,
   createChillerReadingSchema,
   updateChillerReadingSchema,
-} from "@smartops/shared";
+} from "@jouleops/shared";
 
 const router = express.Router();
 

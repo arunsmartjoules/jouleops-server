@@ -13,7 +13,7 @@ import {
   sendError,
   sendNotFound,
   sendServerError,
-} from "@smartops/shared";
+} from "@jouleops/shared";
 
 const VALID_STATUSES = ["Active", "Under Maintenance", "Inactive", "Disposed"];
 

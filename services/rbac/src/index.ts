@@ -16,7 +16,7 @@ import {
   setupGracefulShutdown,
   dbHealthCheck,
   redisHealthCheck,
-} from "@smartops/shared";
+} from "@jouleops/shared";
 
 // Import routes
 import authRoutes from "./routes/auth.ts";
@@ -72,7 +72,11 @@ export { app };
 // Start Server
 if (import.meta.main) {
   const server = app.listen(Number(PORT), "0.0.0.0", () => {
-    logger.info(`SmartOps RBAC Service running on port ${PORT}`);
+    logger.info(`JouleOps RBAC Service running on port ${PORT}`);
+    logger.info(
+      `DATABASE_URL starts with: ${process.env.DATABASE_URL?.substring(0, 30)}...`,
+    );
+    logger.info(`REDIS_URL: ${process.env.REDIS_URL}`);
     logger.info(`Health check: http://localhost:${PORT}/health`);
     logger.info(
       `Routes: /api/auth, /api/admin, /api/site-users, /api/sites, /api/assets`,

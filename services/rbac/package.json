@@ -1,5 +1,5 @@
 {
-    "name": "@smartops/rbac",
+    "name": "@jouleops/rbac",
     "version": "1.0.0",
     "private": true,
     "type": "module",
@@ -11,7 +11,7 @@
         "test": "bun test"
     },
     "dependencies": {
-        "@smartops/shared": "workspace:*",
+        "@jouleops/shared": "workspace:*",
         "bcryptjs": "^2.4.3",
         "jsonwebtoken": "^9.0.2"
     },

@@ -7,7 +7,7 @@ import {
   createComplaintSchema,
   updateComplaintSchema,
   updateComplaintStatusSchema,
-} from "@smartops/shared";
+} from "@jouleops/shared";
 
 const router = express.Router();
 

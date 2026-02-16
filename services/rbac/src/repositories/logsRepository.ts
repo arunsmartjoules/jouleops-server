@@ -4,7 +4,7 @@
  * Data access layer for activity_logs table.
  */
 
-import { query, queryOne } from "@smartops/shared";
+import { query, queryOne } from "@jouleops/shared";
 
 // ============================================================================
 // Types

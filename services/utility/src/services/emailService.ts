@@ -12,7 +12,7 @@ interface VerificationCode {
   userId?: string;
 }
 
-import { query, queryOne } from "@smartops/shared";
+import { query, queryOne } from "@jouleops/shared";
 
 // Generate 6-digit code
 export function generateVerificationCode(): string {
@@ -78,8 +78,8 @@ export async function sendVerificationEmail(
   type: "signup" | "password-reset" | "superadmin-change",
 ): Promise<void> {
   const subjects = {
-    signup: "Verify Your SmartOps Account",
-    "password-reset": "Reset Your SmartOps Password",
+    signup: "Verify Your JouleOps Account",
+    "password-reset": "Reset Your JouleOps Password",
     "superadmin-change": "Confirm Superadmin Change",
   };
 
@@ -97,7 +97,7 @@ export async function sendVerificationEmail(
 
   try {
     const result = await resend.emails.send({
-      from: "SmartOps Admin <onboarding@resend.dev>", // You'll update this with your domain
+      from: "JouleOps Admin <onboarding@resend.dev>", // You'll update this with your domain
       to: email,
       subject: subjects[type],
       html: `
@@ -116,7 +116,7 @@ export async function sendVerificationEmail(
           <body>
             <div class="container">
               <div class="header">
-                <h1>SmartOps Admin</h1>
+                <h1>JouleOps</h1>
               </div>
               <div class="content">
                 <p>${messages[type]}</p>

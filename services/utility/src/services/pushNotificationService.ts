@@ -1,4 +1,4 @@
-import { query, queryOne } from "@smartops/shared";
+import { query, queryOne } from "@jouleops/shared";
 import {
   getUserTokens,
   getUsersTokens,

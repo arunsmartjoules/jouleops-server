@@ -1,6 +1,6 @@
-# SmartOps Backend (Microservices Monorepo)
+# JouleOps Backend (Microservices Monorepo)
 
-This repository contains the backend services for SmartOps, organized as a microservices architecture within a monorepo managed by **Turborepo** and **Bun**.
+This repository contains the backend services for JouleOps, organized as a microservices architecture within a monorepo managed by **Turborepo** and **Bun**.
 
 ## 🏗️ Architecture
 

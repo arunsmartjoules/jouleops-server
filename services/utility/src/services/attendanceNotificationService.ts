@@ -1,4 +1,4 @@
-import { query, queryOne } from "@smartops/shared";
+import { query, queryOne } from "@jouleops/shared";
 import { sendNotificationToUser } from "./pushNotificationService.ts";
 import {
   getCheckInMessage,
@@ -99,7 +99,7 @@ export const sendMissedCheckInNotifications = async () => {
 
     console.log(`Sent ${sentCount} check-in reminder notifications`);
     return { success: true, count: sentCount };
-  } catch (error) {
+  } catch (error: any) {
     console.error("Error sending check-in notifications:", error);
     return { success: false, error: error.message };
   }
@@ -143,7 +143,7 @@ export const sendMissedCheckOutNotifications = async () => {
 
     console.log(`Sent ${sentCount} check-out reminder notifications`);
     return { success: true, count: sentCount };
-  } catch (error) {
+  } catch (error: any) {
     console.error("Error sending check-out notifications:", error);
     return { success: false, error: error.message };
   }

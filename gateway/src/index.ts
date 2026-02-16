@@ -1,5 +1,5 @@
 /**
- * SmartOps API Gateway
+ * JouleOps API Gateway
  *
  * Central entry point for all microservices.
  * Handles authentication, routing, and rate limiting.
@@ -22,7 +22,7 @@ import {
   setupGracefulShutdown,
   dbHealthCheck,
   redisHealthCheck,
-} from "@smartops/shared";
+} from "@jouleops/shared";
 
 // Environment config
 const PORT = process.env.GATEWAY_PORT || 3420;
@@ -176,7 +176,7 @@ app.use((req, res, next) => {
 app.use(errorHandler);
 
 const server = app.listen(Number(PORT), "0.0.0.0", () => {
-  logger.info(`SmartOps API Gateway running on port ${PORT}`);
+  logger.info(`JouleOps API Gateway running on port ${PORT}`);
   logger.info(`Proxying to monolith: ${MONOLITH_URL}`);
   logger.info(`Health check: http://localhost:${PORT}/health`);
 });

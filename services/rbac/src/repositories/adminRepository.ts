@@ -4,7 +4,7 @@
  * Handles admin/superadmin management operations
  */
 
-import { query, queryOne } from "@smartops/shared";
+import { query, queryOne } from "@jouleops/shared";
 
 const SUPERADMIN_EMAIL = "arun.kumar@smartjoules.in";
 

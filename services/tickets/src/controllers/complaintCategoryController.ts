@@ -13,7 +13,7 @@ import {
   sendError,
   sendNotFound,
   sendServerError,
-} from "@smartops/shared";
+} from "@jouleops/shared";
 
 export const getAll = async (req: Request, res: Response) => {
   try {

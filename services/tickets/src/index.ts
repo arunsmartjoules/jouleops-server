@@ -14,7 +14,7 @@ import {
   logger,
   setupGracefulShutdown,
   dbHealthCheck,
-} from "@smartops/shared";
+} from "@jouleops/shared";
 
 // Import routes (copied from monolith)
 import complaintsRoutes from "./routes/complaints.ts";
@@ -60,7 +60,7 @@ app.use(errorHandler);
 
 // Start Server
 const server = app.listen(Number(PORT), "0.0.0.0", () => {
-  logger.info(`SmartOps Tickets Service running on port ${PORT}`);
+  logger.info(`JouleOps Tickets Service running on port ${PORT}`);
   logger.info(`Health check: http://localhost:${PORT}/health`);
 });
 

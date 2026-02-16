@@ -4,8 +4,8 @@
  * Data access layer for tasks table.
  */
 
-import { query, queryOne } from "@smartops/shared";
-import { cacheDel as del, CACHE_PREFIX } from "@smartops/shared";
+import { query, queryOne } from "@jouleops/shared";
+import { cacheDel as del, CACHE_PREFIX } from "@jouleops/shared";
 
 // Local helper for buildKey as it's not exported from shared
 const buildKey = (...parts: string[]): string => parts.join(":");

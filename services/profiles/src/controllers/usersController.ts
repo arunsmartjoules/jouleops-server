@@ -15,7 +15,7 @@ import {
   sendNotFound,
   sendForbidden,
   sendServerError,
-} from "@smartops/shared";
+} from "@jouleops/shared";
 
 interface AuthRequest extends Request {
   user?: {
