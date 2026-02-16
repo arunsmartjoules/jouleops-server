@@ -1,6 +1,10 @@
 import express from "express";
 import complaintsController from "../controllers/complaintsController.ts";
-import { verifyToken, verifyApiKey } from "../middleware/auth.ts";
+import {
+  verifyToken,
+  verifyApiKey,
+  verifyAnyAuth,
+} from "../middleware/auth.ts";
 
 import {
   validate,
@@ -16,10 +20,10 @@ const router = express.Router();
  * Base path: /api/complaints
  */
 
-// Protected routes (require JWT)
-router.get("/", verifyToken, complaintsController.getAll);
+// Protected routes (accepts JWT or API Key)
+router.get("/", verifyAnyAuth, complaintsController.getAll);
 
-// Public routes (with API key for n8n)
+// Protected routes (require API key for external systems)
 router.post(
   "/",
   verifyApiKey,
@@ -37,22 +41,22 @@ router.get(
   complaintsController.getRecentByGroup,
 );
 
-// Protected routes (require JWT)
-router.get("/site/:siteId", verifyToken, complaintsController.getBySite);
-router.get("/site/:siteId/stats", verifyToken, complaintsController.getStats);
-router.get("/:ticketId", verifyToken, complaintsController.getById);
+// Protected routes (accepts JWT or API Key)
+router.get("/site/:siteId", verifyAnyAuth, complaintsController.getBySite);
+router.get("/site/:siteId/stats", verifyAnyAuth, complaintsController.getStats);
+router.get("/:ticketId", verifyAnyAuth, complaintsController.getById);
 router.put(
   "/:ticketId",
-  verifyToken,
+  verifyAnyAuth,
   validate(updateComplaintSchema),
   complaintsController.update,
 );
 router.patch(
   "/:ticketId/status",
-  verifyToken,
+  verifyAnyAuth,
   validate(updateComplaintStatusSchema),
   complaintsController.updateStatus,
 );
-router.delete("/:ticketId", verifyToken, complaintsController.remove);
+router.delete("/:ticketId", verifyAnyAuth, complaintsController.remove);
 
 export default router;

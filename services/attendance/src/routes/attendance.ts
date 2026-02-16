@@ -1,6 +1,10 @@
 import express from "express";
 import attendanceLogsController from "../controllers/attendanceLogsController.ts";
-import { verifyToken, verifyApiKey } from "../middleware/auth.ts";
+import {
+  verifyToken,
+  verifyApiKey,
+  verifyAnyAuth,
+} from "../middleware/auth.ts";
 
 const router = express.Router();
 
@@ -9,43 +13,43 @@ const router = express.Router();
  * Base path: /api/attendance
  */
 
-router.post("/", verifyToken, attendanceLogsController.create);
-router.get("/", verifyToken, attendanceLogsController.getAll);
-router.post("/check-in", verifyToken, attendanceLogsController.checkIn);
-router.post("/:id/check-out", verifyToken, attendanceLogsController.checkOut);
+router.post("/", verifyAnyAuth, attendanceLogsController.create);
+router.get("/", verifyAnyAuth, attendanceLogsController.getAll);
+router.post("/check-in", verifyAnyAuth, attendanceLogsController.checkIn);
+router.post("/:id/check-out", verifyAnyAuth, attendanceLogsController.checkOut);
 
 // Location validation - check which sites a user can check in at based on their location
 router.get(
   "/validate-location/:userId",
-  verifyToken,
+  verifyAnyAuth,
   attendanceLogsController.validateLocation,
 );
 
 // Get user's assigned sites with coordinates
 router.get(
   "/user-sites/:userId",
-  verifyToken,
+  verifyAnyAuth,
   attendanceLogsController.getUserSites,
 );
 
-router.get("/site/:siteId", verifyToken, attendanceLogsController.getBySite);
+router.get("/site/:siteId", verifyAnyAuth, attendanceLogsController.getBySite);
 router.get(
   "/site/:siteId/report",
-  verifyToken,
+  verifyAnyAuth,
   attendanceLogsController.getReport,
 );
 router.get(
   "/overall-report",
-  verifyToken,
+  verifyAnyAuth,
   attendanceLogsController.getOverallReport,
 );
-router.get("/user/:userId", verifyToken, attendanceLogsController.getByUser);
+router.get("/user/:userId", verifyAnyAuth, attendanceLogsController.getByUser);
 router.get(
   "/user/:userId/today",
-  verifyToken,
+  verifyAnyAuth,
   attendanceLogsController.getTodayByUser,
 );
-router.put("/:id", verifyToken, attendanceLogsController.update);
-router.delete("/:id", verifyToken, attendanceLogsController.remove);
+router.put("/:id", verifyAnyAuth, attendanceLogsController.update);
+router.delete("/:id", verifyAnyAuth, attendanceLogsController.remove);
 
 export default router;

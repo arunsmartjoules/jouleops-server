@@ -1,6 +1,11 @@
 import express from "express";
 import pmInstancesController from "../controllers/pmInstancesController.ts";
-import { verifyToken, verifyApiKey, requireRole } from "../middleware/auth.ts";
+import {
+  verifyToken,
+  verifyApiKey,
+  verifyAnyAuth,
+  requireRole,
+} from "../middleware/auth.ts";
 
 const router = express.Router();
 
@@ -9,41 +14,45 @@ const router = express.Router();
  * Base path: /api/pm-instances
  */
 
-router.get("/", verifyToken, pmInstancesController.getAll);
+router.get("/", verifyAnyAuth, pmInstancesController.getAll);
 router.post("/", verifyApiKey, pmInstancesController.create);
-router.get("/site/:siteId", verifyToken, pmInstancesController.getBySite);
+router.get("/site/:siteId", verifyAnyAuth, pmInstancesController.getBySite);
 router.get(
   "/site/:siteId/pending",
-  verifyToken,
+  verifyAnyAuth,
   pmInstancesController.getPending,
 );
 router.get(
   "/site/:siteId/overdue",
-  verifyToken,
+  verifyAnyAuth,
   pmInstancesController.getOverdue,
 );
-router.get("/site/:siteId/stats", verifyToken, pmInstancesController.getStats);
-router.get("/asset/:assetId", verifyToken, pmInstancesController.getByAsset);
-router.get("/:instanceId", verifyToken, pmInstancesController.getById);
+router.get(
+  "/site/:siteId/stats",
+  verifyAnyAuth,
+  pmInstancesController.getStats,
+);
+router.get("/asset/:assetId", verifyAnyAuth, pmInstancesController.getByAsset);
+router.get("/:instanceId", verifyAnyAuth, pmInstancesController.getById);
 router.put(
   "/:instanceId",
-  verifyToken,
+  verifyAnyAuth,
   requireRole(["admin", "superadmin"]),
   pmInstancesController.update,
 );
 router.patch(
   "/:instanceId/status",
-  verifyToken,
+  verifyAnyAuth,
   pmInstancesController.updateStatus,
 );
 router.patch(
   "/:instanceId/progress",
-  verifyToken,
+  verifyAnyAuth,
   pmInstancesController.updateProgress,
 );
 router.delete(
   "/:instanceId",
-  verifyToken,
+  verifyAnyAuth,
   requireRole(["admin", "superadmin"]),
   pmInstancesController.remove,
 );

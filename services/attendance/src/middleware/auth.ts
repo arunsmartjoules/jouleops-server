@@ -131,9 +131,27 @@ export const verifyApiKey = async (
  */
 export const requireAdmin = requireRole(["admin", "superadmin"]);
 
+/**
+ * Combined auth - accepts either JWT or API key
+ */
+export const verifyAnyAuth = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
+  // Check for API key first
+  if (req.headers["x-api-key"]) {
+    return verifyApiKey(req, res, next);
+  }
+
+  // Fall back to JWT
+  return verifyToken(req as AuthRequest, res, next);
+};
+
 export default {
   verifyToken,
   verifyApiKey,
   requireRole,
   requireAdmin,
+  verifyAnyAuth,
 };
