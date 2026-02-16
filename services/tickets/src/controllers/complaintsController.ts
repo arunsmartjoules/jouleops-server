@@ -28,7 +28,19 @@ interface AuthRequest extends Request {
 
 export const create = async (req: Request, res: Response) => {
   try {
-    const complaint = await complaintsRepository.createComplaint(req.body);
+    const { site_id } = req.body;
+    if (!site_id) {
+      return sendError(res, "site_id is required");
+    }
+
+    // Auto-generate ticket number
+    const ticket_no = await complaintsRepository.generateTicketNo(site_id);
+
+    const complaint = await complaintsRepository.createComplaint({
+      ...req.body,
+      ticket_no,
+    });
+
     return sendCreated(res, complaint, "Complaint created successfully");
   } catch (error: any) {
     console.error("Create complaint error:", error);

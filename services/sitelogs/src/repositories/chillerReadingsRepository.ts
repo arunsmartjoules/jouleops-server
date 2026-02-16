@@ -5,6 +5,7 @@
  */
 
 import { query, queryOne } from "@jouleops/shared";
+import { cached, TTL } from "@jouleops/shared";
 
 // ============================================================================
 // Types
@@ -202,9 +203,17 @@ export async function getChillerReadingsBySite(
   );
   const total = parseInt(countResult?.count || "0", 10);
 
-  // Get data
+  // Get data with explicit columns (avoid SELECT *)
+  const CHILLER_LIST_COLUMNS = `id, site_id, chiller_id, equipment_id, reading_time,
+    date_shift, compressor_load_percentage, status, remarks,
+    condenser_inlet_temp, condenser_outlet_temp,
+    evaporator_inlet_temp, evaporator_outlet_temp,
+    set_point_celsius, compressor_suction_temp,
+    discharge_pressure, main_suction_pressure,
+    sla_status, created_at, updated_at`;
+
   const data = await query<ChillerReading>(
-    `SELECT * FROM chiller_readings ${whereClause}
+    `SELECT ${CHILLER_LIST_COLUMNS} FROM chiller_readings ${whereClause}
      ORDER BY ${sortBy} ${orderDirection}
      LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`,
     [...params, limit, offset],
@@ -337,58 +346,54 @@ export async function deleteChillerReading(id: string): Promise<boolean> {
 
 /**
  * Get average readings for a chiller over a period
+ * Uses SQL AVG() + cache-aside (5min TTL)
  */
 export async function getChillerAverages(
   chillerId: string,
   dateFrom: string,
   dateTo: string,
 ): Promise<ChillerAverages | null> {
-  const data = await query<ChillerReading>(
-    `SELECT * FROM chiller_readings
-     WHERE chiller_id = $1
-       AND reading_time >= $2
-       AND reading_time <= $3`,
-    [chillerId, dateFrom, dateTo],
-  );
+  const cacheKey = `chiller_avg:${chillerId}:${dateFrom}:${dateTo}`;
 
-  if (data.length === 0) return null;
+  return cached(
+    cacheKey,
+    async () => {
+      const result = await queryOne<{
+        cnt: string;
+        avg_condenser_inlet: string | null;
+        avg_condenser_outlet: string | null;
+        avg_evaporator_inlet: string | null;
+        avg_evaporator_outlet: string | null;
+        avg_compressor_load: string | null;
+      }>(
+        `SELECT
+         COUNT(*)::text AS cnt,
+         ROUND(AVG(condenser_inlet_temp)::numeric, 2)::text AS avg_condenser_inlet,
+         ROUND(AVG(condenser_outlet_temp)::numeric, 2)::text AS avg_condenser_outlet,
+         ROUND(AVG(evaporator_inlet_temp)::numeric, 2)::text AS avg_evaporator_inlet,
+         ROUND(AVG(evaporator_outlet_temp)::numeric, 2)::text AS avg_evaporator_outlet,
+         ROUND(AVG(compressor_load_percentage)::numeric, 2)::text AS avg_compressor_load
+       FROM chiller_readings
+       WHERE chiller_id = $1
+         AND reading_time >= $2
+         AND reading_time <= $3`,
+        [chillerId, dateFrom, dateTo],
+      );
 
-  const averages: ChillerAverages = {
-    count: data.length,
-    condenser_inlet_temp: 0,
-    condenser_outlet_temp: 0,
-    evaporator_inlet_temp: 0,
-    evaporator_outlet_temp: 0,
-    compressor_load_percentage: 0,
-  };
+      const count = parseInt(result?.cnt || "0", 10);
+      if (count === 0) return null;
 
-  data.forEach((reading) => {
-    averages.condenser_inlet_temp += reading.condenser_inlet_temp || 0;
-    averages.condenser_outlet_temp += reading.condenser_outlet_temp || 0;
-    averages.evaporator_inlet_temp += reading.evaporator_inlet_temp || 0;
-    averages.evaporator_outlet_temp += reading.evaporator_outlet_temp || 0;
-    averages.compressor_load_percentage +=
-      reading.compressor_load_percentage || 0;
-  });
-
-  // Calculate averages
-  averages.condenser_inlet_temp = +(
-    averages.condenser_inlet_temp / data.length
-  ).toFixed(2);
-  averages.condenser_outlet_temp = +(
-    averages.condenser_outlet_temp / data.length
-  ).toFixed(2);
-  averages.evaporator_inlet_temp = +(
-    averages.evaporator_inlet_temp / data.length
-  ).toFixed(2);
-  averages.evaporator_outlet_temp = +(
-    averages.evaporator_outlet_temp / data.length
-  ).toFixed(2);
-  averages.compressor_load_percentage = +(
-    averages.compressor_load_percentage / data.length
-  ).toFixed(2);
-
-  return averages;
+      return {
+        count,
+        condenser_inlet_temp: +(result?.avg_condenser_inlet || 0),
+        condenser_outlet_temp: +(result?.avg_condenser_outlet || 0),
+        evaporator_inlet_temp: +(result?.avg_evaporator_inlet || 0),
+        evaporator_outlet_temp: +(result?.avg_evaporator_outlet || 0),
+        compressor_load_percentage: +(result?.avg_compressor_load || 0),
+      };
+    },
+    TTL.MEDIUM,
+  ); // 5 minute TTL
 }
 
 export default {

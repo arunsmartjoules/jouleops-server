@@ -6,7 +6,13 @@
  */
 
 import { query, queryOne } from "@jouleops/shared";
-import { cached, cacheDel as del, CACHE_PREFIX, TTL } from "@jouleops/shared";
+import {
+  cached,
+  cacheDel as del,
+  cacheInvalidate,
+  CACHE_PREFIX,
+  TTL,
+} from "@jouleops/shared";
 
 // Build cache key helper
 const buildKey = (prefix: string, id: string) => `${prefix}${id}`;
@@ -57,7 +63,7 @@ export interface Complaint {
 }
 
 export interface CreateComplaintInput {
-  ticket_no: string;
+  ticket_no?: string;
   site_id: string;
   title: string;
   status?: string;
@@ -100,11 +106,43 @@ export interface GetComplaintsOptions {
   toDate?: string | null;
   sortBy?: string;
   sortOrder?: "asc" | "desc";
+  cursor?: string | null; // keyset cursor: "created_at,id" for deep pagination
 }
 
 // ============================================================================
 // Repository Functions
 // ============================================================================
+
+/**
+ * Generate a unique ticket number for a site.
+ * Format: {SITE_PREFIX}-{MMYY}-{SEQ} e.g. "NSK-0226-01"
+ * Sequence resets per site per month.
+ */
+export async function generateTicketNo(siteId: string): Promise<string> {
+  // 1. Look up site prefix
+  const site = await queryOne<{ site_prefix: string | null }>(
+    `SELECT site_prefix FROM sites WHERE site_id = $1`,
+    [siteId],
+  );
+  const prefix = site?.site_prefix?.trim() || "SITE";
+
+  // 2. Current month/year (MM + YY)
+  const now = new Date();
+  const mm = String(now.getMonth() + 1).padStart(2, "0");
+  const yy = String(now.getFullYear()).slice(-2);
+  const monthYear = `${mm}${yy}`;
+
+  // 3. Count existing tickets for this site in the current month
+  const pattern = `${prefix}-${monthYear}-%`;
+  const countResult = await queryOne<{ cnt: string }>(
+    `SELECT COUNT(*)::text AS cnt FROM complaints WHERE site_id = $1 AND ticket_no LIKE $2`,
+    [siteId, pattern],
+  );
+  const seq = parseInt(countResult?.cnt || "0", 10) + 1;
+  const seqStr = String(seq).padStart(2, "0");
+
+  return `${prefix}-${monthYear}-${seqStr}`;
+}
 
 /**
  * Create a new complaint
@@ -129,6 +167,9 @@ export async function createComplaint(
   if (!complaint) {
     throw new Error("Failed to create complaint");
   }
+
+  // Invalidate stats cache for this site
+  cacheInvalidate("complaint_stats:*").catch(() => {});
 
   return complaint;
 }
@@ -207,6 +248,7 @@ export async function getComplaintsBySite(
     total: number;
     totalPages: number;
   };
+  nextCursor?: string | null;
 }> {
   const {
     page = 1,
@@ -226,11 +268,22 @@ export async function getComplaintsBySite(
   let paramIndex = 1;
 
   if (siteId !== "all") {
-    conditions.push(
-      `(site_id = $${paramIndex} OR site_id IN (SELECT site_code FROM sites WHERE site_id = $${paramIndex}))`,
+    // Pre-resolve site_code to avoid OR + subquery (index-friendly)
+    const siteRow = await queryOne<{ site_code: string | null }>(
+      `SELECT site_code FROM sites WHERE site_id = $1`,
+      [siteId],
     );
-    params.push(siteId);
-    paramIndex++;
+    const siteCode = siteRow?.site_code;
+
+    if (siteCode && siteCode !== siteId) {
+      conditions.push(`site_id IN ($${paramIndex}, $${paramIndex + 1})`);
+      params.push(siteId, siteCode);
+      paramIndex += 2;
+    } else {
+      conditions.push(`site_id = $${paramIndex}`);
+      params.push(siteId);
+      paramIndex++;
+    }
   }
 
   if (status && status !== "All") {
@@ -261,21 +314,51 @@ export async function getComplaintsBySite(
     conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
   const orderDirection = sortOrder === "asc" ? "ASC" : "DESC";
 
-  // Get total count
-  const countResult = await queryOne<{ count: string }>(
-    `SELECT COUNT(*) as count FROM complaints ${whereClause}`,
-    params,
-  );
-  const total = parseInt(countResult?.count || "0", 10);
+  // Keyset pagination: if cursor provided, use it instead of OFFSET
+  const { cursor = null } = options;
+  let cursorCondition = "";
+  const cursorParams: any[] = [];
+
+  if (cursor) {
+    // cursor format: "created_at_iso,uuid"
+    const [cursorDate, cursorId] = cursor.split(",");
+    if (cursorDate && cursorId) {
+      const op = sortOrder === "desc" ? "<" : ">";
+      cursorCondition = `AND (created_at, id) ${op} ($${paramIndex}, $${paramIndex + 1})`;
+      cursorParams.push(cursorDate, cursorId);
+      paramIndex += 2;
+    }
+  }
+
+  // Get total count (only when no cursor — caller already has total from first page)
+  let total = 0;
+  if (!cursor) {
+    const countResult = await queryOne<{ count: string }>(
+      `SELECT COUNT(*) as count FROM complaints ${whereClause}`,
+      params,
+    );
+    total = parseInt(countResult?.count || "0", 10);
+  }
 
   // Get paginated data
-  const dataParams = [...params, limit, offset];
+  const dataParams = [...params, ...cursorParams, limit];
+  const offsetClause = cursor ? "" : `OFFSET $${paramIndex + 1}`;
+  if (!cursor) {
+    dataParams.push(offset);
+  }
+
   const data = await query<Complaint>(
-    `SELECT * FROM complaints ${whereClause}
-     ORDER BY ${sortBy} ${orderDirection}
-     LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`,
+    `SELECT * FROM complaints ${whereClause} ${cursorCondition}
+     ORDER BY ${sortBy} ${orderDirection}, id ${orderDirection}
+     LIMIT $${paramIndex}${cursor ? "" : ` ${offsetClause}`}`,
     dataParams,
   );
+
+  // Build next cursor from last item
+  const lastItem = data[data.length - 1];
+  const nextCursor = lastItem
+    ? `${new Date(lastItem.created_at).toISOString()},${lastItem.id}`
+    : null;
 
   return {
     data,
@@ -283,8 +366,9 @@ export async function getComplaintsBySite(
       page,
       limit,
       total,
-      totalPages: Math.ceil(total / limit),
+      totalPages: total ? Math.ceil(total / limit) : 0,
     },
+    nextCursor,
   };
 }
 
@@ -335,8 +419,9 @@ export async function updateComplaint(
     throw new Error("Complaint not found");
   }
 
-  // Invalidate cache
+  // Invalidate caches
   await del(buildKey(CACHE_PREFIX.TICKET, complaint.id));
+  cacheInvalidate("complaint_stats:*").catch(() => {});
 
   return complaint;
 }
@@ -401,39 +486,76 @@ export async function deleteComplaint(identifier: string): Promise<boolean> {
 
 /**
  * Get complaint statistics
+ * Uses SQL GROUP BY + cache-aside (60s TTL)
  */
 export async function getComplaintStats(siteId: string): Promise<{
   total: number;
   byStatus: Record<string, number>;
   byCategory: Record<string, number>;
 }> {
-  let sql = `SELECT status, category FROM complaints`;
-  const params: any[] = [];
+  const cacheKey = `complaint_stats:${siteId}`;
 
-  if (siteId !== "all") {
-    sql += ` WHERE (site_id = $1 OR site_id IN (SELECT site_code FROM sites WHERE site_id = $1))`;
-    params.push(siteId);
-  }
+  return cached(
+    cacheKey,
+    async () => {
+      // Build WHERE clause with pre-resolved site_code
+      let whereClause = "";
+      const params: any[] = [];
 
-  const data = await query<{ status: string; category: string }>(sql, params);
+      if (siteId !== "all") {
+        const siteRow = await queryOne<{ site_code: string | null }>(
+          `SELECT site_code FROM sites WHERE site_id = $1`,
+          [siteId],
+        );
+        const siteCode = siteRow?.site_code;
 
-  const stats = {
-    total: data.length,
-    byStatus: {} as Record<string, number>,
-    byCategory: {} as Record<string, number>,
-  };
+        if (siteCode && siteCode !== siteId) {
+          whereClause = `WHERE site_id IN ($1, $2)`;
+          params.push(siteId, siteCode);
+        } else {
+          whereClause = `WHERE site_id = $1`;
+          params.push(siteId);
+        }
+      }
 
-  data.forEach((complaint) => {
-    stats.byStatus[complaint.status] =
-      (stats.byStatus[complaint.status] || 0) + 1;
-    stats.byCategory[complaint.category] =
-      (stats.byCategory[complaint.category] || 0) + 1;
-  });
+      // Run all three queries in parallel
+      const [countResult, statusRows, categoryRows] = await Promise.all([
+        queryOne<{ cnt: string }>(
+          `SELECT COUNT(*)::text AS cnt FROM complaints ${whereClause}`,
+          params,
+        ),
+        query<{ status: string; cnt: string }>(
+          `SELECT status, COUNT(*)::text AS cnt FROM complaints ${whereClause} GROUP BY status`,
+          params,
+        ),
+        query<{ category: string; cnt: string }>(
+          `SELECT category, COUNT(*)::text AS cnt FROM complaints ${whereClause} GROUP BY category`,
+          params,
+        ),
+      ]);
 
-  return stats;
+      const byStatus: Record<string, number> = {};
+      statusRows.forEach((r) => {
+        byStatus[r.status] = parseInt(r.cnt, 10);
+      });
+
+      const byCategory: Record<string, number> = {};
+      categoryRows.forEach((r) => {
+        byCategory[r.category] = parseInt(r.cnt, 10);
+      });
+
+      return {
+        total: parseInt(countResult?.cnt || "0", 10),
+        byStatus,
+        byCategory,
+      };
+    },
+    TTL.SHORT,
+  ); // 60 second TTL
 }
 
 export default {
+  generateTicketNo,
   createComplaint,
   getComplaintById,
   getComplaintByTicketNo,

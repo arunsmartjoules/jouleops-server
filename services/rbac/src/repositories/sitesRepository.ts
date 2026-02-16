@@ -28,6 +28,7 @@ export interface Site {
   address?: string;
   is_active: boolean;
   whatsapp_group_id?: string;
+  site_prefix?: string;
   created_at?: Date;
   updated_at?: Date;
 }
@@ -40,6 +41,7 @@ export interface CreateSiteInput {
   address?: string;
   is_active?: boolean;
   whatsapp_group_id?: string;
+  site_prefix?: string;
 }
 
 export interface UpdateSiteInput {
@@ -49,6 +51,7 @@ export interface UpdateSiteInput {
   address?: string;
   is_active?: boolean;
   whatsapp_group_id?: string;
+  site_prefix?: string;
 }
 
 export interface GetSitesOptions {
