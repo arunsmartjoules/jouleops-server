@@ -1,6 +1,6 @@
 import express from "express";
 import siteUsersController from "../controllers/siteUsersController.ts";
-import { verifyToken, requireRole } from "../middleware/auth.ts";
+import { verifyToken, verifyAnyAuth, requireRole } from "../middleware/auth.ts";
 
 const router = express.Router();
 
@@ -10,13 +10,13 @@ const router = express.Router();
  */
 
 // Get all site-user mappings with filters
-router.get("/", verifyToken, siteUsersController.getAll);
+router.get("/", verifyAnyAuth, siteUsersController.getAll);
 
 // Get users at a specific site
-router.get("/by-site/:siteId", verifyToken, siteUsersController.getBySite);
+router.get("/by-site/:siteId", verifyAnyAuth, siteUsersController.getBySite);
 
 // Get sites for a specific user
-router.get("/by-user/:userId", verifyToken, siteUsersController.getByUser);
+router.get("/by-user/:userId", verifyAnyAuth, siteUsersController.getByUser);
 
 // Assign user to site
 router.post(

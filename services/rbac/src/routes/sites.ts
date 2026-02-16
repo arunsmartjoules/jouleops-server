@@ -1,6 +1,6 @@
 import express from "express";
 import sitesController from "../controllers/sitesController.ts";
-import { verifyToken, requireRole } from "../middleware/auth.ts";
+import { verifyToken, verifyAnyAuth, requireRole } from "../middleware/auth.ts";
 
 const router = express.Router();
 
@@ -15,8 +15,8 @@ router.post(
   requireRole(["admin", "superadmin"]),
   sitesController.create,
 );
-router.get("/", verifyToken, sitesController.getAll);
-router.get("/:siteId", verifyToken, sitesController.getById);
+router.get("/", verifyAnyAuth, sitesController.getAll);
+router.get("/:siteId", verifyAnyAuth, sitesController.getById);
 router.put(
   "/:siteId",
   verifyToken,

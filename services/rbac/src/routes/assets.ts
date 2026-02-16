@@ -1,6 +1,11 @@
 import express from "express";
 import assetsController from "../controllers/assetsController.ts";
-import { verifyToken, verifyApiKey, requireRole } from "../middleware/auth.ts";
+import {
+  verifyToken,
+  verifyApiKey,
+  verifyAnyAuth,
+  requireRole,
+} from "../middleware/auth.ts";
 
 const router = express.Router();
 
@@ -8,46 +13,49 @@ const router = express.Router();
  * Assets Routes
  * Base path: /api/assets
  */
-router.get("/", verifyToken, assetsController.getAll);
-router.post(
-  "/",
-  verifyToken,
-  requireRole(["admin", "superadmin"]),
-  assetsController.create,
-);
-router.get("/site/:siteId", verifyToken, assetsController.getBySite);
-router.get("/site/:siteId/search", verifyToken, assetsController.search);
+// Protected routes (accepts JWT or API Key)
+router.get("/", verifyAnyAuth, assetsController.getAll);
+router.get("/site/:siteId", verifyAnyAuth, assetsController.getBySite);
+router.get("/site/:siteId/search", verifyAnyAuth, assetsController.search);
 router.get(
   "/site/:siteId/type/:assetType",
-  verifyToken,
+  verifyAnyAuth,
   assetsController.getByType,
 );
 router.get(
   "/site/:siteId/location/:location",
-  verifyToken,
+  verifyAnyAuth,
   assetsController.getByLocation,
 );
 router.get(
   "/site/:siteId/warranty",
-  verifyToken,
+  verifyAnyAuth,
   assetsController.getUnderWarranty,
 );
 router.get(
   "/site/:siteId/warranty-expiring",
-  verifyToken,
+  verifyAnyAuth,
   assetsController.getWarrantyExpiring,
 );
-router.get("/site/:siteId/stats", verifyToken, assetsController.getStats);
-router.get("/:assetId", verifyToken, assetsController.getById);
+router.get("/site/:siteId/stats", verifyAnyAuth, assetsController.getStats);
+router.get("/:assetId", verifyAnyAuth, assetsController.getById);
+// Modification and privileged operations (unifying auth but still requiring role if needed)
+// NOTE: For now, we unify auth for GET. Admin ops stay protected.
+router.post(
+  "/",
+  verifyAnyAuth,
+  requireRole(["admin", "superadmin"]),
+  assetsController.create,
+);
 router.put(
   "/:assetId",
-  verifyToken,
+  verifyAnyAuth,
   requireRole(["admin", "superadmin"]),
   assetsController.update,
 );
 router.patch(
   "/:assetId/status",
-  verifyToken,
+  verifyAnyAuth,
   requireRole(["admin", "superadmin"]),
   assetsController.updateStatus,
 );

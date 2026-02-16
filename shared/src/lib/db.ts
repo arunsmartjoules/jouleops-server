@@ -51,6 +51,16 @@ const pool = new Pool({
   idleTimeoutMillis: parseInt(process.env.DB_IDLE_TIMEOUT_MS || "30000"),
   connectionTimeoutMillis: parseInt(process.env.DB_CONN_TIMEOUT_MS || "5000"),
   allowExitOnIdle: true,
+  // SSL Configuration for production/external RDS
+  ssl:
+    process.env.DB_SSL === "true"
+      ? {
+          rejectUnauthorized: false, // Required for most hosted RDS providers like AWS/Railway unless CA cert is provided
+        }
+      : false,
+  // Prevent TCP connection drops by intermediate firewalls/NAT
+  keepAlive: true,
+  keepAliveInitialDelayMillis: 10000, // 10 seconds
 });
 
 // Log pool errors

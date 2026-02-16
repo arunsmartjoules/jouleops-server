@@ -188,6 +188,18 @@ export const verifyApiKey = async (
   const apiKey =
     (Array.isArray(apiKeyHeader) ? apiKeyHeader[0] : apiKeyHeader) || "";
 
+  // 1. Check against static internal key (for consistency across services)
+  const internalKey = process.env.INTERNAL_API_KEY || "smartops-internal-key";
+  if (apiKey === internalKey) {
+    req.apiKey = {
+      id: 0,
+      name: "Internal Service Key",
+      scopes: ["*"], // Full access for internal key
+    };
+    return next();
+  }
+
+  // 2. Fall back to database validation for dynamic keys
   try {
     const key = await validateApiKey(apiKey);
 
