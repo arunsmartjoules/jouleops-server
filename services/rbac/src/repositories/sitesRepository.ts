@@ -187,7 +187,7 @@ export async function updateSite(
   updateData: UpdateSiteInput,
 ): Promise<Site> {
   const entries = Object.entries(updateData).filter(
-    ([, value]) => value !== undefined,
+    ([key, value]) => value !== undefined && key !== "updated_at",
   );
 
   if (entries.length === 0) {
@@ -242,7 +242,7 @@ export async function bulkUpdateSites(
   }
 
   const entries = Object.entries(updateData).filter(
-    ([, value]) => value !== undefined,
+    ([key, value]) => value !== undefined && key !== "updated_at",
   );
 
   if (entries.length === 0) {
