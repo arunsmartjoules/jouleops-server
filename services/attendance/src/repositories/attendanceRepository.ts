@@ -52,6 +52,7 @@ export interface GetAttendanceOptions {
   date_from?: string | null;
   date_to?: string | null;
   status?: string | null;
+  site_code?: string | undefined;
 }
 
 export interface SiteWithCoordinates {
@@ -358,6 +359,12 @@ export async function getAllAttendance(
   if (status) {
     conditions.push(`al.status = $${paramIndex}`);
     params.push(status);
+    paramIndex++;
+  }
+
+  if (options.site_code && options.site_code !== "all") {
+    conditions.push(`al.site_code = $${paramIndex}`);
+    params.push(options.site_code);
     paramIndex++;
   }
 

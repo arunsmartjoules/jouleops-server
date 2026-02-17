@@ -84,7 +84,6 @@ export async function getAll(options: {
       MAX(u.department) as user_department,
       MAX(u.designation) as user_designation,
       json_agg(json_build_object(
-      json_agg(json_build_object(
         'site_code', s.site_code,
         'site_name', s.name,
         'role_at_site', su.role_at_site,

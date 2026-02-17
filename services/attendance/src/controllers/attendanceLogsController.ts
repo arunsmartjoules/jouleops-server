@@ -440,13 +440,14 @@ export const remove = async (req: Request, res: Response) => {
 
 export const getAll = async (req: Request, res: Response) => {
   try {
-    const { page, limit, date_from, date_to, status } = req.query;
+    const { page, limit, date_from, date_to, status, site_code } = req.query;
     const result = await attendanceRepository.getAllAttendance({
       page: parseInt(page as string) || 1,
       limit: parseInt(limit as string) || 30,
       date_from: date_from as string | undefined,
       date_to: date_to as string | undefined,
       status: status as string | undefined,
+      site_code: site_code as string | undefined,
     });
     return sendSuccess(res, result.data, { pagination: result.pagination });
   } catch (error: any) {
