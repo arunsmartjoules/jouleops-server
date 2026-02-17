@@ -125,15 +125,13 @@ jobs:
   deploy:
     needs: test
     if: github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     steps:
-      - name: Deploy to EC2
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ${{ secrets.EC2_USERNAME }}
-          key: ${{ secrets.EC2_SSH_KEY }}
-          script: |
-            cd backend
-            git pull origin main
-            docker compose up -d --build
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Deploy to Docker
+        run: |
+          cd /home/ubuntu/backend
+          git pull origin main
+          docker compose up -d --build
