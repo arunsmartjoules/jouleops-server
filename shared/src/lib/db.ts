@@ -49,7 +49,7 @@ const pool = new Pool({
   connectionString: getDatabaseUrl(),
   max: parseInt(process.env.DB_MAX_POOL_SIZE || "20"),
   idleTimeoutMillis: parseInt(process.env.DB_IDLE_TIMEOUT_MS || "300000"), // 5 minutes
-  connectionTimeoutMillis: parseInt(process.env.DB_CONN_TIMEOUT_MS || "60000"), // 60 seconds
+  connectionTimeoutMillis: parseInt(process.env.DB_CONN_TIMEOUT_MS || "120000"), // 2 minutes
   allowExitOnIdle: true,
   // SSL Configuration for production/external RDS
   ssl:
@@ -60,7 +60,8 @@ const pool = new Pool({
       : false,
   // Prevent TCP connection drops by intermediate firewalls/NAT
   keepAlive: true,
-  keepAliveInitialDelayMillis: 10000, // 10 seconds
+  keepAliveInitialDelayMillis: 3000, // 3 seconds (More aggressive for RDS)
+
   // Session variables
   statement_timeout: 300000, // 5 minutes
 });

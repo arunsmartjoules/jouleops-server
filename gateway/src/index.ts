@@ -183,7 +183,9 @@ const server = app.listen(Number(PORT), "0.0.0.0", () => {
   logger.info(`Health check: http://localhost:${PORT}/health`);
 });
 
+server.setMaxListeners(50); // Increase limit to resolve MaxListenersExceededWarning from many proxies
 server.timeout = 300000; // 5 minutes
+
 server.keepAliveTimeout = 65000; // Slightly more than standard ALBs (60s)
 server.headersTimeout = 66000;
 
