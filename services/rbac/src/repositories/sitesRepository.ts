@@ -21,7 +21,7 @@ const buildKey = (prefix: string, id: string) => `${prefix}${id}`;
 // ============================================================================
 
 export interface Site {
-  site_id: string;
+  site_code: string;
   name: string;
   location?: string;
   city?: string;
@@ -29,12 +29,19 @@ export interface Site {
   is_active: boolean;
   whatsapp_group_id?: string;
   site_prefix?: string;
+  project_type?: string;
+  client?: string;
+  status?: string;
+  task_executor?: string;
+  radius?: number;
+  latitude?: number;
+  longitude?: number;
   created_at?: Date;
   updated_at?: Date;
 }
 
 export interface CreateSiteInput {
-  site_id: string;
+  site_code: string;
   name: string;
   location?: string;
   city?: string;
@@ -42,6 +49,13 @@ export interface CreateSiteInput {
   is_active?: boolean;
   whatsapp_group_id?: string;
   site_prefix?: string;
+  project_type?: string;
+  client?: string;
+  status?: string;
+  task_executor?: string;
+  radius?: number;
+  latitude?: number;
+  longitude?: number;
 }
 
 export interface UpdateSiteInput {
@@ -52,12 +66,21 @@ export interface UpdateSiteInput {
   is_active?: boolean;
   whatsapp_group_id?: string;
   site_prefix?: string;
+  project_type?: string;
+  client?: string;
+  site_code?: string;
+  status?: string;
+  task_executor?: string;
+  radius?: number;
+  latitude?: number;
+  longitude?: number;
 }
 
 export interface GetSitesOptions {
   is_active?: boolean | null;
   city?: string | null;
   search?: string;
+  project_type?: string | null;
 }
 
 // ============================================================================
@@ -90,13 +113,15 @@ export async function createSite(data: CreateSiteInput): Promise<Site> {
 /**
  * Get site by ID (with caching)
  */
-export async function getSiteById(siteId: string): Promise<Site | null> {
-  const cacheKey = buildKey(CACHE_PREFIX.SITE, siteId);
+export async function getSiteById(siteCode: string): Promise<Site | null> {
+  const cacheKey = buildKey(CACHE_PREFIX.SITE, siteCode);
 
   return cached(
     cacheKey,
     async () => {
-      return queryOne<Site>(`SELECT * FROM sites WHERE site_id = $1`, [siteId]);
+      return queryOne<Site>(`SELECT * FROM sites WHERE site_code = $1`, [
+        siteCode,
+      ]);
     },
     TTL.MEDIUM,
   );
@@ -108,7 +133,12 @@ export async function getSiteById(siteId: string): Promise<Site | null> {
 export async function getAllSites(
   options: GetSitesOptions = {},
 ): Promise<Site[]> {
-  const { is_active = null, city = null, search = "" } = options;
+  const {
+    is_active = null,
+    city = null,
+    search = "",
+    project_type = null,
+  } = options;
 
   const conditions: string[] = [];
   const params: any[] = [];
@@ -117,6 +147,12 @@ export async function getAllSites(
   if (is_active !== null) {
     conditions.push(`is_active = $${paramIndex}`);
     params.push(is_active);
+    paramIndex++;
+  }
+
+  if (project_type) {
+    conditions.push(`project_type = $${paramIndex}`);
+    params.push(project_type);
     paramIndex++;
   }
 
@@ -147,7 +183,7 @@ export async function getAllSites(
  * Update a site
  */
 export async function updateSite(
-  siteId: string,
+  siteCode: string,
   updateData: UpdateSiteInput,
 ): Promise<Site> {
   const entries = Object.entries(updateData).filter(
@@ -164,18 +200,18 @@ export async function updateSite(
   const sql = `
     UPDATE sites
     SET ${setClauses.join(", ")}, updated_at = NOW()
-    WHERE site_id = $${entries.length + 1}
+    WHERE site_code = $${entries.length + 1}
     RETURNING *
   `;
 
-  const site = await queryOne<Site>(sql, [...values, siteId]);
+  const site = await queryOne<Site>(sql, [...values, siteCode]);
 
   if (!site) {
     throw new Error("Site not found");
   }
 
   // Invalidate cache
-  await del(buildKey(CACHE_PREFIX.SITE, siteId));
+  await del(buildKey(CACHE_PREFIX.SITE, siteCode));
 
   return site;
 }
@@ -183,13 +219,13 @@ export async function updateSite(
 /**
  * Delete a site
  */
-export async function deleteSite(siteId: string): Promise<boolean> {
-  const result = await queryOne<{ site_id: string }>(
-    `DELETE FROM sites WHERE site_id = $1 RETURNING site_id`,
-    [siteId],
+export async function deleteSite(siteCode: string): Promise<boolean> {
+  const result = await queryOne<{ site_code: string }>(
+    `DELETE FROM sites WHERE site_code = $1 RETURNING site_code`,
+    [siteCode],
   );
 
-  await del(buildKey(CACHE_PREFIX.SITE, siteId));
+  await del(buildKey(CACHE_PREFIX.SITE, siteCode));
 
   return result !== null;
 }
@@ -198,10 +234,10 @@ export async function deleteSite(siteId: string): Promise<boolean> {
  * Bulk update sites
  */
 export async function bulkUpdateSites(
-  siteIds: string[],
+  siteCodes: string[],
   updateData: UpdateSiteInput,
 ): Promise<Site[]> {
-  if (siteIds.length === 0) {
+  if (siteCodes.length === 0) {
     return [];
   }
 
@@ -215,19 +251,19 @@ export async function bulkUpdateSites(
 
   const setClauses = entries.map(([key], i) => `${key} = $${i + 1}`);
   const values = entries.map(([, value]) => value);
-  const placeholders = siteIds.map((_, i) => `$${entries.length + 1 + i}`);
+  const placeholders = siteCodes.map((_, i) => `$${entries.length + 1 + i}`);
 
   const sql = `
     UPDATE sites
     SET ${setClauses.join(", ")}, updated_at = NOW()
-    WHERE site_id IN (${placeholders.join(", ")})
+    WHERE site_code IN (${placeholders.join(", ")})
     RETURNING *
   `;
 
-  const sites = await query<Site>(sql, [...values, ...siteIds]);
+  const sites = await query<Site>(sql, [...values, ...siteCodes]);
 
   // Invalidate cache for all updated sites
-  for (const id of siteIds) {
+  for (const id of siteCodes) {
     await del(buildKey(CACHE_PREFIX.SITE, id));
   }
 
@@ -237,20 +273,20 @@ export async function bulkUpdateSites(
 /**
  * Bulk delete sites
  */
-export async function bulkDeleteSites(siteIds: string[]): Promise<boolean> {
-  if (siteIds.length === 0) {
+export async function bulkDeleteSites(siteCodes: string[]): Promise<boolean> {
+  if (siteCodes.length === 0) {
     return true;
   }
 
-  const placeholders = siteIds.map((_, i) => `$${i + 1}`);
+  const placeholders = siteCodes.map((_, i) => `$${i + 1}`);
 
-  const results = await query<{ site_id: string }>(
-    `DELETE FROM sites WHERE site_id IN (${placeholders.join(", ")}) RETURNING site_id`,
-    siteIds,
+  const results = await query<{ site_code: string }>(
+    `DELETE FROM sites WHERE site_code IN (${placeholders.join(", ")}) RETURNING site_code`,
+    siteCodes,
   );
 
   // Invalidate cache
-  for (const id of siteIds) {
+  for (const id of siteCodes) {
     await del(buildKey(CACHE_PREFIX.SITE, id));
   }
 

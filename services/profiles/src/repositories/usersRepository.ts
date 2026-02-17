@@ -30,7 +30,7 @@ export interface User {
   role: string;
   is_active: boolean;
   is_superadmin?: boolean;
-  site_id?: string;
+  site_code?: string;
   employee_code?: string;
   department?: string;
   designation?: string;
@@ -47,7 +47,7 @@ export interface CreateUserInput {
   phone?: string;
   role?: string;
   is_active?: boolean;
-  site_id?: string;
+  site_code?: string;
   employee_code?: string;
   department?: string;
   designation?: string;
@@ -61,7 +61,7 @@ export interface UpdateUserInput {
   phone?: string;
   role?: string;
   is_active?: boolean;
-  site_id?: string;
+  site_code?: string;
   employee_code?: string;
   department?: string;
   designation?: string;
@@ -158,13 +158,13 @@ export async function getUserByEmailAndEmployeeCode(
  * Get users by site ID
  */
 export async function getUsersBySite(
-  siteId: string,
+  siteCode: string,
   options: { role?: string | null; is_active?: boolean | null } = {},
 ): Promise<User[]> {
   const { role = null, is_active = true } = options;
 
-  let sql = `SELECT * FROM users WHERE site_id = $1`;
-  const params: any[] = [siteId];
+  let sql = `SELECT * FROM users WHERE site_code = $1`;
+  const params: any[] = [siteCode];
   let paramIndex = 2;
 
   if (role !== null) {

@@ -22,7 +22,7 @@ const buildKey = (prefix: string, id: string) => `${prefix}${id}`;
 
 export interface Asset {
   asset_id: string;
-  site_id: string;
+  site_code: string;
   asset_name: string;
   asset_type?: string;
   status: string;
@@ -40,7 +40,7 @@ export interface Asset {
 
 export interface CreateAssetInput {
   asset_id: string;
-  site_id: string;
+  site_code: string;
   asset_name: string;
   asset_type?: string;
   status?: string;
@@ -137,7 +137,7 @@ export async function getAssetById(assetId: string): Promise<Asset | null> {
  * Get assets by site with pagination and filtering
  */
 export async function getAssetsBySite(
-  siteId: string,
+  siteCode: string,
   options: GetAssetsOptions = {},
 ): Promise<{
   data: Asset[];
@@ -164,9 +164,9 @@ export async function getAssetsBySite(
   const params: any[] = [];
   let paramIndex = 1;
 
-  if (siteId !== "all") {
-    conditions.push(`site_id = $${paramIndex}`);
-    params.push(siteId);
+  if (siteCode !== "all") {
+    conditions.push(`site_code = $${paramIndex}`);
+    params.push(siteCode);
     paramIndex++;
   }
 
@@ -223,14 +223,14 @@ export async function getAssetsBySite(
  * Get assets by type for a site
  */
 export async function getAssetsByType(
-  siteId: string,
+  siteCode: string,
   assetType: string,
 ): Promise<Asset[]> {
   return query<Asset>(
     `SELECT * FROM assets
-     WHERE site_id = $1 AND asset_type = $2 AND status = 'Active'
+     WHERE site_code = $1 AND asset_type = $2 AND status = 'Active'
      ORDER BY asset_name ASC`,
-    [siteId, assetType],
+    [siteCode, assetType],
   );
 }
 
@@ -238,14 +238,14 @@ export async function getAssetsByType(
  * Get assets by location for a site
  */
 export async function getAssetsByLocation(
-  siteId: string,
+  siteCode: string,
   location: string,
 ): Promise<Asset[]> {
   return query<Asset>(
     `SELECT * FROM assets
-     WHERE site_id = $1 AND location ILIKE $2
+     WHERE site_code = $1 AND location ILIKE $2
      ORDER BY asset_name ASC`,
-    [siteId, `%${location}%`],
+    [siteCode, `%${location}%`],
   );
 }
 
@@ -253,28 +253,30 @@ export async function getAssetsByLocation(
  * Search assets within a site
  */
 export async function searchAssets(
-  siteId: string,
+  siteCode: string,
   searchTerm: string,
 ): Promise<Asset[]> {
   return query<Asset>(
     `SELECT * FROM assets
-     WHERE site_id = $1
+     WHERE site_code = $1
        AND (asset_name ILIKE $2 OR asset_id ILIKE $2 OR location ILIKE $2)
      ORDER BY asset_name ASC
      LIMIT 20`,
-    [siteId, `%${searchTerm}%`],
+    [siteCode, `%${searchTerm}%`],
   );
 }
 
 /**
  * Get assets under warranty
  */
-export async function getAssetsUnderWarranty(siteId: string): Promise<Asset[]> {
+export async function getAssetsUnderWarranty(
+  siteCode: string,
+): Promise<Asset[]> {
   return query<Asset>(
     `SELECT * FROM assets
-     WHERE site_id = $1 AND warranty_end_date >= CURRENT_DATE
+     WHERE site_code = $1 AND warranty_end_date >= CURRENT_DATE
      ORDER BY warranty_end_date ASC`,
-    [siteId],
+    [siteCode],
   );
 }
 
@@ -282,16 +284,16 @@ export async function getAssetsUnderWarranty(siteId: string): Promise<Asset[]> {
  * Get assets with warranty expiring within N days
  */
 export async function getAssetsWarrantyExpiring(
-  siteId: string,
+  siteCode: string,
   days: number = 30,
 ): Promise<Asset[]> {
   return query<Asset>(
     `SELECT * FROM assets
-     WHERE site_id = $1
+     WHERE site_code = $1
        AND warranty_end_date >= CURRENT_DATE
        AND warranty_end_date <= CURRENT_DATE + $2::integer
      ORDER BY warranty_end_date ASC`,
-    [siteId, days],
+    [siteCode, days],
   );
 }
 
@@ -361,10 +363,10 @@ export async function deleteAsset(assetId: string): Promise<boolean> {
 /**
  * Get asset statistics for a site
  */
-export async function getAssetStats(siteId: string): Promise<AssetStats> {
+export async function getAssetStats(siteCode: string): Promise<AssetStats> {
   const data = await query<{ status: string; asset_type: string | null }>(
-    `SELECT status, asset_type FROM assets WHERE site_id = $1`,
-    [siteId],
+    `SELECT status, asset_type FROM assets WHERE site_code = $1`,
+    [siteCode],
   );
 
   const stats: AssetStats = {

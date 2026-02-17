@@ -52,13 +52,13 @@ export const getById = async (req: Request, res: Response) => {
 
 export const getBySite = async (req: Request, res: Response) => {
   try {
-    const { siteId } = req.params;
-    if (!siteId) {
-      return sendError(res, "Site ID is required");
+    const { siteCode } = req.params;
+    if (!siteCode) {
+      return sendError(res, "Site Code is required");
     }
     const { page, limit, status, frequency, asset_type, sortBy, sortOrder } =
       req.query;
-    const result = await pmInstancesRepository.getPMInstancesBySite(siteId, {
+    const result = await pmInstancesRepository.getPMInstancesBySite(siteCode, {
       page: parseInt(page as string) || 1,
       limit: parseInt(limit as string) || 20,
       status: status as string | undefined,
@@ -91,13 +91,13 @@ export const getByAsset = async (req: Request, res: Response) => {
 
 export const getPending = async (req: Request, res: Response) => {
   try {
-    const { siteId } = req.params;
-    if (!siteId) {
-      return sendError(res, "Site ID is required");
+    const { siteCode } = req.params;
+    if (!siteCode) {
+      return sendError(res, "Site Code is required");
     }
     const { days } = req.query;
     const instances = await pmInstancesRepository.getPendingPMInstances(
-      siteId,
+      siteCode,
       parseInt(days as string) || 7,
     );
     return sendSuccess(res, instances);
@@ -109,11 +109,12 @@ export const getPending = async (req: Request, res: Response) => {
 
 export const getOverdue = async (req: Request, res: Response) => {
   try {
-    const { siteId } = req.params;
-    if (!siteId) {
-      return sendError(res, "Site ID is required");
+    const { siteCode } = req.params;
+    if (!siteCode) {
+      return sendError(res, "Site Code is required");
     }
-    const instances = await pmInstancesRepository.getOverduePMInstances(siteId);
+    const instances =
+      await pmInstancesRepository.getOverduePMInstances(siteCode);
     return sendSuccess(res, instances);
   } catch (error: any) {
     console.error("Get overdue PM instances error:", error);
@@ -219,11 +220,11 @@ export const remove = async (req: Request, res: Response) => {
 
 export const getStats = async (req: Request, res: Response) => {
   try {
-    const { siteId } = req.params;
-    if (!siteId) {
-      return sendError(res, "Site ID is required");
+    const { siteCode } = req.params;
+    if (!siteCode) {
+      return sendError(res, "Site Code is required");
     }
-    const stats = await pmInstancesRepository.getPMStats(siteId);
+    const stats = await pmInstancesRepository.getPMStats(siteCode);
     return sendSuccess(res, stats);
   } catch (error: any) {
     console.error("Get stats error:", error);
@@ -232,7 +233,7 @@ export const getStats = async (req: Request, res: Response) => {
 };
 
 export const getAll = async (req: Request, res: Response) => {
-  req.params.siteId = "all";
+  req.params.siteCode = "all";
   return getBySite(req, res);
 };
 

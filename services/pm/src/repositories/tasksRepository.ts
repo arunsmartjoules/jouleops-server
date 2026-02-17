@@ -16,7 +16,7 @@ const buildKey = (...parts: string[]): string => parts.join(":");
 
 export interface Task {
   task_id: string;
-  site_id: string;
+  site_code: string;
   title: string;
   description?: string;
   task_status: string;
@@ -32,7 +32,7 @@ export interface Task {
 
 export interface CreateTaskInput {
   task_id: string;
-  site_id: string;
+  site_code: string;
   title: string;
   description?: string;
   task_status?: string;
@@ -103,7 +103,7 @@ export async function getTaskById(taskId: string): Promise<Task | null> {
  * Get tasks by site with pagination and filtering
  */
 export async function getTasksBySite(
-  siteId: string,
+  siteCode: string,
   options: GetTasksOptions = {},
 ): Promise<{
   data: Task[];
@@ -126,8 +126,8 @@ export async function getTasksBySite(
 
   const offset = (page - 1) * limit;
 
-  const conditions: string[] = ["site_id = $1"];
-  const params: any[] = [siteId];
+  const conditions: string[] = ["site_code = $1"];
+  const params: any[] = [siteCode];
   let paramIndex = 2;
 
   if (task_status) {
@@ -208,14 +208,14 @@ export async function getTasksByUser(
 /**
  * Get tasks due today
  */
-export async function getTasksDueToday(siteId: string): Promise<Task[]> {
+export async function getTasksDueToday(siteCode: string): Promise<Task[]> {
   return query<Task>(
     `SELECT * FROM tasks
-     WHERE site_id = $1
+     WHERE site_code = $1
        AND due_date >= CURRENT_DATE
        AND due_date < CURRENT_DATE + INTERVAL '1 day'
      ORDER BY due_date ASC`,
-    [siteId],
+    [siteCode],
   );
 }
 
@@ -284,14 +284,14 @@ export async function deleteTask(taskId: string): Promise<boolean> {
 /**
  * Get task statistics
  */
-export async function getTaskStats(siteId: string): Promise<{
+export async function getTaskStats(siteCode: string): Promise<{
   total: number;
   byStatus: Record<string, number>;
   byPriority: Record<string, number>;
 }> {
   const data = await query<{ task_status: string; priority: string }>(
-    `SELECT task_status, priority FROM tasks WHERE site_id = $1`,
-    [siteId],
+    `SELECT task_status, priority FROM tasks WHERE site_code = $1`,
+    [siteCode],
   );
 
   const stats = {

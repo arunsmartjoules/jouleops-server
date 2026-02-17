@@ -13,7 +13,7 @@ import { query, queryOne } from "@jouleops/shared";
 export interface PMInstance {
   id: string; // UUID
   instance_id: string;
-  site_id: string;
+  site_code: string;
   asset_id?: string;
   maintenance_id?: string;
   checklist_version?: string;
@@ -43,7 +43,7 @@ export interface PMInstance {
 
 export interface CreatePMInstanceInput {
   instance_id: string;
-  site_id: string;
+  site_code: string;
   asset_id?: string;
   maintenance_id?: string;
   checklist_version?: string;
@@ -80,30 +80,6 @@ export interface GetPMInstancesOptions {
 // Helper Functions
 // ============================================================================
 
-/**
- * Resolve site_code to site_id if needed
- */
-async function resolveSiteId(siteIdOrCode: string): Promise<string> {
-  const uuidRegex =
-    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-  if (uuidRegex.test(siteIdOrCode)) {
-    return siteIdOrCode;
-  }
-
-  // Look up by site_code
-  const site = await queryOne<{ site_id: string }>(
-    `SELECT site_id FROM sites WHERE site_code = $1`,
-    [siteIdOrCode],
-  );
-
-  if (!site) {
-    throw new Error(`Site not found for code: ${siteIdOrCode}`);
-  }
-
-  return site.site_id;
-}
-
 // ============================================================================
 // Repository Functions
 // ============================================================================
@@ -114,11 +90,6 @@ async function resolveSiteId(siteIdOrCode: string): Promise<string> {
 export async function createPMInstance(
   data: CreatePMInstanceInput,
 ): Promise<PMInstance> {
-  // Resolve site_id if it's a site_code
-  if (data.site_id) {
-    data.site_id = await resolveSiteId(data.site_id);
-  }
-
   const columns = Object.keys(data).filter(
     (k) => data[k as keyof CreatePMInstanceInput] !== undefined,
   );
@@ -155,7 +126,7 @@ export async function getPMInstanceById(
  * Get PM instances by site with pagination
  */
 export async function getPMInstancesBySite(
-  siteId: string,
+  siteCode: string,
   options: GetPMInstancesOptions = {},
 ): Promise<{
   data: PMInstance[];
@@ -178,8 +149,8 @@ export async function getPMInstancesBySite(
 
   const offset = (page - 1) * limit;
 
-  const conditions: string[] = ["site_id = $1"];
-  const params: any[] = [siteId];
+  const conditions: string[] = ["site_code = $1"];
+  const params: any[] = [siteCode];
   let paramIndex = 2;
 
   if (status) {
@@ -247,16 +218,16 @@ export async function getPMInstancesByAsset(
  * Get pending PM instances within N days
  */
 export async function getPendingPMInstances(
-  siteId: string,
+  siteCode: string,
   days: number = 7,
 ): Promise<PMInstance[]> {
   return query<PMInstance>(
     `SELECT * FROM pm_instances
-     WHERE site_id = $1
+     WHERE site_code = $1
        AND status = 'Pending'
        AND start_due_date <= CURRENT_DATE + $2::integer
      ORDER BY start_due_date ASC`,
-    [siteId, days],
+    [siteCode, days],
   );
 }
 
@@ -264,15 +235,15 @@ export async function getPendingPMInstances(
  * Get overdue PM instances
  */
 export async function getOverduePMInstances(
-  siteId: string,
+  siteCode: string,
 ): Promise<PMInstance[]> {
   return query<PMInstance>(
     `SELECT * FROM pm_instances
-     WHERE site_id = $1
+     WHERE site_code = $1
        AND status IN ('Pending', 'In Progress')
        AND start_due_date < CURRENT_DATE
      ORDER BY start_due_date ASC`,
-    [siteId],
+    [siteCode],
   );
 }
 
@@ -358,14 +329,14 @@ export async function deletePMInstance(instanceId: string): Promise<boolean> {
 /**
  * Get PM statistics
  */
-export async function getPMStats(siteId: string): Promise<{
+export async function getPMStats(siteCode: string): Promise<{
   total: number;
   byStatus: Record<string, number>;
   byFrequency: Record<string, number>;
 }> {
   const data = await query<{ status: string; frequency: string }>(
-    `SELECT status, frequency FROM pm_instances WHERE site_id = $1`,
-    [siteId],
+    `SELECT status, frequency FROM pm_instances WHERE site_code = $1`,
+    [siteCode],
   );
 
   const stats = {

@@ -1,6 +1,6 @@
 import express from "express";
 import complaintCategoryController from "../controllers/complaintCategoryController.ts";
-import { verifyToken } from "../middleware/auth.ts";
+import { verifyAnyAuth } from "../middleware/auth.ts";
 
 const router = express.Router();
 
@@ -10,18 +10,18 @@ const router = express.Router();
  */
 
 // Get all categories
-router.get("/", verifyToken, complaintCategoryController.getAll);
+router.get("/", verifyAnyAuth, complaintCategoryController.getAll);
 
 // Get category by ID
-router.get("/:id", verifyToken, complaintCategoryController.getById);
+router.get("/:id", verifyAnyAuth, complaintCategoryController.getById);
 
 // Create a new category (admin only)
-router.post("/", verifyToken, complaintCategoryController.create);
+router.post("/", verifyAnyAuth, complaintCategoryController.create);
 
 // Update a category (admin only)
-router.put("/:id", verifyToken, complaintCategoryController.update);
+router.put("/:id", verifyAnyAuth, complaintCategoryController.update);
 
 // Delete a category (admin only)
-router.delete("/:id", verifyToken, complaintCategoryController.remove);
+router.delete("/:id", verifyAnyAuth, complaintCategoryController.remove);
 
 export default router;

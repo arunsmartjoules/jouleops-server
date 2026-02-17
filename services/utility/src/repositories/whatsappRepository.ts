@@ -11,7 +11,7 @@ const CACHE_TTL = 600; // 10 minutes
 
 export interface WhatsAppGroupMapping {
   id: number;
-  site_id?: string;
+  site_code?: string;
   site_name?: string;
   group_id: string;
   group_name?: string;
@@ -55,7 +55,7 @@ export async function getMappings(): Promise<WhatsAppGroupMapping[]> {
       const sql = `
         SELECT wm.*, s.name as site_name
         FROM whatsapp_group_mappings wm
-        LEFT JOIN sites s ON wm.site_id = s.site_id
+        LEFT JOIN sites s ON wm.site_code = s.site_code
         ORDER BY s.name, wm.created_at DESC
       `;
       return query(sql);
@@ -71,12 +71,12 @@ export async function createMapping(
   data: Partial<WhatsAppGroupMapping>,
 ): Promise<WhatsAppGroupMapping> {
   const sql = `
-    INSERT INTO whatsapp_group_mappings (site_id, group_id, group_name, is_active, created_at, updated_at)
+    INSERT INTO whatsapp_group_mappings (site_code, group_id, group_name, is_active, created_at, updated_at)
     VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
     RETURNING *
   `;
   const result = await queryOne<WhatsAppGroupMapping>(sql, [
-    data.site_id,
+    data.site_code,
     data.group_id,
     data.group_name,
     data.is_active ?? true,
@@ -86,10 +86,10 @@ export async function createMapping(
   await cacheDel("whatsapp:mappings");
 
   // Fetch with site name
-  if (result && data.site_id) {
+  if (result && data.site_code) {
     const siteQuery = await queryOne<{ site_name: string }>(
-      `SELECT name as site_name FROM sites WHERE site_id = $1`,
-      [data.site_id],
+      `SELECT name as site_name FROM sites WHERE site_code = $1`,
+      [data.site_code],
     );
     result.site_name = siteQuery?.site_name;
   }
@@ -107,9 +107,9 @@ export async function updateMapping(
   const setClauses: string[] = ["updated_at = CURRENT_TIMESTAMP"];
   const params: any[] = [];
 
-  if (data.site_id !== undefined) {
-    params.push(data.site_id);
-    setClauses.push(`site_id = $${params.length}`);
+  if (data.site_code !== undefined) {
+    params.push(data.site_code);
+    setClauses.push(`site_code = $${params.length}`);
   }
 
   if (data.group_id !== undefined) {
@@ -140,10 +140,10 @@ export async function updateMapping(
   await cacheDel("whatsapp:mappings");
 
   // Fetch site name
-  if (result?.site_id) {
+  if (result?.site_code) {
     const siteQuery = await queryOne<{ site_name: string }>(
-      `SELECT name as site_name FROM sites WHERE site_id = $1`,
-      [result.site_id],
+      `SELECT name as site_name FROM sites WHERE site_code = $1`,
+      [result.site_code],
     );
     result.site_name = siteQuery?.site_name;
   }

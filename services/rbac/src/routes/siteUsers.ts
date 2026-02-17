@@ -13,7 +13,7 @@ const router = express.Router();
 router.get("/", verifyAnyAuth, siteUsersController.getAll);
 
 // Get users at a specific site
-router.get("/by-site/:siteId", verifyAnyAuth, siteUsersController.getBySite);
+router.get("/by-site/:siteCode", verifyAnyAuth, siteUsersController.getBySite);
 
 // Get sites for a specific user
 router.get("/by-user/:userId", verifyAnyAuth, siteUsersController.getByUser);
@@ -28,7 +28,7 @@ router.post(
 
 // Update assignment
 router.put(
-  "/:siteId/:userId",
+  "/:siteCode/:userId",
   verifyToken,
   requireRole(["admin", "superadmin"]),
   siteUsersController.updateAssignment,
@@ -36,7 +36,7 @@ router.put(
 
 // Remove assignment
 router.delete(
-  "/:siteId/:userId",
+  "/:siteCode/:userId",
   verifyToken,
   requireRole(["admin", "superadmin"]),
   siteUsersController.removeAssignment,

@@ -15,29 +15,29 @@ const router = express.Router();
  */
 // Protected routes (accepts JWT or API Key)
 router.get("/", verifyAnyAuth, assetsController.getAll);
-router.get("/site/:siteId", verifyAnyAuth, assetsController.getBySite);
-router.get("/site/:siteId/search", verifyAnyAuth, assetsController.search);
+router.get("/site/:siteCode", verifyAnyAuth, assetsController.getBySite);
+router.get("/site/:siteCode/search", verifyAnyAuth, assetsController.search);
 router.get(
-  "/site/:siteId/type/:assetType",
+  "/site/:siteCode/type/:assetType",
   verifyAnyAuth,
   assetsController.getByType,
 );
 router.get(
-  "/site/:siteId/location/:location",
+  "/site/:siteCode/location/:location",
   verifyAnyAuth,
   assetsController.getByLocation,
 );
 router.get(
-  "/site/:siteId/warranty",
+  "/site/:siteCode/warranty",
   verifyAnyAuth,
   assetsController.getUnderWarranty,
 );
 router.get(
-  "/site/:siteId/warranty-expiring",
+  "/site/:siteCode/warranty-expiring",
   verifyAnyAuth,
   assetsController.getWarrantyExpiring,
 );
-router.get("/site/:siteId/stats", verifyAnyAuth, assetsController.getStats);
+router.get("/site/:siteCode/stats", verifyAnyAuth, assetsController.getStats);
 router.get("/:assetId", verifyAnyAuth, assetsController.getById);
 // Modification and privileged operations (unifying auth but still requiring role if needed)
 // NOTE: For now, we unify auth for GET. Admin ops stay protected.

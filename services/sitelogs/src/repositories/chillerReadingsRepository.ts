@@ -13,7 +13,7 @@ import { cached, TTL } from "@jouleops/shared";
 
 export interface ChillerReading {
   id: string; // UUID in database
-  site_id: string;
+  site_code: string;
   chiller_id?: string;
   equipment_id?: string;
   log_id?: string;
@@ -61,7 +61,7 @@ export interface ChillerReading {
 }
 
 export interface CreateChillerReadingInput {
-  site_id: string;
+  site_code: string;
   chiller_id?: string;
   equipment_id?: string;
   log_id?: string;
@@ -141,7 +141,7 @@ export async function getChillerReadingById(
  * Get chiller readings by site with pagination
  */
 export async function getChillerReadingsBySite(
-  siteId: string,
+  siteCode: string,
   options: GetChillerReadingsOptions = {},
 ): Promise<{
   data: ChillerReading[];
@@ -168,9 +168,9 @@ export async function getChillerReadingsBySite(
   const params: any[] = [];
   let paramIndex = 1;
 
-  if (siteId !== "all") {
-    conditions.push(`site_id = $${paramIndex}`);
-    params.push(siteId);
+  if (siteCode !== "all") {
+    conditions.push(`site_code = $${paramIndex}`);
+    params.push(siteCode);
     paramIndex++;
   }
 
@@ -204,7 +204,7 @@ export async function getChillerReadingsBySite(
   const total = parseInt(countResult?.count || "0", 10);
 
   // Get data with explicit columns (avoid SELECT *)
-  const CHILLER_LIST_COLUMNS = `id, site_id, chiller_id, equipment_id, reading_time,
+  const CHILLER_LIST_COLUMNS = `id, site_code, chiller_id, equipment_id, reading_time,
     date_shift, compressor_load_percentage, status, remarks,
     condenser_inlet_temp, condenser_outlet_temp,
     evaporator_inlet_temp, evaporator_outlet_temp,
@@ -287,14 +287,14 @@ export async function getLatestReadingByChiller(
  * Get readings by date and shift
  */
 export async function getReadingsByDateShift(
-  siteId: string,
+  siteCode: string,
   dateShift: string,
 ): Promise<ChillerReading[]> {
   return query<ChillerReading>(
     `SELECT * FROM chiller_readings
-     WHERE site_id = $1 AND date_shift = $2
+     WHERE site_code = $1 AND date_shift = $2
      ORDER BY reading_time ASC`,
-    [siteId, dateShift],
+    [siteCode, dateShift],
   );
 }
 

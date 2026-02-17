@@ -23,11 +23,11 @@ interface AuthRequest extends Request {
 
 export const getAll = async (req: Request, res: Response) => {
   try {
-    const { page, limit, site_id, user_id, search } = req.query;
+    const { page, limit, site_code, user_id, search } = req.query;
     const result = await siteUsersRepository.getAll({
       page: parseInt(page as string) || 1,
       limit: parseInt(limit as string) || 50,
-      siteId: site_id as string | undefined,
+      siteCode: site_code as string | undefined,
       userId: user_id as string | undefined,
       search: search as string | undefined,
     });
@@ -40,11 +40,11 @@ export const getAll = async (req: Request, res: Response) => {
 
 export const getBySite = async (req: Request, res: Response) => {
   try {
-    const { siteId } = req.params;
-    if (!siteId) {
-      return sendError(res, "Site ID is required");
+    const { siteCode } = req.params;
+    if (!siteCode) {
+      return sendError(res, "Site Code is required");
     }
-    const data = await siteUsersRepository.getBySite(siteId);
+    const data = await siteUsersRepository.getBySite(siteCode);
     return sendSuccess(res, data);
   } catch (error: any) {
     console.error("Get site users error:", error);
@@ -68,16 +68,22 @@ export const getByUser = async (req: Request, res: Response) => {
 
 export const assignUser = async (req: AuthRequest, res: Response) => {
   try {
-    const { site_id, user_id, site_ids, user_ids, role_at_site, is_primary } =
-      req.body;
+    const {
+      site_code,
+      user_id,
+      site_codes,
+      user_ids,
+      role_at_site,
+      is_primary,
+    } = req.body;
 
-    const sitesToAssign = site_ids || (site_id ? [site_id] : []);
+    const sitesToAssign = site_codes || (site_code ? [site_code] : []);
     const usersToAssign = user_ids || (user_id ? [user_id] : []);
 
     if (sitesToAssign.length === 0 || usersToAssign.length === 0) {
       return sendError(
         res,
-        "At least one Site ID and one User ID are required",
+        "At least one Site Code and one User ID are required",
       );
     }
 
@@ -122,7 +128,7 @@ export const assignUser = async (req: AuthRequest, res: Response) => {
             `Assignment failed for user ${uid} at site ${sid}:`,
             err.message,
           );
-          errors.push({ site_id: sid, error: err.message });
+          errors.push({ site_code: sid, error: err.message });
         }
       }
     } else {
@@ -139,7 +145,7 @@ export const assignUser = async (req: AuthRequest, res: Response) => {
         module: "SITE_USERS",
         description: `Assigned ${results.length} mapping(s)`,
         metadata: {
-          site_ids: sitesToAssign,
+          site_codes: sitesToAssign,
           user_ids: usersToAssign,
           role_at_site,
         },
@@ -160,13 +166,13 @@ export const assignUser = async (req: AuthRequest, res: Response) => {
 
 export const updateAssignment = async (req: AuthRequest, res: Response) => {
   try {
-    const { siteId, userId } = req.params;
-    if (!siteId || !userId) {
-      return sendError(res, "Site ID and User ID are required");
+    const { siteCode, userId } = req.params;
+    if (!siteCode || !userId) {
+      return sendError(res, "Site Code and User ID are required");
     }
     const { role_at_site, is_primary } = req.body;
 
-    const data = await siteUsersRepository.updateAssignment(siteId, userId, {
+    const data = await siteUsersRepository.updateAssignment(siteCode, userId, {
       role_at_site,
       is_primary,
     });
@@ -176,9 +182,9 @@ export const updateAssignment = async (req: AuthRequest, res: Response) => {
         user_id: req.user.user_id,
         action: "SITE_USER_UPDATE",
         module: "SITE_USERS",
-        description: `Updated assignment for user ${userId} at site ${siteId}`,
+        description: `Updated assignment for user ${userId} at site ${siteCode}`,
         metadata: {
-          site_id: siteId,
+          site_code: siteCode,
           user_id: userId,
           role_at_site,
           is_primary,
@@ -196,20 +202,20 @@ export const updateAssignment = async (req: AuthRequest, res: Response) => {
 
 export const removeAssignment = async (req: AuthRequest, res: Response) => {
   try {
-    const { siteId, userId } = req.params;
-    if (!siteId || !userId) {
-      return sendError(res, "Site ID and User ID are required");
+    const { siteCode, userId } = req.params;
+    if (!siteCode || !userId) {
+      return sendError(res, "Site Code and User ID are required");
     }
 
-    await siteUsersRepository.removeAssignment(siteId, userId);
+    await siteUsersRepository.removeAssignment(siteCode, userId);
 
     if (req.user) {
       await logActivity({
         user_id: req.user.user_id,
         action: "SITE_USER_REMOVE",
         module: "SITE_USERS",
-        description: `Removed user ${userId} from site ${siteId}`,
-        metadata: { site_id: siteId, user_id: userId },
+        description: `Removed user ${userId} from site ${siteCode}`,
+        metadata: { site_code: siteCode, user_id: userId },
         ip_address: req.ip,
       });
     }

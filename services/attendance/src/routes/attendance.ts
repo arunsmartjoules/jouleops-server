@@ -32,9 +32,13 @@ router.get(
   attendanceLogsController.getUserSites,
 );
 
-router.get("/site/:siteId", verifyAnyAuth, attendanceLogsController.getBySite);
 router.get(
-  "/site/:siteId/report",
+  "/site/:siteCode",
+  verifyAnyAuth,
+  attendanceLogsController.getBySite,
+);
+router.get(
+  "/site/:siteCode/report",
   verifyAnyAuth,
   attendanceLogsController.getReport,
 );

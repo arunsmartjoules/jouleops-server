@@ -35,14 +35,14 @@ export const getById = asyncHandler(async (req: Request, res: Response) => {
 });
 
 export const getBySite = asyncHandler(async (req: Request, res: Response) => {
-  const { siteId } = req.params;
-  if (!siteId) {
-    return sendError(res, "Site ID is required");
+  const { siteCode } = req.params;
+  if (!siteCode) {
+    return sendError(res, "Site Code is required");
   }
   const { page, limit, chiller_id, date_from, date_to, sortBy, sortOrder } =
     req.query;
   const result = await chillerReadingsRepository.getChillerReadingsBySite(
-    siteId,
+    siteCode,
     {
       page: parseInt(page as string) || 1,
       limit: parseInt(limit as string) || 20,
@@ -88,12 +88,12 @@ export const getLatest = asyncHandler(async (req: Request, res: Response) => {
 
 export const getByDateShift = asyncHandler(
   async (req: Request, res: Response) => {
-    const { siteId, dateShift } = req.params;
-    if (!siteId || !dateShift) {
-      return sendError(res, "Site ID and Date Shift are required");
+    const { siteCode, dateShift } = req.params;
+    if (!siteCode || !dateShift) {
+      return sendError(res, "Site Code and Date Shift are required");
     }
     const readings = await chillerReadingsRepository.getReadingsByDateShift(
-      siteId,
+      siteCode,
       dateShift,
     );
     return sendSuccess(res, readings);
@@ -153,7 +153,7 @@ export const getAverages = asyncHandler(async (req: Request, res: Response) => {
 
 export const getAll = asyncHandler(
   async (req: Request, res: Response, next) => {
-    req.params.siteId = "all";
+    req.params.siteCode = "all";
     return getBySite(req, res, next);
   },
 );

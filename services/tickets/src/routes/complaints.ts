@@ -42,8 +42,12 @@ router.get(
 );
 
 // Protected routes (accepts JWT or API Key)
-router.get("/site/:siteId", verifyAnyAuth, complaintsController.getBySite);
-router.get("/site/:siteId/stats", verifyAnyAuth, complaintsController.getStats);
+router.get("/site/:siteCode", verifyAnyAuth, complaintsController.getBySite);
+router.get(
+  "/site/:siteCode/stats",
+  verifyAnyAuth,
+  complaintsController.getStats,
+);
 router.get("/:ticketId", verifyAnyAuth, complaintsController.getById);
 router.put(
   "/:ticketId",

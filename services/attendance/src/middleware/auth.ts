@@ -123,6 +123,16 @@ export const verifyApiKey = async (
       error: "Invalid or missing API Key",
     });
   }
+
+  // Attach a virtual "system" user for API key auth to satisfy controller checks
+  (req as any).user = {
+    user_id: "system",
+    role: "admin",
+    is_admin: true,
+    is_superadmin: true,
+    email: "system@smartops.internal",
+  };
+
   next();
 };
 

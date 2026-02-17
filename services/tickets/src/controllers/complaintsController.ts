@@ -28,13 +28,13 @@ interface AuthRequest extends Request {
 
 export const create = async (req: Request, res: Response) => {
   try {
-    const { site_id } = req.body;
-    if (!site_id) {
-      return sendError(res, "site_id is required");
+    const { site_code } = req.body;
+    if (!site_code) {
+      return sendError(res, "site_code is required");
     }
 
     // Auto-generate ticket number
-    const ticket_no = await complaintsRepository.generateTicketNo(site_id);
+    const ticket_no = await complaintsRepository.generateTicketNo(site_code);
 
     const complaint = await complaintsRepository.createComplaint({
       ...req.body,
@@ -66,7 +66,7 @@ export const getById = async (req: Request, res: Response) => {
 
 export const getBySite = async (req: Request, res: Response) => {
   try {
-    const { siteId } = req.params as { siteId: string };
+    const { siteCode } = req.params as { siteCode: string };
     const {
       page,
       limit,
@@ -78,7 +78,7 @@ export const getBySite = async (req: Request, res: Response) => {
       sortOrder,
     } = req.query;
 
-    const result = await complaintsRepository.getComplaintsBySite(siteId, {
+    const result = await complaintsRepository.getComplaintsBySite(siteCode, {
       page: parseInt(page as string) || 1,
       limit: parseInt(limit as string) || 20,
       status: status as string | undefined,
@@ -227,8 +227,8 @@ export const remove = async (req: Request, res: Response) => {
 
 export const getStats = async (req: Request, res: Response) => {
   try {
-    const { siteId } = req.params as { siteId: string };
-    const stats = await complaintsRepository.getComplaintStats(siteId);
+    const { siteCode } = req.params as { siteCode: string };
+    const stats = await complaintsRepository.getComplaintStats(siteCode);
 
     return sendSuccess(res, stats);
   } catch (error: any) {
@@ -238,7 +238,7 @@ export const getStats = async (req: Request, res: Response) => {
 };
 
 export const getAll = async (req: Request, res: Response) => {
-  req.params.siteId = "all";
+  req.params.siteCode = "all";
   return getBySite(req, res);
 };
 

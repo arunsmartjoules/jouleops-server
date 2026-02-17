@@ -45,13 +45,13 @@ export const getById = async (req: Request, res: Response) => {
 
 export const getBySite = async (req: Request, res: Response) => {
   try {
-    const { siteId } = req.params;
-    if (!siteId) {
-      return sendError(res, "Site ID is required");
+    const { siteCode } = req.params;
+    if (!siteCode) {
+      return sendError(res, "Site Code is required");
     }
     const { asset_type, status } = req.query;
     const checklists = await pmChecklistRepository.getPMChecklistBySite(
-      siteId,
+      siteCode,
       {
         asset_type: asset_type as string | undefined,
         status: status as string | undefined,
@@ -70,11 +70,11 @@ export const getByMaintenanceType = async (req: Request, res: Response) => {
     if (!maintenanceType) {
       return sendError(res, "Maintenance Type is required");
     }
-    const { site_id } = req.query;
+    const { site_code } = req.query;
     const checklists =
       await pmChecklistRepository.getPMChecklistByMaintenanceType(
         maintenanceType,
-        site_id as string | undefined,
+        site_code as string | undefined,
       );
     return sendSuccess(res, checklists);
   } catch (error: any) {

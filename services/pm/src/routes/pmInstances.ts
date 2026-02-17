@@ -16,19 +16,19 @@ const router = express.Router();
 
 router.get("/", verifyAnyAuth, pmInstancesController.getAll);
 router.post("/", verifyApiKey, pmInstancesController.create);
-router.get("/site/:siteId", verifyAnyAuth, pmInstancesController.getBySite);
+router.get("/site/:siteCode", verifyAnyAuth, pmInstancesController.getBySite);
 router.get(
-  "/site/:siteId/pending",
+  "/site/:siteCode/pending",
   verifyAnyAuth,
   pmInstancesController.getPending,
 );
 router.get(
-  "/site/:siteId/overdue",
+  "/site/:siteCode/overdue",
   verifyAnyAuth,
   pmInstancesController.getOverdue,
 );
 router.get(
-  "/site/:siteId/stats",
+  "/site/:siteCode/stats",
   verifyAnyAuth,
   pmInstancesController.getStats,
 );

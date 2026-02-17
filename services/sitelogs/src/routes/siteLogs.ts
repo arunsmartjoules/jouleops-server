@@ -23,7 +23,7 @@ router.post(
   validate(createSiteLogSchema),
   siteLogsController.create,
 );
-router.get("/site/:siteId", verifyAnyAuth, siteLogsController.getBySite);
+router.get("/site/:siteCode", verifyAnyAuth, siteLogsController.getBySite);
 router.put(
   "/:id",
   verifyAnyAuth,

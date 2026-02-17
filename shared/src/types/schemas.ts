@@ -4,7 +4,7 @@ import { z } from "zod";
  * Site Log Schemas
  */
 export const createSiteLogSchema = z.object({
-  site_id: z.string().min(1),
+  site_code: z.string().min(1),
   executor_id: z.string().optional().nullable(),
   log_name: z.string().optional().nullable(),
   temperature: z.number().optional().nullable(),
@@ -28,14 +28,14 @@ export const createSiteLogSchema = z.object({
 });
 
 export const updateSiteLogSchema = createSiteLogSchema
-  .omit({ site_id: true })
+  .omit({ site_code: true })
   .partial();
 
 /**
  * Chiller Reading Schemas
  */
 export const createChillerReadingSchema = z.object({
-  site_id: z.string().min(1),
+  site_code: z.string().min(1),
   chiller_id: z.string().min(1).optional().nullable(),
   equipment_id: z.string().optional().nullable(),
   log_id: z.string().optional().nullable(),
@@ -82,7 +82,7 @@ export const createChillerReadingSchema = z.object({
 });
 
 export const updateChillerReadingSchema = createChillerReadingSchema
-  .omit({ site_id: true, chiller_id: true })
+  .omit({ site_code: true, chiller_id: true })
   .partial();
 
 /**
@@ -90,7 +90,7 @@ export const updateChillerReadingSchema = createChillerReadingSchema
  */
 export const createPMInstanceSchema = z.object({
   instance_id: z.string().min(1),
-  site_id: z.string().min(1),
+  site_code: z.string().min(1),
   asset_id: z.string().optional().nullable(),
   maintenance_id: z.string().optional().nullable(),
   checklist_version: z.string().optional().nullable(),
@@ -117,7 +117,7 @@ export const createPMInstanceSchema = z.object({
 });
 
 export const updatePMInstanceSchema = createPMInstanceSchema
-  .omit({ instance_id: true, site_id: true })
+  .omit({ instance_id: true, site_code: true })
   .partial();
 
 /**
@@ -144,7 +144,7 @@ export const changePasswordSchema = z.object({
  */
 export const createComplaintSchema = z.object({
   ticket_no: z.string().min(1),
-  site_id: z.string().min(1), // Relaxed from UUID since it can be alphanumeric code
+  site_code: z.string().min(1), // Relaxed from UUID since it can be alphanumeric code
   title: z.string().min(1),
   status: z.string().optional().default("Open"),
   category: z.string().optional(),
@@ -183,7 +183,7 @@ export const createComplaintSchema = z.object({
 export const updateComplaintSchema = createComplaintSchema
   .omit({
     ticket_no: true,
-    site_id: true,
+    site_code: true,
   })
   .partial();
 
@@ -197,7 +197,7 @@ export const updateComplaintStatusSchema = z.object({
  */
 export const attendanceSchema = z.object({
   user_id: z.string().min(1),
-  site_id: z.string().min(1),
+  site_code: z.string().min(1),
   date: z.string().optional(),
   check_in_time: z.string().datetime().optional().nullable(),
   check_out_time: z.string().datetime().optional().nullable(),

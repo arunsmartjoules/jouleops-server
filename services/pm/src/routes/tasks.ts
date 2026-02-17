@@ -10,9 +10,13 @@ const router = express.Router();
  */
 
 router.post("/", verifyApiKey, tasksController.create);
-router.get("/site/:siteId", verifyToken, tasksController.getBySite);
-router.get("/site/:siteId/due-today", verifyToken, tasksController.getDueToday);
-router.get("/site/:siteId/stats", verifyToken, tasksController.getStats);
+router.get("/site/:siteCode", verifyToken, tasksController.getBySite);
+router.get(
+  "/site/:siteCode/due-today",
+  verifyToken,
+  tasksController.getDueToday,
+);
+router.get("/site/:siteCode/stats", verifyToken, tasksController.getStats);
 router.get("/user/:userId", verifyToken, tasksController.getByUser);
 router.get("/:taskId", verifyToken, tasksController.getById);
 router.put(

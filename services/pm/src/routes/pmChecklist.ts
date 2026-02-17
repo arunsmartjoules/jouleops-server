@@ -15,7 +15,7 @@ router.post(
   requireRole(["admin", "superadmin"]),
   pmChecklistController.create,
 );
-router.get("/site/:siteId", verifyAnyAuth, pmChecklistController.getBySite);
+router.get("/site/:siteCode", verifyAnyAuth, pmChecklistController.getBySite);
 router.get(
   "/maintenance-type/:maintenanceType",
   verifyAnyAuth,

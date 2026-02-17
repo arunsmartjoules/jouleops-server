@@ -12,7 +12,7 @@ import { query, queryOne } from "@jouleops/shared";
 
 export interface SiteLog {
   id: string; // UUID
-  site_id: string;
+  site_code: string;
   executor_id?: string;
   log_name?: string;
   temperature?: number;
@@ -38,7 +38,7 @@ export interface SiteLog {
 }
 
 export interface CreateSiteLogInput {
-  site_id: string;
+  site_code: string;
   executor_id?: string;
   log_name?: string;
   temperature?: number;
@@ -123,7 +123,7 @@ export async function createLog(data: CreateSiteLogInput): Promise<SiteLog> {
  * Get logs by site with pagination
  */
 export async function getLogsBySite(
-  siteId: string,
+  siteCode: string,
   options: GetSiteLogsOptions = {},
 ): Promise<{
   data: SiteLog[];
@@ -141,9 +141,9 @@ export async function getLogsBySite(
   const params: any[] = [];
   let paramIndex = 1;
 
-  if (siteId !== "all") {
-    conditions.push(`site_id = $${paramIndex}`);
-    params.push(siteId);
+  if (siteCode !== "all") {
+    conditions.push(`site_code = $${paramIndex}`);
+    params.push(siteCode);
     paramIndex++;
   }
 

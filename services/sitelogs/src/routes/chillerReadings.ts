@@ -23,9 +23,13 @@ router.post(
   validate(createChillerReadingSchema),
   chillerReadingsController.create,
 );
-router.get("/site/:siteId", verifyAnyAuth, chillerReadingsController.getBySite);
 router.get(
-  "/site/:siteId/shift/:dateShift",
+  "/site/:siteCode",
+  verifyAnyAuth,
+  chillerReadingsController.getBySite,
+);
+router.get(
+  "/site/:siteCode/shift/:dateShift",
   verifyAnyAuth,
   chillerReadingsController.getByDateShift,
 );

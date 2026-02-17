@@ -13,7 +13,7 @@ import { query, queryOne } from "@jouleops/shared";
 export interface AttendanceLog {
   id: string;
   user_id: string;
-  site_id: string;
+  site_code: string;
   date: string;
   check_in_time?: Date;
   check_out_time?: Date;
@@ -32,7 +32,7 @@ export interface AttendanceLog {
 
 export interface CheckInInput {
   user_id: string;
-  site_id: string;
+  site_code: string;
   latitude?: number;
   longitude?: number;
   address?: string;
@@ -55,9 +55,8 @@ export interface GetAttendanceOptions {
 }
 
 export interface SiteWithCoordinates {
-  site_id: string;
+  site_code: string;
   name: string;
-  site_code?: string;
   address?: string;
   city?: string;
   state?: string;
@@ -128,23 +127,32 @@ export async function getUserWorkLocationType(
  */
 export async function getUserSitesWithCoordinates(
   userId: string,
+  projectType?: string,
 ): Promise<SiteWithCoordinates[]> {
   // Get assigned site IDs
-  const userSites = await query<{ site_id: string }>(
-    `SELECT site_id FROM site_user WHERE user_id = $1`,
+  const userSites = await query<{ site_code: string }>(
+    `SELECT site_code FROM site_user WHERE user_id = $1`,
     [userId],
   );
 
   if (!userSites || userSites.length === 0) return [];
 
-  const siteIds = userSites.map((us) => us.site_id);
-  const placeholders = siteIds.map((_, i) => `$${i + 1}`).join(", ");
+  const siteCodes = userSites.map((us) => us.site_code);
+  const placeholders = siteCodes.map((_, i) => `$${i + 1}`).join(", ");
+
+  let whereClause = `WHERE site_code IN (${placeholders})`;
+  const params: any[] = [...siteCodes];
+
+  if (projectType) {
+    whereClause += ` AND project_type = $${params.length + 1}`;
+    params.push(projectType);
+  }
 
   // Fetch site details with coordinates
   return query<SiteWithCoordinates>(
-    `SELECT site_id, name, site_code, address, city, state, latitude, longitude, radius
-     FROM sites WHERE site_id IN (${placeholders})`,
-    siteIds,
+    `SELECT site_code, name, address, city, state, latitude, longitude, radius, project_type
+     FROM sites ${whereClause}`,
+    params,
   );
 }
 
@@ -156,13 +164,13 @@ export async function checkIn(data: CheckInInput): Promise<AttendanceLog> {
 
   const result = await queryOne<AttendanceLog>(
     `INSERT INTO attendance_logs 
-     (user_id, site_id, check_in_time, check_in_latitude, check_in_longitude, 
+     (user_id, site_code, check_in_time, check_in_latitude, check_in_longitude, 
       check_in_address, shift_id, status, date)
      VALUES ($1, $2, NOW(), $3, $4, $5, $6, 'Present', $7)
      RETURNING *`,
     [
       data.user_id,
-      data.site_id,
+      data.site_code,
       data.latitude || null,
       data.longitude || null,
       data.address || null,
@@ -290,7 +298,7 @@ export async function getAttendanceByUser(
             jsonb_build_object('name', s.name, 'site_code', s.site_code) as sites
      FROM attendance_logs al
      LEFT JOIN users u ON al.user_id = u.user_id
-     LEFT JOIN sites s ON al.site_id = s.site_id
+     LEFT JOIN sites s ON al.site_code = s.site_code
      ${whereClause}
      ORDER BY al.date DESC, al.check_in_time DESC
      LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`,
@@ -370,7 +378,7 @@ export async function getAllAttendance(
             jsonb_build_object('name', s.name, 'site_code', s.site_code) as sites
      FROM attendance_logs al
      LEFT JOIN users u ON al.user_id = u.user_id
-     LEFT JOIN sites s ON al.site_id = s.site_id
+     LEFT JOIN sites s ON al.site_code = s.site_code
      ${whereClause}
      ORDER BY al.date DESC, al.check_in_time DESC
      LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`,
@@ -392,14 +400,14 @@ export async function getAllAttendance(
  * Get attendance by site for a specific date
  */
 export async function getAttendanceBySite(
-  siteId: string,
+  siteCode: string,
   options: { date?: string; status?: string | null } = {},
 ): Promise<any[]> {
   const { date = new Date().toISOString().split("T")[0], status = null } =
     options;
 
-  const conditions: string[] = ["al.site_id = $1", "al.date = $2"];
-  const params: any[] = [siteId, date];
+  const conditions: string[] = ["al.site_code = $1", "al.date = $2"];
+  const params: any[] = [siteCode, date];
   let paramIndex = 3;
 
   if (status) {
@@ -429,7 +437,7 @@ export async function getAttendanceBySite(
  * Get attendance report
  */
 export async function getAttendanceReport(
-  siteId: string | null,
+  siteCode: string | null,
   dateFrom: string,
   dateTo: string,
 ): Promise<any[]> {
@@ -437,9 +445,9 @@ export async function getAttendanceReport(
   const params: any[] = [dateFrom, dateTo];
   let paramIndex = 3;
 
-  if (siteId && siteId !== "all") {
-    conditions.push(`al.site_id = $${paramIndex}`);
-    params.push(siteId);
+  if (siteCode && siteCode !== "all") {
+    conditions.push(`al.site_code = $${paramIndex}`);
+    params.push(siteCode);
     paramIndex++;
   }
 
@@ -458,7 +466,7 @@ export async function getAttendanceReport(
             ) as sites
      FROM attendance_logs al
      LEFT JOIN users u ON al.user_id = u.user_id
-     LEFT JOIN sites s ON al.site_id = s.site_id
+     LEFT JOIN sites s ON al.site_code = s.site_code
      ${whereClause}
      ORDER BY al.date ASC`,
     params,

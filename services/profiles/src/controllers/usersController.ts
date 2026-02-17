@@ -84,12 +84,12 @@ export const getByPhone = async (req: Request, res: Response) => {
 
 export const getBySite = async (req: Request, res: Response) => {
   try {
-    const { siteId } = req.params;
-    if (!siteId) {
-      return sendError(res, "Site ID is required");
+    const { siteCode } = req.params;
+    if (!siteCode) {
+      return sendError(res, "Site Code is required");
     }
     const { role, is_active } = req.query;
-    const users = await usersRepository.getUsersBySite(siteId, {
+    const users = await usersRepository.getUsersBySite(siteCode, {
       role: role as string | undefined,
       is_active:
         is_active === "true" ? true : is_active === "false" ? false : undefined,

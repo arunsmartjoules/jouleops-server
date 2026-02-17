@@ -50,15 +50,15 @@ export const create = async (req: Request, res: Response) => {
 export const checkIn = async (req: AuthRequest, res: Response) => {
   try {
     let { user_id } = req.body;
-    const { site_id, latitude, longitude, address, shift_id } = req.body;
+    const { site_code, latitude, longitude, address, shift_id } = req.body;
 
     const user = req.user;
     if (!isAdmin(user) || !user_id) {
       user_id = getUserId(user);
     }
 
-    if (!user_id || !site_id) {
-      return sendError(res, "user_id and site_id are required");
+    if (!user_id || !site_code) {
+      return sendError(res, "user_id and site_code are required");
     }
 
     // Check if already checked in today
@@ -91,7 +91,7 @@ export const checkIn = async (req: AuthRequest, res: Response) => {
           return distance <= (s.radius || 200);
         });
 
-        if (!matchingSite && site_id !== "WFH") {
+        if (!matchingSite && site_code !== "WFH") {
           return res.status(400).json({
             success: false,
             error: "You are not within range of any assigned site",
@@ -101,11 +101,11 @@ export const checkIn = async (req: AuthRequest, res: Response) => {
       }
     }
 
-    const siteIdForDb = site_id === "WFH" ? null : site_id;
+    const siteCodeForDb = site_code === "WFH" ? null : site_code;
 
     const log = await attendanceRepository.checkIn({
       user_id,
-      site_id: siteIdForDb!,
+      site_code: siteCodeForDb!,
       latitude: latitude ? parseFloat(latitude) : undefined,
       longitude: longitude ? parseFloat(longitude) : undefined,
       address,
@@ -247,6 +247,8 @@ export const validateLocation = async (req: AuthRequest, res: Response) => {
 export const getUserSites = async (req: AuthRequest, res: Response) => {
   try {
     const { userId } = req.params;
+    const { project_type } = req.query;
+
     if (!userId) {
       return sendError(res, "User ID is required");
     }
@@ -256,8 +258,10 @@ export const getUserSites = async (req: AuthRequest, res: Response) => {
       return sendForbidden(res, "Unauthorized");
     }
 
-    const sites =
-      await attendanceRepository.getUserSitesWithCoordinates(userId);
+    const sites = await attendanceRepository.getUserSitesWithCoordinates(
+      userId,
+      project_type as string | undefined,
+    );
     return sendSuccess(res, sites);
   } catch (error: any) {
     console.error("Get user sites error:", error);
@@ -336,12 +340,12 @@ export const getByUser = async (req: AuthRequest, res: Response) => {
 
 export const getBySite = async (req: Request, res: Response) => {
   try {
-    const { siteId } = req.params;
-    if (!siteId) {
-      return sendError(res, "Site ID is required");
+    const { siteCode } = req.params;
+    if (!siteCode) {
+      return sendError(res, "Site Code is required");
     }
     const { date, status } = req.query;
-    const logs = await attendanceRepository.getAttendanceBySite(siteId, {
+    const logs = await attendanceRepository.getAttendanceBySite(siteCode, {
       date: date as string | undefined,
       status: status as string | undefined,
     });
@@ -354,9 +358,9 @@ export const getBySite = async (req: Request, res: Response) => {
 
 export const getReport = async (req: Request, res: Response) => {
   try {
-    const { siteId } = req.params;
-    if (!siteId) {
-      return sendError(res, "Site ID is required");
+    const { siteCode } = req.params;
+    if (!siteCode) {
+      return sendError(res, "Site Code is required");
     }
     const { date_from, date_to } = req.query;
     if (!date_from || !date_to) {
@@ -364,7 +368,7 @@ export const getReport = async (req: Request, res: Response) => {
     }
 
     const report = await attendanceRepository.getAttendanceReport(
-      siteId,
+      siteCode,
       date_from as string,
       date_to as string,
     );
@@ -377,13 +381,13 @@ export const getReport = async (req: Request, res: Response) => {
 
 export const getOverallReport = async (req: Request, res: Response) => {
   try {
-    const { date_from, date_to, site_id } = req.query;
+    const { date_from, date_to, site_code } = req.query;
     if (!date_from || !date_to) {
       return sendError(res, "date_from and date_to are required");
     }
 
     const report = await attendanceRepository.getAttendanceReport(
-      (site_id as string) || null,
+      (site_code as string) || null,
       date_from as string,
       date_to as string,
     );

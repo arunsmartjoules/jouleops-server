@@ -66,13 +66,13 @@ export const getAll = async (req: Request, res: Response) => {
 
 export const getBySite = async (req: Request, res: Response) => {
   try {
-    const { siteId } = req.params;
-    if (!siteId) {
-      return sendError(res, "Site ID is required");
+    const { siteCode } = req.params;
+    if (!siteCode) {
+      return sendError(res, "Site Code is required");
     }
     const { page, limit, asset_type, status, floor, sortBy, sortOrder } =
       req.query;
-    const result = await assetsRepository.getAssetsBySite(siteId, {
+    const result = await assetsRepository.getAssetsBySite(siteCode, {
       page: parseInt(page as string) || 1,
       limit: parseInt(limit as string) || 50,
       asset_type: asset_type as string | undefined,
@@ -90,11 +90,11 @@ export const getBySite = async (req: Request, res: Response) => {
 
 export const getByType = async (req: Request, res: Response) => {
   try {
-    const { siteId, assetType } = req.params;
-    if (!siteId || !assetType) {
-      return sendError(res, "Site ID and Asset Type are required");
+    const { siteCode, assetType } = req.params;
+    if (!siteCode || !assetType) {
+      return sendError(res, "Site Code and Asset Type are required");
     }
-    const assets = await assetsRepository.getAssetsByType(siteId, assetType);
+    const assets = await assetsRepository.getAssetsByType(siteCode, assetType);
     return sendSuccess(res, assets);
   } catch (error: any) {
     console.error("Get assets error:", error);
@@ -104,11 +104,14 @@ export const getByType = async (req: Request, res: Response) => {
 
 export const getByLocation = async (req: Request, res: Response) => {
   try {
-    const { siteId, location } = req.params;
-    if (!siteId || !location) {
-      return sendError(res, "Site ID and Location are required");
+    const { siteCode, location } = req.params;
+    if (!siteCode || !location) {
+      return sendError(res, "Site Code and Location are required");
     }
-    const assets = await assetsRepository.getAssetsByLocation(siteId, location);
+    const assets = await assetsRepository.getAssetsByLocation(
+      siteCode,
+      location,
+    );
     return sendSuccess(res, assets);
   } catch (error: any) {
     console.error("Get assets error:", error);
@@ -118,16 +121,16 @@ export const getByLocation = async (req: Request, res: Response) => {
 
 export const search = async (req: Request, res: Response) => {
   try {
-    const { siteId } = req.params;
-    if (!siteId) {
-      return sendError(res, "Site ID is required");
+    const { siteCode } = req.params;
+    if (!siteCode) {
+      return sendError(res, "Site Code is required");
     }
     const { q } = req.query;
     if (!q) {
       return sendError(res, "Search query (q) is required");
     }
 
-    const assets = await assetsRepository.searchAssets(siteId, q as string);
+    const assets = await assetsRepository.searchAssets(siteCode, q as string);
     return sendSuccess(res, assets);
   } catch (error: any) {
     console.error("Search assets error:", error);
@@ -137,11 +140,11 @@ export const search = async (req: Request, res: Response) => {
 
 export const getUnderWarranty = async (req: Request, res: Response) => {
   try {
-    const { siteId } = req.params;
-    if (!siteId) {
-      return sendError(res, "Site ID is required");
+    const { siteCode } = req.params;
+    if (!siteCode) {
+      return sendError(res, "Site Code is required");
     }
-    const assets = await assetsRepository.getAssetsUnderWarranty(siteId);
+    const assets = await assetsRepository.getAssetsUnderWarranty(siteCode);
     return sendSuccess(res, assets);
   } catch (error: any) {
     console.error("Get assets error:", error);
@@ -151,13 +154,13 @@ export const getUnderWarranty = async (req: Request, res: Response) => {
 
 export const getWarrantyExpiring = async (req: Request, res: Response) => {
   try {
-    const { siteId } = req.params;
-    if (!siteId) {
-      return sendError(res, "Site ID is required");
+    const { siteCode } = req.params;
+    if (!siteCode) {
+      return sendError(res, "Site Code is required");
     }
     const { days } = req.query;
     const assets = await assetsRepository.getAssetsWarrantyExpiring(
-      siteId,
+      siteCode,
       parseInt(days as string) || 30,
     );
     return sendSuccess(res, assets);
@@ -234,11 +237,11 @@ export const remove = async (req: Request, res: Response) => {
 
 export const getStats = async (req: Request, res: Response) => {
   try {
-    const { siteId } = req.params;
-    if (!siteId) {
-      return sendError(res, "Site ID is required");
+    const { siteCode } = req.params;
+    if (!siteCode) {
+      return sendError(res, "Site Code is required");
     }
-    const stats = await assetsRepository.getAssetStats(siteId);
+    const stats = await assetsRepository.getAssetStats(siteCode);
     return sendSuccess(res, stats);
   } catch (error: any) {
     console.error("Get stats error:", error);

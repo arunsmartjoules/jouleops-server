@@ -24,7 +24,8 @@ const buildKey = (prefix: string, id: string) => `${prefix}${id}`;
 export interface Complaint {
   id: string; // UUID in database
   ticket_no: string;
-  site_id: string;
+  site_code: string;
+  site_name?: string;
   title: string;
   status: string;
   category?: string;
@@ -64,7 +65,7 @@ export interface Complaint {
 
 export interface CreateComplaintInput {
   ticket_no?: string;
-  site_id: string;
+  site_code: string;
   title: string;
   status?: string;
   category?: string;
@@ -118,11 +119,10 @@ export interface GetComplaintsOptions {
  * Format: {SITE_PREFIX}-{MMYY}-{SEQ} e.g. "NSK-0226-01"
  * Sequence resets per site per month.
  */
-export async function generateTicketNo(siteId: string): Promise<string> {
-  // 1. Look up site prefix
+export async function generateTicketNo(siteCode: string): Promise<string> {
   const site = await queryOne<{ site_prefix: string | null }>(
-    `SELECT site_prefix FROM sites WHERE site_id = $1`,
-    [siteId],
+    `SELECT site_prefix FROM sites WHERE site_code = $1`,
+    [siteCode],
   );
   const prefix = site?.site_prefix?.trim() || "SITE";
 
@@ -135,8 +135,8 @@ export async function generateTicketNo(siteId: string): Promise<string> {
   // 3. Count existing tickets for this site in the current month
   const pattern = `${prefix}-${monthYear}-%`;
   const countResult = await queryOne<{ cnt: string }>(
-    `SELECT COUNT(*)::text AS cnt FROM complaints WHERE site_id = $1 AND ticket_no LIKE $2`,
-    [siteId, pattern],
+    `SELECT COUNT(*)::text AS cnt FROM complaints WHERE site_code = $1 AND ticket_no LIKE $2`,
+    [siteCode, pattern],
   );
   const seq = parseInt(countResult?.cnt || "0", 10) + 1;
   const seqStr = String(seq).padStart(2, "0");
@@ -183,9 +183,13 @@ export async function getComplaintById(id: string): Promise<Complaint | null> {
   return cached(
     cacheKey,
     async () => {
-      return queryOne<Complaint>(`SELECT * FROM complaints WHERE id = $1`, [
-        id,
-      ]);
+      return queryOne<Complaint>(
+        `SELECT c.*, s.name as site_name
+         FROM complaints c
+         LEFT JOIN sites s ON c.site_code = s.site_code
+         WHERE c.id = $1`,
+        [id],
+      );
     },
     TTL.SHORT,
   );
@@ -197,9 +201,13 @@ export async function getComplaintById(id: string): Promise<Complaint | null> {
 export async function getComplaintByTicketNo(
   ticketNo: string,
 ): Promise<Complaint | null> {
-  return queryOne<Complaint>(`SELECT * FROM complaints WHERE ticket_no = $1`, [
-    ticketNo,
-  ]);
+  return queryOne<Complaint>(
+    `SELECT c.*, s.name as site_name
+     FROM complaints c
+     LEFT JOIN sites s ON c.site_code = s.site_code
+     WHERE c.ticket_no = $1`,
+    [ticketNo],
+  );
 }
 
 /**
@@ -238,7 +246,7 @@ export async function getComplaintByMessageId(
  * Get complaints by site with pagination and filtering
  */
 export async function getComplaintsBySite(
-  siteId: string,
+  siteCode: string,
   options: GetComplaintsOptions = {},
 ): Promise<{
   data: Complaint[];
@@ -267,45 +275,32 @@ export async function getComplaintsBySite(
   const params: any[] = [];
   let paramIndex = 1;
 
-  if (siteId !== "all") {
-    // Pre-resolve site_code to avoid OR + subquery (index-friendly)
-    const siteRow = await queryOne<{ site_code: string | null }>(
-      `SELECT site_code FROM sites WHERE site_id = $1`,
-      [siteId],
-    );
-    const siteCode = siteRow?.site_code;
-
-    if (siteCode && siteCode !== siteId) {
-      conditions.push(`site_id IN ($${paramIndex}, $${paramIndex + 1})`);
-      params.push(siteId, siteCode);
-      paramIndex += 2;
-    } else {
-      conditions.push(`site_id = $${paramIndex}`);
-      params.push(siteId);
-      paramIndex++;
-    }
+  if (siteCode !== "all") {
+    conditions.push(`c.site_code = $${paramIndex}`);
+    params.push(siteCode);
+    paramIndex++;
   }
 
   if (status && status !== "All") {
-    conditions.push(`status = $${paramIndex}`);
+    conditions.push(`c.status = $${paramIndex}`);
     params.push(status);
     paramIndex++;
   }
 
   if (category) {
-    conditions.push(`category = $${paramIndex}`);
+    conditions.push(`c.category = $${paramIndex}`);
     params.push(category);
     paramIndex++;
   }
 
   if (fromDate) {
-    conditions.push(`created_at >= $${paramIndex}`);
+    conditions.push(`c.created_at >= $${paramIndex}`);
     params.push(fromDate);
     paramIndex++;
   }
 
   if (toDate) {
-    conditions.push(`created_at <= $${paramIndex}`);
+    conditions.push(`c.created_at <= $${paramIndex}`);
     params.push(toDate);
     paramIndex++;
   }
@@ -324,7 +319,7 @@ export async function getComplaintsBySite(
     const [cursorDate, cursorId] = cursor.split(",");
     if (cursorDate && cursorId) {
       const op = sortOrder === "desc" ? "<" : ">";
-      cursorCondition = `AND (created_at, id) ${op} ($${paramIndex}, $${paramIndex + 1})`;
+      cursorCondition = `AND (c.created_at, c.id) ${op} ($${paramIndex}, $${paramIndex + 1})`;
       cursorParams.push(cursorDate, cursorId);
       paramIndex += 2;
     }
@@ -334,7 +329,7 @@ export async function getComplaintsBySite(
   let total = 0;
   if (!cursor) {
     const countResult = await queryOne<{ count: string }>(
-      `SELECT COUNT(*) as count FROM complaints ${whereClause}`,
+      `SELECT COUNT(*) as count FROM complaints c ${whereClause}`,
       params,
     );
     total = parseInt(countResult?.count || "0", 10);
@@ -348,8 +343,12 @@ export async function getComplaintsBySite(
   }
 
   const data = await query<Complaint>(
-    `SELECT * FROM complaints ${whereClause} ${cursorCondition}
-     ORDER BY ${sortBy} ${orderDirection}, id ${orderDirection}
+    `SELECT c.*, s.name as site_name
+     FROM complaints c
+     LEFT JOIN sites s ON c.site_code = s.site_code
+     ${whereClause} 
+     ${cursorCondition}
+     ORDER BY c.${sortBy} ${orderDirection}, c.id ${orderDirection}
      LIMIT $${paramIndex}${cursor ? "" : ` ${offsetClause}`}`,
     dataParams,
   );
@@ -380,9 +379,11 @@ export async function getRecentComplaintsByGroup(
   limit: number = 5,
 ): Promise<Complaint[]> {
   return query<Complaint>(
-    `SELECT * FROM complaints
-     WHERE group_id = $1
-     ORDER BY created_at DESC
+    `SELECT c.*, s.name as site_name
+     FROM complaints c
+     LEFT JOIN sites s ON c.site_code = s.site_code
+     WHERE c.group_id = $1
+     ORDER BY c.created_at DESC
      LIMIT $2`,
     [groupId, limit],
   );
@@ -488,12 +489,12 @@ export async function deleteComplaint(identifier: string): Promise<boolean> {
  * Get complaint statistics
  * Uses SQL GROUP BY + cache-aside (60s TTL)
  */
-export async function getComplaintStats(siteId: string): Promise<{
+export async function getComplaintStats(siteCode: string): Promise<{
   total: number;
   byStatus: Record<string, number>;
   byCategory: Record<string, number>;
 }> {
-  const cacheKey = `complaint_stats:${siteId}`;
+  const cacheKey = `complaint_stats:${siteCode}`;
 
   return cached(
     cacheKey,
@@ -502,20 +503,9 @@ export async function getComplaintStats(siteId: string): Promise<{
       let whereClause = "";
       const params: any[] = [];
 
-      if (siteId !== "all") {
-        const siteRow = await queryOne<{ site_code: string | null }>(
-          `SELECT site_code FROM sites WHERE site_id = $1`,
-          [siteId],
-        );
-        const siteCode = siteRow?.site_code;
-
-        if (siteCode && siteCode !== siteId) {
-          whereClause = `WHERE site_id IN ($1, $2)`;
-          params.push(siteId, siteCode);
-        } else {
-          whereClause = `WHERE site_id = $1`;
-          params.push(siteId);
-        }
+      if (siteCode !== "all") {
+        whereClause = `WHERE site_code = $1`;
+        params.push(siteCode);
       }
 
       // Run all three queries in parallel

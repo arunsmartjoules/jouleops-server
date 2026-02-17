@@ -16,15 +16,15 @@ router.post(
   sitesController.create,
 );
 router.get("/", verifyAnyAuth, sitesController.getAll);
-router.get("/:siteId", verifyAnyAuth, sitesController.getById);
+router.get("/:siteCode", verifyAnyAuth, sitesController.getById);
 router.put(
-  "/:siteId",
+  "/:siteCode",
   verifyToken,
   requireRole(["admin", "superadmin"]),
   sitesController.update,
 );
 router.delete(
-  "/:siteId",
+  "/:siteCode",
   verifyToken,
   requireRole(["admin", "superadmin"]),
   sitesController.remove,

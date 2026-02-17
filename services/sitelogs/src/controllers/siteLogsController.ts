@@ -20,14 +20,14 @@ export const create = asyncHandler(async (req: Request, res: Response) => {
 });
 
 export const getBySite = asyncHandler(async (req: Request, res: Response) => {
-  const { siteId } = req.params;
+  const { siteCode } = req.params;
   const { page, limit, type } = req.query;
 
-  if (!siteId) {
-    return sendError(res, "Site ID is required");
+  if (!siteCode) {
+    return sendError(res, "Site Code is required");
   }
 
-  const result = await siteLogsRepository.getLogsBySite(siteId, {
+  const result = await siteLogsRepository.getLogsBySite(siteCode, {
     page: parseInt(page as string) || 1,
     limit: parseInt(limit as string) || 20,
     log_name: type as string | undefined,
@@ -37,7 +37,7 @@ export const getBySite = asyncHandler(async (req: Request, res: Response) => {
 
 export const getAll = asyncHandler(
   async (req: Request, res: Response, next) => {
-    req.params.siteId = "all";
+    req.params.siteCode = "all";
     return getBySite(req, res, next);
   },
 );

@@ -46,9 +46,9 @@ export const getById = async (req: Request, res: Response) => {
 
 export const getBySite = async (req: Request, res: Response) => {
   try {
-    const { siteId } = req.params;
-    if (!siteId) {
-      return sendError(res, "Site ID is required");
+    const { siteCode } = req.params;
+    if (!siteCode) {
+      return sendError(res, "Site Code is required");
     }
     const {
       page,
@@ -60,7 +60,7 @@ export const getBySite = async (req: Request, res: Response) => {
       sortOrder,
     } = req.query;
 
-    const result = await tasksRepository.getTasksBySite(siteId, {
+    const result = await tasksRepository.getTasksBySite(siteCode, {
       page: parseInt(page as string) || 1,
       limit: parseInt(limit as string) || 20,
       task_status: task_status as string | undefined,
@@ -96,11 +96,11 @@ export const getByUser = async (req: Request, res: Response) => {
 
 export const getDueToday = async (req: Request, res: Response) => {
   try {
-    const { siteId } = req.params;
-    if (!siteId) {
-      return sendError(res, "Site ID is required");
+    const { siteCode } = req.params;
+    if (!siteCode) {
+      return sendError(res, "Site Code is required");
     }
-    const tasks = await tasksRepository.getTasksDueToday(siteId);
+    const tasks = await tasksRepository.getTasksDueToday(siteCode);
     return sendSuccess(res, tasks);
   } catch (error: any) {
     console.error("Get tasks error:", error);
@@ -175,11 +175,11 @@ export const remove = async (req: Request, res: Response) => {
 
 export const getStats = async (req: Request, res: Response) => {
   try {
-    const { siteId } = req.params;
-    if (!siteId) {
-      return sendError(res, "Site ID is required");
+    const { siteCode } = req.params;
+    if (!siteCode) {
+      return sendError(res, "Site Code is required");
     }
-    const stats = await tasksRepository.getTaskStats(siteId);
+    const stats = await tasksRepository.getTaskStats(siteCode);
     return sendSuccess(res, stats);
   } catch (error: any) {
     console.error("Get stats error:", error);

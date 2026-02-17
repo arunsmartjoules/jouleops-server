@@ -12,7 +12,7 @@ import { query, queryOne } from "@jouleops/shared";
 
 export interface PMChecklist {
   checklist_id: string;
-  site_id: string;
+  site_code: string;
   task_name: string;
   asset_type?: string;
   maintenance_type?: string;
@@ -37,7 +37,7 @@ export interface PMChecklistResponse {
 
 export interface CreatePMChecklistInput {
   checklist_id: string;
-  site_id: string;
+  site_code: string;
   task_name: string;
   asset_type?: string;
   maintenance_type?: string;
@@ -97,13 +97,13 @@ export async function getPMChecklistById(
  * Get PM checklist by site
  */
 export async function getPMChecklistBySite(
-  siteId: string,
+  siteCode: string,
   options: GetPMChecklistOptions = {},
 ): Promise<PMChecklist[]> {
   const { asset_type = null, status = "Active" } = options;
 
-  const conditions: string[] = ["site_id = $1"];
-  const params: any[] = [siteId];
+  const conditions: string[] = ["site_code = $1"];
+  const params: any[] = [siteCode];
   let paramIndex = 2;
 
   if (asset_type) {
@@ -131,15 +131,15 @@ export async function getPMChecklistBySite(
  */
 export async function getPMChecklistByMaintenanceType(
   maintenanceType: string,
-  siteId?: string,
+  siteCode?: string,
 ): Promise<PMChecklist[]> {
   const conditions: string[] = ["maintenance_type = $1", "status = 'Active'"];
   const params: any[] = [maintenanceType];
   let paramIndex = 2;
 
-  if (siteId) {
-    conditions.push(`site_id = $${paramIndex}`);
-    params.push(siteId);
+  if (siteCode) {
+    conditions.push(`site_code = $${paramIndex}`);
+    params.push(siteCode);
     paramIndex++;
   }
 
@@ -181,7 +181,7 @@ export async function getAllPMChecklists(
   return query<PMChecklist>(
     `SELECT * FROM pm_checklist
      ${whereClause}
-     ORDER BY site_id, sequence_no ASC`,
+     ORDER BY site_code, sequence_no ASC`,
     params,
   );
 }

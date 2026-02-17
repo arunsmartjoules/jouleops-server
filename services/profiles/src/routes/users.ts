@@ -12,7 +12,7 @@ const router = express.Router();
 router.post("/", verifyToken, usersController.create);
 router.get("/", verifyToken, usersController.getAll);
 router.get("/phone/:phone", verifyApiKey, usersController.getByPhone);
-router.get("/site/:siteId", verifyToken, usersController.getBySite);
+router.get("/site/:siteCode", verifyToken, usersController.getBySite);
 router.get("/:userId", verifyToken, usersController.getById);
 router.put("/:userId", verifyToken, usersController.update);
 router.delete("/:userId", verifyToken, usersController.remove);
