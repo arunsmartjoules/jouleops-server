@@ -3,6 +3,7 @@
  *
  * Direct database access layer replacing Supabase SDK.
  * Uses a connection pool for efficient resource management.
+ * Test
  */
 
 import { Pool } from "pg";
