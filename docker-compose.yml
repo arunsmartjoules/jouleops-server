@@ -121,3 +121,21 @@ services:
         SERVICE_NAME: services/pm
     environment:
       - PORT=3424
+
+  # Caddy (Automatic HTTPS)
+  caddy:
+    image: caddy:alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - gateway
+
+volumes:
+  caddy_data:
+  caddy_config:

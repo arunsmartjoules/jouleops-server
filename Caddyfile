@@ -1,0 +1,7 @@
+{
+    email arun.kumar@smartjoules.in
+}
+
+3.110.174.185.nip.io {
+    reverse_proxy gateway:3420
+}
