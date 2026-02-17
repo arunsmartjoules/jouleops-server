@@ -7,13 +7,12 @@ services:
 
   # API Gateway
   gateway:
-    image: ghcr.io/arunsmartjoules/jouleops-gateway:latest
     env_file: .env.local
-    # build:
-    #   context: .
-    #   dockerfile: Dockerfile
-    #   args:
-    #     SERVICE_NAME: gateway
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        SERVICE_NAME: gateway
     environment:
       - PORT=3420
       - MONOLITH_URL=http://host.docker.internal:3400
@@ -45,13 +44,12 @@ services:
 
   # RBAC Service
   rbac:
-    image: ghcr.io/arunsmartjoules/jouleops-rbac:latest
     env_file: .env.local
-    # build:
-    #   context: .
-    #   dockerfile: Dockerfile
-    #   args:
-    #     SERVICE_NAME: services/rbac
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        SERVICE_NAME: services/rbac
     environment:
       - PORT=3425
       - REDIS_URL=redis://redis:6379
@@ -60,73 +58,67 @@ services:
 
   # Profiles Service
   profiles:
-    image: ghcr.io/arunsmartjoules/jouleops-profiles:latest
     env_file: .env.local
-    # build:
-    #   context: .
-    #   dockerfile: Dockerfile
-    #   args:
-    #     SERVICE_NAME: services/profiles
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        SERVICE_NAME: services/profiles
     environment:
       - PORT=3426
 
   # Utility Service (Email, WhatsApp, Notifications)
   utility:
-    image: ghcr.io/arunsmartjoules/jouleops-utility:latest
     env_file: .env.local
-    # build:
-    #   context: .
-    #   dockerfile: Dockerfile
-    #   args:
-    #     SERVICE_NAME: services/utility
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        SERVICE_NAME: services/utility
     environment:
       - PORT=3428
 
   # Tickets Service
   tickets:
-    image: ghcr.io/arunsmartjoules/jouleops-tickets:latest
     env_file: .env.local
-    # build:
-    #   context: .
-    #   dockerfile: Dockerfile
-    #   args:
-    #     SERVICE_NAME: services/tickets
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        SERVICE_NAME: services/tickets
     environment:
       - PORT=3421
 
   # Attendance Service
   attendance:
-    image: ghcr.io/arunsmartjoules/jouleops-attendance:latest
     env_file: .env.local
-    # build:
-    #   context: .
-    #   dockerfile: Dockerfile
-    #   args:
-    #     SERVICE_NAME: services/attendance
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        SERVICE_NAME: services/attendance
     environment:
       - PORT=3422
 
   # SiteLogs Service
   sitelogs:
-    image: ghcr.io/arunsmartjoules/jouleops-sitelogs:latest
     env_file: .env.local
-    # build:
-    #   context: .
-    #   dockerfile: Dockerfile
-    #   args:
-    #     SERVICE_NAME: services/sitelogs
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        SERVICE_NAME: services/sitelogs
     environment:
       - PORT=3423
 
   # PM Service
   pm:
-    image: ghcr.io/arunsmartjoules/jouleops-pm:latest
     env_file: .env.local
-    # build:
-    #   context: .
-    #   dockerfile: Dockerfile
-    #   args:
-    #     SERVICE_NAME: services/pm
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        SERVICE_NAME: services/pm
     environment:
       - PORT=3424
 
