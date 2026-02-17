@@ -32,6 +32,8 @@ build
 # Git
 .git
 .gitignore
+# Automation
+actions-runner
 .github
 
 # Testing
