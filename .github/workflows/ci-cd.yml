@@ -134,4 +134,14 @@ jobs:
         run: |
           cd /home/ubuntu/backend
           git pull origin main
-          docker compose up -d --build
+          echo "Starting sequential build..."
+          docker compose build gateway
+          docker compose build attendance
+          docker compose build tickets
+          docker compose build profiles
+          docker compose build rbac
+          docker compose build pm
+          docker compose build sitelogs
+          docker compose build utility
+          echo "Restarting services..."
+          docker compose up -d
