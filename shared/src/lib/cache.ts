@@ -38,6 +38,11 @@ export async function cached<T>(
   fetcher: () => Promise<T>,
   ttl: number = TTL.MEDIUM,
 ): Promise<T> {
+  // Skip cache if redis is not ready to avoid hanging in offline queue
+  if (redis.status !== "ready") {
+    return fetcher();
+  }
+
   try {
     // Check cache first
     const cached = await redis.get(key);
@@ -55,7 +60,9 @@ export async function cached<T>(
 
   // Store in cache (fire and forget)
   try {
-    await redis.setex(key, ttl, JSON.stringify(data));
+    if (redis.status === "ready") {
+      await redis.setex(key, ttl, JSON.stringify(data));
+    }
   } catch (error) {
     console.warn("Cache write failed:", error);
   }
@@ -71,6 +78,7 @@ export async function set(
   value: any,
   ttl: number = TTL.MEDIUM,
 ): Promise<void> {
+  if (redis.status !== "ready") return;
   try {
     await redis.setex(key, ttl, JSON.stringify(value));
   } catch (error) {
@@ -82,6 +90,7 @@ export async function set(
  * Get a value from cache
  */
 export async function get<T>(key: string): Promise<T | null> {
+  if (redis.status !== "ready") return null;
   try {
     const cached = await redis.get(key);
     return cached ? (JSON.parse(cached) as T) : null;
@@ -95,6 +104,7 @@ export async function get<T>(key: string): Promise<T | null> {
  * Delete a specific key from cache
  */
 export async function del(key: string): Promise<void> {
+  if (redis.status !== "ready") return;
   try {
     await redis.del(key);
   } catch (error) {
@@ -108,6 +118,7 @@ export async function del(key: string): Promise<void> {
  * @param pattern - Redis pattern (e.g., "user:*" to invalidate all user cache)
  */
 export async function invalidate(pattern: string): Promise<number> {
+  if (redis.status !== "ready") return 0;
   try {
     const keys = await redis.keys(pattern);
 

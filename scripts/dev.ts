@@ -7,7 +7,7 @@ const envPath = path.resolve(process.cwd(), ".env.local");
 const result = dotenv.config({ path: envPath });
 
 if (result.error) {
-  console.warn("⚠️  .env.local not found or failed to load. Checking .env...");
+  console.warn("⚠️ .env.local not found or failed to load. Checking .env...");
   dotenv.config(); // Fallback to .env
 } else {
   console.log("✅ Loaded environment from .env.local");
@@ -29,7 +29,7 @@ const turbo = spawn("turbo", ["run", "dev", "--concurrency=10"], {
     RBAC_SERVICE_URL: "http://localhost:3425",
     PROFILES_SERVICE_URL: "http://localhost:3426",
     UTILITY_SERVICE_URL: "http://localhost:3428",
-    REDIS_URL: "redis://localhost:6379",
+    REDIS_URL: process.env.REDIS_URL || "redis://localhost:6379",
   }, // Explicitly pass loaded env vars with overrides
 });
 

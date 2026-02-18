@@ -72,8 +72,15 @@ export async function storeRefreshToken(data: {
       .update(data.token)
       .digest("hex");
 
-    const redisKey = `rt:${tokenHash}`;
+    if (redis.status !== "ready") {
+      console.warn(
+        "Redis not ready for storing refresh token (status: %s)",
+        redis.status,
+      );
+      return;
+    }
     const userKey = `user_rt:${data.user_id}`;
+    const redisKey = `rt:${tokenHash}`;
 
     const tokenData = {
       user_id: data.user_id,
@@ -103,6 +110,14 @@ export async function getRefreshToken(
 ): Promise<RefreshToken | null> {
   const tokenHash = crypto.createHash("sha256").update(token).digest("hex");
   const redisKey = `rt:${tokenHash}`;
+
+  if (redis.status !== "ready") {
+    console.warn(
+      "Redis not ready for getting refresh token (status: %s)",
+      redis.status,
+    );
+    return null;
+  }
 
   const data = await redis.get(redisKey);
 
@@ -134,6 +149,10 @@ export async function revokeRefreshToken(token: string): Promise<boolean> {
   const tokenHash = crypto.createHash("sha256").update(token).digest("hex");
   const redisKey = `rt:${tokenHash}`;
 
+  if (redis.status !== "ready") {
+    return false;
+  }
+
   const data = await redis.get(redisKey);
   if (data) {
     try {
@@ -157,6 +176,11 @@ export async function revokeRefreshToken(token: string): Promise<boolean> {
  */
 export async function revokeAllUserTokens(userId: string): Promise<void> {
   const userKey = `user_rt:${userId}`;
+
+  if (redis.status !== "ready") {
+    return;
+  }
+
   const tokens = await redis.smembers(userKey);
 
   if (tokens.length > 0) {
@@ -191,6 +215,11 @@ export async function blacklistToken(
 ): Promise<void> {
   try {
     const key = `blacklist:${jti}`;
+
+    if (redis.status !== "ready") {
+      return;
+    }
+
     // Only blacklist if expiresIn is positive
     if (expiresIn > 0) {
       await redis.setex(key, expiresIn, "1");
@@ -209,6 +238,11 @@ export async function isTokenBlacklisted(jti: string): Promise<boolean> {
   if (!jti) return false;
   try {
     const key = `blacklist:${jti}`;
+
+    if (redis.status !== "ready") {
+      return false;
+    }
+
     const result = await redis.get(key);
     return result !== null;
   } catch (error: any) {

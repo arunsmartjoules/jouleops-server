@@ -76,17 +76,21 @@ export const getBySite = async (req: Request, res: Response) => {
       toDate,
       sortBy,
       sortOrder,
+      search,
+      filters,
     } = req.query;
 
     const result = await complaintsRepository.getComplaintsBySite(siteCode, {
-      page: parseInt(page as string) || 1,
-      limit: parseInt(limit as string) || 20,
-      status: status as string | undefined,
-      category: category as string | undefined,
-      fromDate: fromDate as string | undefined,
-      toDate: toDate as string | undefined,
-      sortBy: sortBy as string | undefined,
-      sortOrder: sortOrder as "asc" | "desc" | undefined,
+      page: page as string,
+      limit: limit as string,
+      status: status as string,
+      category: category as string,
+      fromDate: fromDate as string,
+      toDate: toDate as string,
+      sortBy: sortBy as string,
+      sortOrder: sortOrder as "asc" | "desc",
+      search: search as string,
+      filters: filters as string,
     });
 
     return sendSuccess(res, result.data, { pagination: result.pagination });

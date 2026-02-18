@@ -8,6 +8,7 @@
 import {
   query,
   queryOne,
+  buildQuery,
   cached,
   cacheDel as del,
   CACHE_PREFIX,
@@ -74,6 +75,8 @@ export interface GetUsersOptions {
   role?: string | null;
   is_active?: boolean | null;
   search?: string;
+  sort?: string;
+  filters?: string;
 }
 
 // ============================================================================
@@ -196,61 +199,44 @@ export async function getAllUsers(options: GetUsersOptions = {}): Promise<{
     totalPages: number;
   };
 }> {
-  const {
-    page = 1,
-    limit = 50,
-    role = null,
-    is_active = null,
-    search = "",
-  } = options;
+  const { search, filters, ...rest } = options;
 
-  const offset = (page - 1) * limit;
+  const { whereClause, orderClause, limitClause, values } = buildQuery(
+    { ...rest, search, filters },
+    {
+      searchFields: [
+        "name",
+        "email",
+        "employee_code",
+        "designation",
+        "department",
+      ],
+      allowedFields: [
+        "role",
+        "is_active",
+        "site_code",
+        "department",
+        "work_location_type",
+      ],
+      defaultSort: "name",
+      defaultSortOrder: "asc",
+    },
+  );
 
-  // Build WHERE clause dynamically
-  const conditions: string[] = [];
-  const params: any[] = [];
-  let paramIndex = 1;
-
-  if (role !== null) {
-    conditions.push(`role = $${paramIndex}`);
-    params.push(role);
-    paramIndex++;
-  }
-
-  if (is_active !== null) {
-    conditions.push(`is_active = $${paramIndex}`);
-    params.push(is_active);
-    paramIndex++;
-  }
-
-  if (search) {
-    conditions.push(`(
-      name ILIKE $${paramIndex} OR
-      email ILIKE $${paramIndex} OR
-      employee_code ILIKE $${paramIndex}
-    )`);
-    params.push(`%${search}%`);
-    paramIndex++;
-  }
-
-  const whereClause =
-    conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
-
-  // Get total count
+  // Get total count (Skip limit/offset values which are the last two)
+  const countSql = `SELECT COUNT(*) as count FROM users ${whereClause}`;
   const countResult = await queryOne<{ count: string }>(
-    `SELECT COUNT(*) as count FROM users ${whereClause}`,
-    params,
+    countSql,
+    values.slice(0, -2),
   );
   const total = parseInt(countResult?.count || "0", 10);
 
   // Get paginated data
-  const dataParams = [...params, limit, offset];
-  const data = await query<User>(
-    `SELECT * FROM users ${whereClause}
-     ORDER BY name ASC
-     LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`,
-    dataParams,
-  );
+  const dataSql = `SELECT * FROM users ${whereClause} ${orderClause} ${limitClause}`;
+  const data = await query<User>(dataSql, values);
+
+  const limit = options.limit || 50;
+  const page = options.page || 1;
 
   return {
     data,

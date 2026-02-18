@@ -103,7 +103,7 @@ export const getBySite = async (req: Request, res: Response) => {
 
 export const getAll = async (req: Request, res: Response) => {
   try {
-    const { page, limit, role, is_active, search } = req.query;
+    const { page, limit, role, is_active, search, sort, filters } = req.query;
     const result = await usersRepository.getAllUsers({
       page: parseInt(page as string) || 1,
       limit: parseInt(limit as string) || 50,
@@ -111,6 +111,8 @@ export const getAll = async (req: Request, res: Response) => {
       is_active:
         is_active === "true" ? true : is_active === "false" ? false : undefined,
       search: search as string | undefined,
+      sort: sort as string | undefined,
+      filters: filters as string | undefined,
     });
     return sendSuccess(res, result.data, { pagination: result.pagination });
   } catch (error: any) {

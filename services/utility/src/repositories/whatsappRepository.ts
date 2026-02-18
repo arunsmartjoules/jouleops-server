@@ -10,21 +10,21 @@ import { cached, del as cacheDel } from "@jouleops/shared";
 const CACHE_TTL = 600; // 10 minutes
 
 export interface WhatsAppGroupMapping {
-  id: number;
+  id: string; // Changed from number to string (UUID)
   site_code?: string;
   site_name?: string;
-  group_id: string;
-  group_name?: string;
+  whatsapp_group_id: string;
+  whatsapp_group_name?: string;
   is_active?: boolean;
   created_at?: Date;
   updated_at?: Date;
 }
 
 export interface WhatsAppTemplate {
-  id: number;
+  id: string; // Changed from number to string (UUID)
   template_key: string;
   template_name?: string;
-  content?: string;
+  template_content?: string;
   variables?: any;
   is_active?: boolean;
   updated_by?: string;
@@ -53,10 +53,11 @@ export async function getMappings(): Promise<WhatsAppGroupMapping[]> {
     cacheKey,
     async () => {
       const sql = `
-        SELECT wm.*, s.name as site_name
+        SELECT wm.id, wm.site_code, wm.whatsapp_group_id, wm.whatsapp_group_name, wm.is_active, wm.created_at, wm.updated_at,
+               COALESCE(wm.site_name, s.name) as site_name
         FROM whatsapp_group_mappings wm
         LEFT JOIN sites s ON wm.site_code = s.site_code
-        ORDER BY s.name, wm.created_at DESC
+        ORDER BY site_name, wm.created_at DESC
       `;
       return query(sql);
     },
@@ -71,14 +72,14 @@ export async function createMapping(
   data: Partial<WhatsAppGroupMapping>,
 ): Promise<WhatsAppGroupMapping> {
   const sql = `
-    INSERT INTO whatsapp_group_mappings (site_code, group_id, group_name, is_active, created_at, updated_at)
+    INSERT INTO whatsapp_group_mappings (site_code, whatsapp_group_id, whatsapp_group_name, is_active, created_at, updated_at)
     VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
     RETURNING *
   `;
   const result = await queryOne<WhatsAppGroupMapping>(sql, [
     data.site_code,
-    data.group_id,
-    data.group_name,
+    data.whatsapp_group_id,
+    data.whatsapp_group_name,
     data.is_active ?? true,
   ]);
 
@@ -112,14 +113,14 @@ export async function updateMapping(
     setClauses.push(`site_code = $${params.length}`);
   }
 
-  if (data.group_id !== undefined) {
-    params.push(data.group_id);
-    setClauses.push(`group_id = $${params.length}`);
+  if (data.whatsapp_group_id !== undefined) {
+    params.push(data.whatsapp_group_id);
+    setClauses.push(`whatsapp_group_id = $${params.length}`);
   }
 
-  if (data.group_name !== undefined) {
-    params.push(data.group_name);
-    setClauses.push(`group_name = $${params.length}`);
+  if (data.whatsapp_group_name !== undefined) {
+    params.push(data.whatsapp_group_name);
+    setClauses.push(`whatsapp_group_name = $${params.length}`);
   }
 
   if (data.is_active !== undefined) {
@@ -162,6 +163,20 @@ export async function deleteMapping(id: number | string): Promise<void> {
   await cacheDel("whatsapp:mappings");
 }
 
+/**
+ * Bulk delete group mappings
+ */
+export async function bulkDeleteMappings(ids: string[]): Promise<void> {
+  if (!ids || ids.length === 0) return;
+
+  const placeholders = ids.map((_, i) => `$${i + 1}`).join(", ");
+  const sql = `DELETE FROM whatsapp_group_mappings WHERE id IN (${placeholders})`;
+  await query(sql, ids);
+
+  // Invalidate cache
+  await cacheDel("whatsapp:mappings");
+}
+
 // --- Templates ---
 
 /**
@@ -174,7 +189,7 @@ export async function getTemplates(): Promise<WhatsAppTemplate[]> {
     async () => {
       const sql = `
         SELECT *
-        FROM whatsapp_templates
+        FROM whatsapp_message_templates
         WHERE is_active = true OR is_active IS NULL
         ORDER BY template_key
       `;
@@ -199,9 +214,9 @@ export async function updateTemplate(
     setClauses.push(`template_name = $${params.length}`);
   }
 
-  if (data.content !== undefined) {
-    params.push(data.content);
-    setClauses.push(`content = $${params.length}`);
+  if (data.template_content !== undefined) {
+    params.push(data.template_content);
+    setClauses.push(`template_content = $${params.length}`);
   }
 
   if (data.variables !== undefined) {
@@ -221,7 +236,7 @@ export async function updateTemplate(
 
   params.push(id);
   const sql = `
-    UPDATE whatsapp_templates
+    UPDATE whatsapp_message_templates
     SET ${setClauses.join(", ")}
     WHERE id = $${params.length}
     RETURNING *
@@ -282,4 +297,5 @@ export default {
   updateTemplate,
   getMessageLogs,
   createMessageLog,
+  bulkDeleteMappings,
 };

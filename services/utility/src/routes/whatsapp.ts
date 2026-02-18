@@ -14,6 +14,11 @@ router.get("/mappings", verifyToken, whatsappController.getAllMappings);
 router.post("/mappings", verifyToken, whatsappController.createMapping);
 router.put("/mappings/:id", verifyToken, whatsappController.updateMapping);
 router.delete("/mappings/:id", verifyToken, whatsappController.deleteMapping);
+router.post(
+  "/mappings/bulk-delete",
+  verifyToken,
+  whatsappController.bulkDeleteMappings,
+);
 
 // Template routes
 router.get("/templates", verifyToken, whatsappController.getAllTemplates);

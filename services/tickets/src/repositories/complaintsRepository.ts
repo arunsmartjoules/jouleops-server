@@ -5,7 +5,8 @@
  * Business logic (notifications) remains in the service layer.
  */
 
-import { query, queryOne } from "@jouleops/shared";
+import { query, queryOne, buildQuery } from "@jouleops/shared";
+import type { FilterRule } from "@jouleops/shared";
 import {
   cached,
   cacheDel as del,
@@ -99,15 +100,17 @@ export interface UpdateComplaintInput {
 }
 
 export interface GetComplaintsOptions {
-  page?: number;
-  limit?: number;
+  page?: number | string;
+  limit?: number | string;
   status?: string | null;
   category?: string | null;
+  search?: string | null;
+  filters?: FilterRule[] | string | null;
   fromDate?: string | null;
   toDate?: string | null;
   sortBy?: string;
   sortOrder?: "asc" | "desc";
-  cursor?: string | null; // keyset cursor: "created_at,id" for deep pagination
+  cursor?: string | null;
 }
 
 // ============================================================================
@@ -265,107 +268,109 @@ export async function getComplaintsBySite(
     category = null,
     fromDate = null,
     toDate = null,
-    sortBy = "created_at",
-    sortOrder = "desc",
+    search = null,
+    filters: optFilters = null,
   } = options;
 
-  const offset = (page - 1) * limit;
-
-  const conditions: string[] = [];
-  const params: any[] = [];
-  let paramIndex = 1;
-
-  if (siteCode !== "all") {
-    conditions.push(`c.site_code = $${paramIndex}`);
-    params.push(siteCode);
-    paramIndex++;
-  }
-
-  if (status && status !== "All") {
-    conditions.push(`c.status = $${paramIndex}`);
-    params.push(status);
-    paramIndex++;
-  }
-
-  if (category) {
-    conditions.push(`c.category = $${paramIndex}`);
-    params.push(category);
-    paramIndex++;
-  }
-
-  if (fromDate) {
-    conditions.push(`c.created_at >= $${paramIndex}`);
-    params.push(fromDate);
-    paramIndex++;
-  }
-
-  if (toDate) {
-    conditions.push(`c.created_at <= $${paramIndex}`);
-    params.push(toDate);
-    paramIndex++;
-  }
-
-  const whereClause =
-    conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
-  const orderDirection = sortOrder === "asc" ? "ASC" : "DESC";
-
-  // Keyset pagination: if cursor provided, use it instead of OFFSET
-  const { cursor = null } = options;
-  let cursorCondition = "";
-  const cursorParams: any[] = [];
-
-  if (cursor) {
-    // cursor format: "created_at_iso,uuid"
-    const [cursorDate, cursorId] = cursor.split(",");
-    if (cursorDate && cursorId) {
-      const op = sortOrder === "desc" ? "<" : ">";
-      cursorCondition = `AND (c.created_at, c.id) ${op} ($${paramIndex}, $${paramIndex + 1})`;
-      cursorParams.push(cursorDate, cursorId);
-      paramIndex += 2;
+  // 1. Normalize filters
+  const filters: FilterRule[] = [];
+  if (optFilters) {
+    if (typeof optFilters === "string") {
+      try {
+        filters.push(...JSON.parse(optFilters));
+      } catch (e) {
+        console.error("[COMPLAINTS-REPO] Failed to parse filters", e);
+      }
+    } else if (Array.isArray(optFilters)) {
+      filters.push(...optFilters);
     }
   }
 
-  // Get total count (only when no cursor — caller already has total from first page)
-  let total = 0;
-  if (!cursor) {
-    const countResult = await queryOne<{ count: string }>(
-      `SELECT COUNT(*) as count FROM complaints c ${whereClause}`,
-      params,
-    );
-    total = parseInt(countResult?.count || "0", 10);
+  // 2. Add specific filters
+  if (siteCode !== "all") {
+    filters.push({ fieldId: "site_code", operator: "=", value: siteCode });
+  }
+  if (status && status !== "All" && status !== "all") {
+    filters.push({ fieldId: "status", operator: "=", value: status });
+  }
+  if (category && category !== "All" && category !== "all") {
+    filters.push({ fieldId: "category", operator: "=", value: category });
+  }
+  if (fromDate) {
+    filters.push({ fieldId: "created_at", operator: ">=", value: fromDate });
+  }
+  if (toDate) {
+    filters.push({ fieldId: "created_at", operator: "<=", value: toDate });
   }
 
-  // Get paginated data
-  const dataParams = [...params, ...cursorParams, limit];
-  const offsetClause = cursor ? "" : `OFFSET $${paramIndex + 1}`;
-  if (!cursor) {
-    dataParams.push(offset);
-  }
+  // 3. Build Query using shared utility
+  const { whereClause, orderClause, limitClause, values } = buildQuery(
+    {
+      ...options,
+      search: search ?? undefined,
+      filters: filters.length > 0 ? filters : undefined,
+    },
+    {
+      tableAlias: "c",
+      searchFields: [
+        "ticket_no",
+        "title",
+        "site_code",
+        "location",
+        "area_asset",
+        "assigned_to",
+      ],
+      allowedFields: [
+        "ticket_no",
+        "site_code",
+        "title",
+        "status",
+        "category",
+        "location",
+        "area_asset",
+        "assigned_to",
+        "created_at",
+        "updated_at",
+      ],
+      defaultSort: "created_at",
+      defaultSortOrder: "desc",
+    },
+  );
 
+  // 4. Get Total Count (Skip limit/offset values which are the last two)
+  const countResult = await queryOne<{ count: string }>(
+    `SELECT COUNT(*) as count FROM complaints c ${whereClause}`,
+    values.slice(0, -2),
+  );
+  const total = parseInt(countResult?.count || "0", 10);
+
+  // 5. Get Paginated Data
   const data = await query<Complaint>(
     `SELECT c.*, s.name as site_name
      FROM complaints c
      LEFT JOIN sites s ON c.site_code = s.site_code
-     ${whereClause} 
-     ${cursorCondition}
-     ORDER BY c.${sortBy} ${orderDirection}, c.id ${orderDirection}
-     LIMIT $${paramIndex}${cursor ? "" : ` ${offsetClause}`}`,
-    dataParams,
+     ${whereClause}
+     ${orderClause}
+     ${limitClause}`,
+    values,
   );
 
-  // Build next cursor from last item
+  // 6. Next Cursor (optional for keyset pagination support)
   const lastItem = data[data.length - 1];
   const nextCursor = lastItem
     ? `${new Date(lastItem.created_at).toISOString()},${lastItem.id}`
     : null;
 
+  const numPage = Number(page);
+  const numLimit = Number(limit);
+
   return {
     data,
     pagination: {
-      page,
-      limit,
+      page: numPage,
+      limit: numLimit,
       total,
-      totalPages: total ? Math.ceil(total / limit) : 0,
+      totalPages: Math.ceil(total / numLimit),
     },
     nextCursor,
   };

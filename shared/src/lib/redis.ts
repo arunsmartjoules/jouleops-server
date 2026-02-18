@@ -12,21 +12,21 @@ const getRedisUrl = (): string => {
   return process.env.REDIS_URL || "redis://localhost:6379";
 };
 
-// Create Redis client with fail-fast strategy
+// Create Redis client with persistent strategy
 // Redis is optional - app should work without it (just no token refresh/caching)
 export const redis = new Redis(getRedisUrl(), {
-  maxRetriesPerRequest: 1, // Fail fast
+  maxRetriesPerRequest: null, // Allow commands to wait for connection
   retryStrategy: (times) => {
-    if (times > 3) {
-      logger.error("Redis: Max retry attempts reached, giving up");
-      return null; // Stop retrying
+    // Persistent retry with exponential backoff, capped at 10 seconds
+    const delay = Math.min(times * 200, 10000);
+    if (times % 5 === 0) {
+      logger.warn(`Redis: Reconnection attempt #${times} in ${delay}ms`);
     }
-    const delay = Math.min(times * 100, 1000);
     return delay;
   },
   lazyConnect: true, // Don't connect immediately
-  enableOfflineQueue: false, // Fail immediately if not connected
-  connectTimeout: 5000, // 5 second connection timeout
+  enableOfflineQueue: true, // Buffer commands while disconnected
+  connectTimeout: 10000, // 10 second connection timeout
 });
 
 // Event handlers
@@ -57,6 +57,13 @@ export async function healthCheck(): Promise<{
   error?: string;
 }> {
   const start = Date.now();
+  if (redis.status !== "ready") {
+    return {
+      connected: false,
+      latency: 0,
+      error: `Redis status: ${redis.status}`,
+    };
+  }
 
   try {
     await redis.ping();

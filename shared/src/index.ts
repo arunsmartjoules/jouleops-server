@@ -60,3 +60,6 @@ export { correlationId } from "./middleware/correlationId.ts";
 
 // Types
 export type { AuthRequest } from "./types/express.ts";
+
+// Querier
+export * from "./lib/querier.ts";

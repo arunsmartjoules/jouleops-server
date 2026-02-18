@@ -104,6 +104,34 @@ export const deleteMapping = async (req: AuthRequest, res: Response) => {
   }
 };
 
+export const bulkDeleteMappings = async (req: AuthRequest, res: Response) => {
+  try {
+    const { ids } = req.body;
+    if (!ids || !Array.isArray(ids) || ids.length === 0) {
+      return sendError(res, "Mapping IDs are required");
+    }
+
+    await whatsappRepository.bulkDeleteMappings(ids);
+
+    if (req.user) {
+      await logActivity({
+        user_id: req.user.user_id,
+        action: "WA_MAPPING_BULK_DELETE",
+        module: "WHATSAPP",
+        description: `Deleted ${ids.length} WhatsApp mappings`,
+        metadata: { count: ids.length, ids },
+        ip_address: req.ip,
+      });
+    }
+
+    return sendSuccess(res, null, {
+      message: `${ids.length} mappings deleted`,
+    });
+  } catch (error: any) {
+    return sendServerError(res, error);
+  }
+};
+
 // --- Templates ---
 
 export const getAllTemplates = async (req: Request, res: Response) => {
@@ -162,4 +190,5 @@ export default {
   getAllTemplates,
   updateTemplate,
   getMessageLogs,
+  bulkDeleteMappings,
 };
