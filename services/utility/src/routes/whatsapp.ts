@@ -1,6 +1,6 @@
 import express from "express";
 import whatsappController from "../controllers/whatsappController.ts";
-import { verifyToken } from "../middleware/auth.ts";
+import { verifyAnyAuth } from "../middleware/auth.ts";
 
 const router = express.Router();
 
@@ -10,21 +10,21 @@ const router = express.Router();
  */
 
 // Mapping routes
-router.get("/mappings", verifyToken, whatsappController.getAllMappings);
-router.post("/mappings", verifyToken, whatsappController.createMapping);
-router.put("/mappings/:id", verifyToken, whatsappController.updateMapping);
-router.delete("/mappings/:id", verifyToken, whatsappController.deleteMapping);
+router.get("/mappings", verifyAnyAuth, whatsappController.getAllMappings);
+router.post("/mappings", verifyAnyAuth, whatsappController.createMapping);
+router.put("/mappings/:id", verifyAnyAuth, whatsappController.updateMapping);
+router.delete("/mappings/:id", verifyAnyAuth, whatsappController.deleteMapping);
 router.post(
   "/mappings/bulk-delete",
-  verifyToken,
+  verifyAnyAuth,
   whatsappController.bulkDeleteMappings,
 );
 
 // Template routes
-router.get("/templates", verifyToken, whatsappController.getAllTemplates);
-router.put("/templates/:id", verifyToken, whatsappController.updateTemplate);
+router.get("/templates", verifyAnyAuth, whatsappController.getAllTemplates);
+router.put("/templates/:id", verifyAnyAuth, whatsappController.updateTemplate);
 
 // Log routes
-router.get("/logs", verifyToken, whatsappController.getMessageLogs);
+router.get("/logs", verifyAnyAuth, whatsappController.getMessageLogs);
 
 export default router;

@@ -1,5 +1,5 @@
 import express from "express";
-import { verifyToken } from "../middleware/auth.ts";
+import { verifyAnyAuth } from "../middleware/auth.ts";
 import pushTokenService from "../services/pushTokenService.ts";
 import notificationSettingsService from "../services/notificationSettingsService.ts";
 import pushNotificationService from "../services/pushNotificationService.ts";
@@ -18,7 +18,7 @@ const router = express.Router();
  * Register a push token for a user's device
  * POST /api/notifications/register-token
  */
-router.post("/register-token", verifyToken, async (req, res) => {
+router.post("/register-token", verifyAnyAuth, async (req: any, res) => {
   try {
     const { pushToken, deviceId, platform } = req.body;
     const userId = req.user.user_id;
@@ -41,7 +41,7 @@ router.post("/register-token", verifyToken, async (req, res) => {
       success: true,
       data: result,
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error("Error registering push token:", error);
     res.status(500).json({
       success: false,
@@ -54,7 +54,7 @@ router.post("/register-token", verifyToken, async (req, res) => {
  * Remove a push token (e.g., on logout)
  * DELETE /api/notifications/token
  */
-router.delete("/token", verifyToken, async (req, res) => {
+router.delete("/token", verifyAnyAuth, async (req, res) => {
   try {
     const { pushToken } = req.body;
 
@@ -71,7 +71,7 @@ router.delete("/token", verifyToken, async (req, res) => {
       success: true,
       message: "Token removed successfully",
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error("Error removing push token:", error);
     res.status(500).json({
       success: false,
@@ -84,7 +84,7 @@ router.delete("/token", verifyToken, async (req, res) => {
  * Get all notification settings
  * GET /api/notifications/settings
  */
-router.get("/settings", verifyToken, async (req, res) => {
+router.get("/settings", verifyAnyAuth, async (req, res) => {
   try {
     const settings = await notificationSettingsService.getAllSettings();
 
@@ -92,7 +92,7 @@ router.get("/settings", verifyToken, async (req, res) => {
       success: true,
       data: settings,
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error("Error getting notification settings:", error);
     res.status(500).json({
       success: false,
@@ -105,7 +105,7 @@ router.get("/settings", verifyToken, async (req, res) => {
  * Update check-in notification message (Admin only)
  * PUT /api/notifications/settings/check-in
  */
-router.put("/settings/check-in", verifyToken, async (req, res) => {
+router.put("/settings/check-in", verifyAnyAuth, async (req: any, res) => {
   try {
     const { message, time } = req.body;
     const userId = req.user.user_id;
@@ -118,7 +118,7 @@ router.put("/settings/check-in", verifyToken, async (req, res) => {
       });
     }
 
-    const results = {};
+    const results: any = {};
 
     if (message) {
       results.message = await notificationSettingsService.updateCheckInMessage(
@@ -139,7 +139,7 @@ router.put("/settings/check-in", verifyToken, async (req, res) => {
       success: true,
       data: results,
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error("Error updating check-in settings:", error);
     res.status(500).json({
       success: false,
@@ -152,7 +152,7 @@ router.put("/settings/check-in", verifyToken, async (req, res) => {
  * Update check-out notification message (Admin only)
  * PUT /api/notifications/settings/check-out
  */
-router.put("/settings/check-out", verifyToken, async (req, res) => {
+router.put("/settings/check-out", verifyAnyAuth, async (req: any, res) => {
   try {
     const { message, time } = req.body;
     const userId = req.user.user_id;
@@ -165,7 +165,7 @@ router.put("/settings/check-out", verifyToken, async (req, res) => {
       });
     }
 
-    const results = {};
+    const results: any = {};
 
     if (message) {
       results.message = await notificationSettingsService.updateCheckOutMessage(
@@ -186,7 +186,7 @@ router.put("/settings/check-out", verifyToken, async (req, res) => {
       success: true,
       data: results,
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error("Error updating check-out settings:", error);
     res.status(500).json({
       success: false,
@@ -199,10 +199,9 @@ router.put("/settings/check-out", verifyToken, async (req, res) => {
  * Send custom notification (Admin only)
  * POST /api/notifications/send-custom
  */
-router.post("/send-custom", verifyToken, async (req, res) => {
+router.post("/send-custom", verifyAnyAuth, async (req: any, res) => {
   try {
     const { title, body, recipients, userIds } = req.body;
-    const userId = req.user.user_id;
     const role = req.user.role;
 
     if (role !== "Admin" && role !== "admin") {
@@ -242,7 +241,7 @@ router.post("/send-custom", verifyToken, async (req, res) => {
     }
 
     res.json(result);
-  } catch (error) {
+  } catch (error: any) {
     console.error("Error sending custom notification:", error);
     res.status(500).json({
       success: false,
@@ -255,11 +254,10 @@ router.post("/send-custom", verifyToken, async (req, res) => {
  * Get notification logs (Admin only)
  * GET /api/notifications/logs
  */
-router.get("/logs", verifyToken, async (req, res) => {
+router.get("/logs", verifyAnyAuth, async (req: any, res) => {
   try {
-    const userId = req.user.user_id;
     const role = req.user.role;
-    const { page, limit, type, user_id } = req.query;
+    const { page, limit, type, user_id }: any = req.query;
 
     if (role !== "Admin" && role !== "admin") {
       return res.status(403).json({
@@ -279,7 +277,7 @@ router.get("/logs", verifyToken, async (req, res) => {
       success: true,
       ...logs,
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error("Error getting notification logs:", error);
     res.status(500).json({
       success: false,
@@ -292,7 +290,7 @@ router.get("/logs", verifyToken, async (req, res) => {
  * Get user notification preferences
  * GET /api/notifications/preferences
  */
-router.get("/preferences", verifyToken, async (req, res) => {
+router.get("/preferences", verifyAnyAuth, async (req: any, res) => {
   try {
     const userId = req.user.user_id;
     const preferences =
@@ -302,7 +300,7 @@ router.get("/preferences", verifyToken, async (req, res) => {
       success: true,
       data: preferences,
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error("Error getting user preferences:", error);
     res.status(500).json({
       success: false,
@@ -315,7 +313,7 @@ router.get("/preferences", verifyToken, async (req, res) => {
  * Update user notification preferences
  * PUT /api/notifications/preferences
  */
-router.put("/preferences", verifyToken, async (req, res) => {
+router.put("/preferences", verifyAnyAuth, async (req: any, res) => {
   try {
     const userId = req.user.user_id;
     const { attendance_notifications_enabled } = req.body;
@@ -329,7 +327,7 @@ router.put("/preferences", verifyToken, async (req, res) => {
       success: true,
       data: preferences,
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error("Error updating user preferences:", error);
     res.status(500).json({
       success: false,
@@ -342,9 +340,8 @@ router.put("/preferences", verifyToken, async (req, res) => {
  * Trigger attendance notifications manually (Admin only, for testing)
  * POST /api/notifications/trigger-attendance
  */
-router.post("/trigger-attendance", verifyToken, async (req, res) => {
+router.post("/trigger-attendance", verifyAnyAuth, async (req: any, res) => {
   try {
-    const userId = req.user.user_id;
     const role = req.user.role;
     const { type } = req.body; // 'check-in' or 'check-out'
 
@@ -370,7 +367,7 @@ router.post("/trigger-attendance", verifyToken, async (req, res) => {
     }
 
     res.json(result);
-  } catch (error) {
+  } catch (error: any) {
     console.error("Error triggering attendance notifications:", error);
     res.status(500).json({
       success: false,
