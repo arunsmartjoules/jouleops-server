@@ -1,6 +1,6 @@
 import express from "express";
 import usersController from "../controllers/usersController.ts";
-import { verifyToken, verifyApiKey } from "../middleware/auth.ts";
+import { verifyAnyAuth } from "../middleware/auth.ts";
 
 const router = express.Router();
 
@@ -9,16 +9,16 @@ const router = express.Router();
  * Base path: /api/users
  */
 
-router.post("/", verifyToken, usersController.create);
-router.get("/", verifyToken, usersController.getAll);
-router.get("/phone/:phone", verifyApiKey, usersController.getByPhone);
-router.get("/site/:siteCode", verifyToken, usersController.getBySite);
-router.get("/:userId", verifyToken, usersController.getById);
-router.put("/:userId", verifyToken, usersController.update);
-router.delete("/:userId", verifyToken, usersController.remove);
+router.post("/", verifyAnyAuth, usersController.create);
+router.get("/", verifyAnyAuth, usersController.getAll);
+router.get("/phone/:phone", verifyAnyAuth, usersController.getByPhone);
+router.get("/site/:siteCode", verifyAnyAuth, usersController.getBySite);
+router.get("/:userId", verifyAnyAuth, usersController.getById);
+router.put("/:userId", verifyAnyAuth, usersController.update);
+router.delete("/:userId", verifyAnyAuth, usersController.remove);
 
 // Bulk operations
-router.post("/bulk-update", verifyToken, usersController.bulkUpdate);
-router.post("/bulk-delete", verifyToken, usersController.bulkRemove);
+router.post("/bulk-update", verifyAnyAuth, usersController.bulkUpdate);
+router.post("/bulk-delete", verifyAnyAuth, usersController.bulkRemove);
 
 export default router;

@@ -1,6 +1,6 @@
 import express from "express";
 import tasksController from "../controllers/tasksController.ts";
-import { verifyToken, verifyApiKey, requireRole } from "../middleware/auth.ts";
+import { verifyAnyAuth, requireRole } from "../middleware/auth.ts";
 
 const router = express.Router();
 
@@ -9,26 +9,26 @@ const router = express.Router();
  * Base path: /api/tasks
  */
 
-router.post("/", verifyApiKey, tasksController.create);
-router.get("/site/:siteCode", verifyToken, tasksController.getBySite);
+router.post("/", verifyAnyAuth, tasksController.create);
+router.get("/site/:siteCode", verifyAnyAuth, tasksController.getBySite);
 router.get(
   "/site/:siteCode/due-today",
-  verifyToken,
+  verifyAnyAuth,
   tasksController.getDueToday,
 );
-router.get("/site/:siteCode/stats", verifyToken, tasksController.getStats);
-router.get("/user/:userId", verifyToken, tasksController.getByUser);
-router.get("/:taskId", verifyToken, tasksController.getById);
+router.get("/site/:siteCode/stats", verifyAnyAuth, tasksController.getStats);
+router.get("/user/:userId", verifyAnyAuth, tasksController.getByUser);
+router.get("/:taskId", verifyAnyAuth, tasksController.getById);
 router.put(
   "/:taskId",
-  verifyToken,
+  verifyAnyAuth,
   requireRole(["admin", "superadmin"]),
   tasksController.update,
 );
-router.patch("/:taskId/status", verifyToken, tasksController.updateStatus);
+router.patch("/:taskId/status", verifyAnyAuth, tasksController.updateStatus);
 router.delete(
   "/:taskId",
-  verifyToken,
+  verifyAnyAuth,
   requireRole(["admin", "superadmin"]),
   tasksController.remove,
 );

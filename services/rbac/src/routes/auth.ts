@@ -1,6 +1,6 @@
 import express from "express";
 import authController from "../controllers/authController.ts";
-import { verifyToken } from "../middleware/auth.ts";
+import { verifyAnyAuth } from "../middleware/auth.ts";
 
 import {
   validate,
@@ -19,15 +19,15 @@ const router = express.Router();
 router.post("/login", validate(loginSchema), authController.login);
 router.post("/signup", validate(signupSchema), authController.signup);
 router.post("/reset-password", authController.resetPassword);
-router.post("/logout", verifyToken, authController.logout);
+router.post("/logout", verifyAnyAuth, authController.logout);
 router.post(
   "/change-password",
-  verifyToken,
+  verifyAnyAuth,
   validate(changePasswordSchema),
   authController.changePassword,
 );
 router.post("/refresh", authController.refreshToken);
-router.get("/profile", verifyToken, authController.getProfile);
+router.get("/profile", verifyAnyAuth, authController.getProfile);
 
 // Email verification routes
 router.post("/send-verification", authController.sendVerificationCode);

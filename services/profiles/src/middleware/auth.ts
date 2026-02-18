@@ -115,7 +115,7 @@ export const verifyApiKey = async (
   next: NextFunction,
 ) => {
   const apiKey = req.headers["x-api-key"];
-  const validKey = process.env.INTERNAL_API_KEY || "jouleops-internal-key";
+  const validKey = process.env.INTERNAL_API_KEY || "smartops-internal-key";
 
   if (!apiKey || apiKey !== validKey) {
     return res.status(401).json({
@@ -124,6 +124,23 @@ export const verifyApiKey = async (
     });
   }
   next();
+};
+
+/**
+ * Combined auth - accepts either JWT or API key
+ */
+export const verifyAnyAuth = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
+  // Check for API key first
+  if (req.headers["x-api-key"]) {
+    return verifyApiKey(req, res, next);
+  }
+
+  // Fall back to JWT
+  return verifyToken(req as AuthRequest, res, next);
 };
 
 /**

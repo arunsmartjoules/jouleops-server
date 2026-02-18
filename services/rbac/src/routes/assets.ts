@@ -61,7 +61,7 @@ router.patch(
 );
 router.delete(
   "/:assetId",
-  verifyToken,
+  verifyAnyAuth,
   requireRole(["admin", "superadmin"]),
   assetsController.remove,
 );

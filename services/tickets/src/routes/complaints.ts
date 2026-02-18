@@ -26,18 +26,19 @@ router.get("/", verifyAnyAuth, complaintsController.getAll);
 // Protected routes (require API key for external systems)
 router.post(
   "/",
-  verifyApiKey,
+  verifyAnyAuth,
   validate(createComplaintSchema),
   complaintsController.create,
 );
+// Protected routes (accepts JWT or API Key)
 router.get(
   "/message/:messageId",
-  verifyApiKey,
+  verifyAnyAuth,
   complaintsController.getByMessageId,
 );
 router.get(
   "/group/:groupId/recent",
-  verifyApiKey,
+  verifyAnyAuth,
   complaintsController.getRecentByGroup,
 );
 

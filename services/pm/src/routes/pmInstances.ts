@@ -1,11 +1,6 @@
 import express from "express";
 import pmInstancesController from "../controllers/pmInstancesController.ts";
-import {
-  verifyToken,
-  verifyApiKey,
-  verifyAnyAuth,
-  requireRole,
-} from "../middleware/auth.ts";
+import { verifyAnyAuth, requireRole } from "../middleware/auth.ts";
 
 const router = express.Router();
 
@@ -15,7 +10,7 @@ const router = express.Router();
  */
 
 router.get("/", verifyAnyAuth, pmInstancesController.getAll);
-router.post("/", verifyApiKey, pmInstancesController.create);
+router.post("/", verifyAnyAuth, pmInstancesController.create);
 router.get("/site/:siteCode", verifyAnyAuth, pmInstancesController.getBySite);
 router.get(
   "/site/:siteCode/pending",

@@ -78,6 +78,10 @@ export const getBySite = async (req: Request, res: Response) => {
       sortOrder,
       search,
       filters,
+      message_id,
+      group_id,
+      ticket_no,
+      id,
     } = req.query;
 
     const result = await complaintsRepository.getComplaintsBySite(siteCode, {
@@ -90,7 +94,8 @@ export const getBySite = async (req: Request, res: Response) => {
       sortBy: sortBy as string,
       sortOrder: sortOrder as "asc" | "desc",
       search: search as string,
-      filters: filters as string,
+      filters: (filters || []) as any,
+      ...({ message_id, group_id, ticket_no, id } as any),
     });
 
     return sendSuccess(res, result.data, { pagination: result.pagination });
