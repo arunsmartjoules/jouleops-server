@@ -45,24 +45,57 @@ export interface WhatsAppMessageLog {
 // --- Group Mappings ---
 
 /**
- * Get all WhatsApp group mappings
+ * Get WhatsApp group mappings with optional filters
  */
-export async function getMappings(): Promise<WhatsAppGroupMapping[]> {
-  const cacheKey = "whatsapp:mappings";
-  return cached(
-    cacheKey,
-    async () => {
-      const sql = `
-        SELECT wm.id, wm.site_code, wm.whatsapp_group_id, wm.whatsapp_group_name, wm.is_active, wm.created_at, wm.updated_at,
-               COALESCE(wm.site_name, s.name) as site_name
-        FROM whatsapp_group_mappings wm
-        LEFT JOIN sites s ON wm.site_code = s.site_code
-        ORDER BY site_name, wm.created_at DESC
-      `;
-      return query(sql);
-    },
-    CACHE_TTL,
-  );
+export async function getMappings(filters?: {
+  whatsapp_group_id?: string;
+  site_code?: string;
+}): Promise<WhatsAppGroupMapping[]> {
+  const hasFilters =
+    filters && (filters.whatsapp_group_id || filters.site_code);
+
+  if (!hasFilters) {
+    const cacheKey = "whatsapp:mappings";
+    return cached(
+      cacheKey,
+      async () => {
+        const sql = `
+          SELECT wm.id, wm.site_code, wm.whatsapp_group_id, wm.whatsapp_group_name, wm.is_active, wm.created_at, wm.updated_at,
+                 COALESCE(wm.site_name, s.name) as site_name
+          FROM whatsapp_group_mappings wm
+          LEFT JOIN sites s ON wm.site_code = s.site_code
+          ORDER BY site_name, wm.created_at DESC
+        `;
+        return query(sql);
+      },
+      CACHE_TTL,
+    );
+  }
+
+  // Handle filtering (bypass cache)
+  const whereClauses: string[] = [];
+  const params: any[] = [];
+
+  if (filters?.whatsapp_group_id) {
+    params.push(filters.whatsapp_group_id);
+    whereClauses.push(`wm.whatsapp_group_id = $${params.length}`);
+  }
+
+  if (filters?.site_code) {
+    params.push(filters.site_code);
+    whereClauses.push(`wm.site_code = $${params.length}`);
+  }
+
+  const sql = `
+    SELECT wm.id, wm.site_code, wm.whatsapp_group_id, wm.whatsapp_group_name, wm.is_active, wm.created_at, wm.updated_at,
+           COALESCE(wm.site_name, s.name) as site_name
+    FROM whatsapp_group_mappings wm
+    LEFT JOIN sites s ON wm.site_code = s.site_code
+    ${whereClauses.length > 0 ? "WHERE " + whereClauses.join(" AND ") : ""}
+    ORDER BY site_name, wm.created_at DESC
+  `;
+
+  return query(sql, params);
 }
 
 /**

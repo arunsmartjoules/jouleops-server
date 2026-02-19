@@ -26,7 +26,11 @@ interface AuthRequest extends Request {
 
 export const getAllMappings = async (req: Request, res: Response) => {
   try {
-    const mappings = await whatsappRepository.getMappings();
+    const { site_code, whatsapp_group_id } = req.query;
+    const mappings = await whatsappRepository.getMappings({
+      site_code: site_code as string,
+      whatsapp_group_id: whatsapp_group_id as string,
+    });
     return sendSuccess(res, mappings);
   } catch (error: any) {
     return sendServerError(res, error);
