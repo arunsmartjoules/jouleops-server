@@ -111,6 +111,10 @@ export interface GetComplaintsOptions {
   sortBy?: string;
   sortOrder?: "asc" | "desc";
   cursor?: string | null;
+  ticket_no?: string | null;
+  message_id?: string | null;
+  group_id?: string | null;
+  id?: string | null;
 }
 
 // ============================================================================
@@ -301,6 +305,32 @@ export async function getComplaintsBySite(
   }
   if (toDate) {
     filters.push({ fieldId: "created_at", operator: "<=", value: toDate });
+  }
+
+  // 3. Add explicit identifier filters
+  if (options.ticket_no) {
+    filters.push({
+      fieldId: "ticket_no",
+      operator: "=",
+      value: options.ticket_no,
+    });
+  }
+  if (options.message_id) {
+    filters.push({
+      fieldId: "message_id",
+      operator: "=",
+      value: options.message_id,
+    });
+  }
+  if (options.group_id) {
+    filters.push({
+      fieldId: "group_id",
+      operator: "=",
+      value: options.group_id,
+    });
+  }
+  if (options.id) {
+    filters.push({ fieldId: "id", operator: "=", value: options.id });
   }
 
   // 3. Build Query using shared utility

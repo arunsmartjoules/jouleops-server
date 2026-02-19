@@ -95,7 +95,10 @@ export const getBySite = async (req: Request, res: Response) => {
       sortOrder: sortOrder as "asc" | "desc",
       search: search as string,
       filters: (filters || []) as any,
-      ...({ message_id, group_id, ticket_no, id } as any),
+      message_id: message_id as string,
+      group_id: group_id as string,
+      ticket_no: ticket_no as string,
+      id: id as string,
     });
 
     return sendSuccess(res, result.data, { pagination: result.pagination });

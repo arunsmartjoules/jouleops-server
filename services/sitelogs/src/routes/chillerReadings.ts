@@ -16,6 +16,11 @@ const router = express.Router();
  */
 
 // Protected routes (accepts JWT or API Key)
+router.post(
+  "/bulk-delete",
+  verifyAnyAuth,
+  chillerReadingsController.bulkRemove,
+);
 router.get("/", verifyAnyAuth, chillerReadingsController.getAll);
 router.post(
   "/",

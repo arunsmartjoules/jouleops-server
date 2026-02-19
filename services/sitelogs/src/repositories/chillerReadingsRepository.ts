@@ -344,6 +344,23 @@ export async function deleteChillerReading(id: string): Promise<boolean> {
   return result !== null;
 }
 
+export async function deleteChillerReadings(
+  ids: string[],
+): Promise<{ count: number }> {
+  if (!ids || ids.length === 0) {
+    return { count: 0 };
+  }
+
+  const placeholders = ids.map((_, i) => `$${i + 1}`).join(", ");
+
+  const results = await query<{ id: string }>(
+    `DELETE FROM chiller_readings WHERE id IN (${placeholders}) RETURNING id`,
+    ids,
+  );
+
+  return { count: results.length };
+}
+
 /**
  * Get average readings for a chiller over a period
  * Uses SQL AVG() + cache-aside (5min TTL)
@@ -405,5 +422,6 @@ export default {
   getReadingsByDateShift,
   updateChillerReading,
   deleteChillerReading,
+  deleteChillerReadings,
   getChillerAverages,
 };

@@ -133,6 +133,15 @@ export const remove = asyncHandler(async (req: Request, res: Response) => {
   });
 });
 
+export const bulkRemove = asyncHandler(async (req: Request, res: Response) => {
+  const { ids } = req.body;
+  if (!ids || !Array.isArray(ids)) {
+    return sendError(res, "Invalid IDs provided");
+  }
+  const result = await chillerReadingsRepository.deleteChillerReadings(ids);
+  return sendSuccess(res, result);
+});
+
 export const getAverages = asyncHandler(async (req: Request, res: Response) => {
   const { chillerId } = req.params;
   if (!chillerId) {
@@ -168,5 +177,6 @@ export default {
   getByDateShift,
   update,
   remove,
+  bulkRemove,
   getAverages,
 };
