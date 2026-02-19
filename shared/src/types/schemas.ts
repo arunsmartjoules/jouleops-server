@@ -143,10 +143,11 @@ export const changePasswordSchema = z.object({
  * Ticket/Complaint Schemas
  */
 export const createComplaintSchema = z.object({
-  ticket_no: z.string().min(1),
+  ticket_no: z.string().optional(),
   site_code: z.string().min(1), // Relaxed from UUID since it can be alphanumeric code
   title: z.string().min(1),
   status: z.string().optional().default("Open"),
+  priority: z.string().optional().default("Medium"),
   category: z.string().optional(),
   location: z.string().optional(),
   area_asset: z.string().optional(),

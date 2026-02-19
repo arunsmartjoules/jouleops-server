@@ -29,6 +29,7 @@ export interface Complaint {
   site_name?: string;
   title: string;
   status: string;
+  priority?: string;
   category?: string;
   location?: string;
   area_asset?: string;
@@ -69,6 +70,7 @@ export interface CreateComplaintInput {
   site_code: string;
   title: string;
   status?: string;
+  priority?: string;
   category?: string;
   location?: string;
   area_asset?: string;
@@ -87,6 +89,7 @@ export interface CreateComplaintInput {
 export interface UpdateComplaintInput {
   title?: string;
   status?: string;
+  priority?: string;
   category?: string;
   location?: string;
   area_asset?: string;
