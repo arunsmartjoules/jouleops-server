@@ -129,7 +129,7 @@ app.use(
 );
 app.use(
   createProxyMiddleware(
-    proxyOptions(SERVICES.tickets, "/api/complaint-categories"),
+    proxyOptions(SERVICES.tickets, "/api/complaint_category"),
   ),
 );
 app.use(

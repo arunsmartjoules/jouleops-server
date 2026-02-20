@@ -44,7 +44,7 @@ export const getById = async (req: Request, res: Response) => {
 
 export const create = async (req: Request, res: Response) => {
   try {
-    const { category, description } = req.body;
+    const { category } = req.body;
 
     if (!category) {
       return sendError(res, "Category name is required");
@@ -52,7 +52,6 @@ export const create = async (req: Request, res: Response) => {
 
     const newCategory = await complaintCategoryRepository.createCategory({
       category,
-      description,
     });
 
     return sendCreated(res, newCategory);
@@ -67,13 +66,12 @@ export const update = async (req: Request, res: Response) => {
     if (!id) {
       return sendError(res, "Category ID is required");
     }
-    const { category, description } = req.body;
+    const { category } = req.body;
 
     const updatedCategory = await complaintCategoryRepository.updateCategory(
       id,
       {
         category,
-        description,
       },
     );
 
