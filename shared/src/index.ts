@@ -48,6 +48,7 @@ export {
 export { AppError } from "./utils/AppError.ts";
 export { asyncHandler } from "./utils/asyncHandler.ts";
 export { logger, logWithRequest } from "./utils/logger.ts";
+export { logActivity, type LogActivityInput } from "./utils/activityLogger.ts";
 export { setupGracefulShutdown } from "./utils/shutdown.ts";
 
 // Schemas

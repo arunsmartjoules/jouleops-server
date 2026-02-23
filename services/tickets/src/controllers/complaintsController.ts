@@ -14,18 +14,11 @@ import {
   sendError,
   sendNotFound,
   sendServerError,
+  logActivity,
+  type AuthRequest,
 } from "@jouleops/shared";
 
 const VALID_STATUSES = ["Open", "Inprogress", "Resolved", "Cancelled"];
-
-interface AuthRequest extends Request {
-  user?: {
-    user_id: string;
-    full_name?: string;
-    name?: string;
-    email?: string;
-  };
-}
 
 export const create = async (req: Request, res: Response) => {
   try {
@@ -46,6 +39,21 @@ export const create = async (req: Request, res: Response) => {
     forwardComplaintToFieldproxy(complaint).catch((err) => {
       console.error("Fieldproxy forward failed:", err);
     });
+
+    logActivity({
+      user_id: (req as AuthRequest).user?.user_id,
+      action: "CREATE_COMPLAINT",
+      module: "complaints",
+      description: `Complaint ${complaint.ticket_no} created for site ${complaint.site_code}`,
+      ip_address: req.ip,
+      metadata: {
+        ticket_no: complaint.ticket_no,
+        site_code: complaint.site_code,
+        title: complaint.title,
+        category: complaint.category,
+        priority: complaint.priority,
+      },
+    }).catch(() => {});
 
     return sendCreated(res, complaint, "Complaint created successfully");
   } catch (error: any) {
@@ -162,6 +170,18 @@ export const update = async (req: AuthRequest, res: Response) => {
       req.body,
     );
 
+    logActivity({
+      user_id: req.user?.user_id,
+      action: "UPDATE_COMPLAINT",
+      module: "complaints",
+      description: `Complaint ${existing.ticket_no} updated`,
+      ip_address: req.ip,
+      metadata: {
+        ticket_no: existing.ticket_no,
+        updated_fields: Object.keys(req.body),
+      },
+    }).catch(() => {});
+
     return sendSuccess(res, complaint, {
       message: "Complaint updated successfully",
     });
@@ -214,6 +234,20 @@ export const updateStatus = async (req: AuthRequest, res: Response) => {
       remarks,
     );
 
+    logActivity({
+      user_id: req.user?.user_id,
+      action: "UPDATE_COMPLAINT_STATUS",
+      module: "complaints",
+      description: `Complaint ${existing.ticket_no} status changed from ${existing.status} to ${status}`,
+      ip_address: req.ip,
+      metadata: {
+        ticket_no: existing.ticket_no,
+        old_status: existing.status,
+        new_status: status,
+        remarks: remarks || null,
+      },
+    }).catch(() => {});
+
     return sendSuccess(res, complaint, {
       message: "Status updated successfully",
     });
@@ -233,6 +267,18 @@ export const remove = async (req: Request, res: Response) => {
     }
 
     await complaintsRepository.deleteComplaint(ticketId);
+
+    logActivity({
+      user_id: (req as AuthRequest).user?.user_id,
+      action: "DELETE_COMPLAINT",
+      module: "complaints",
+      description: `Complaint ${existing.ticket_no} deleted`,
+      ip_address: req.ip,
+      metadata: {
+        ticket_no: existing.ticket_no,
+        site_code: existing.site_code,
+      },
+    }).catch(() => {});
 
     return sendSuccess(res, null, {
       message: "Complaint deleted successfully",
