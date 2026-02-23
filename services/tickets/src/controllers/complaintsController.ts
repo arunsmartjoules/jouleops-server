@@ -36,9 +36,31 @@ export const create = async (req: Request, res: Response) => {
     });
 
     // Forward to Fieldproxy — fire and forget, do not block the response
-    forwardComplaintToFieldproxy(complaint).catch((err) => {
-      console.error("Fieldproxy forward failed:", err);
-    });
+    forwardComplaintToFieldproxy(complaint)
+      .then(() => {
+        logActivity({
+          action: "FORWARD_TO_FIELDPROXY",
+          module: "complaints",
+          description: `Complaint ${complaint.ticket_no} forwarded to Fieldproxy successfully`,
+          metadata: {
+            ticket_no: complaint.ticket_no,
+            site_code: complaint.site_code,
+          },
+        }).catch(() => {});
+      })
+      .catch((err: Error) => {
+        console.error("Fieldproxy forward failed:", err);
+        logActivity({
+          action: "FORWARD_TO_FIELDPROXY_FAILED",
+          module: "complaints",
+          description: `Failed to forward complaint ${complaint.ticket_no} to Fieldproxy: ${err.message}`,
+          metadata: {
+            ticket_no: complaint.ticket_no,
+            site_code: complaint.site_code,
+            error: err.message,
+          },
+        }).catch(() => {});
+      });
 
     logActivity({
       user_id: (req as AuthRequest).user?.user_id,

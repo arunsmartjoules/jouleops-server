@@ -140,6 +140,7 @@ app.use(createProxyMiddleware(proxyOptions(SERVICES.rbac, "/api/admin")));
 app.use(createProxyMiddleware(proxyOptions(SERVICES.rbac, "/api/site-users")));
 app.use(createProxyMiddleware(proxyOptions(SERVICES.rbac, "/api/sites")));
 app.use(createProxyMiddleware(proxyOptions(SERVICES.rbac, "/api/assets")));
+app.use(createProxyMiddleware(proxyOptions(SERVICES.rbac, "/api/logs")));
 app.use(createProxyMiddleware(proxyOptions(SERVICES.profiles, "/api/users")));
 app.use(
   createProxyMiddleware(proxyOptions(SERVICES.sitelogs, "/api/site-logs")),

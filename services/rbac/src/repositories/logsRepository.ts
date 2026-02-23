@@ -163,7 +163,7 @@ export async function getAllLogs(
   // Data query
   params.push(limit, offset);
   const data = await query<ActivityLog>(
-    `SELECT al.*, u.full_name as user_name, u.email as user_email
+    `SELECT al.*, u.name as user_name, u.email as user_email
      FROM activity_logs al
      LEFT JOIN users u ON al.user_id = u.user_id
      ${whereClause}
