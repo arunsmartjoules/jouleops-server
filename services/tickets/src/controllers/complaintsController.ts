@@ -6,6 +6,7 @@
  */
 
 import complaintsRepository from "../repositories/complaintsRepository.ts";
+import { forwardComplaintToFieldproxy } from "../services/fieldproxyService.ts";
 import type { Request, Response } from "express";
 import {
   sendSuccess,
@@ -39,6 +40,11 @@ export const create = async (req: Request, res: Response) => {
     const complaint = await complaintsRepository.createComplaint({
       ...req.body,
       ticket_no,
+    });
+
+    // Forward to Fieldproxy — fire and forget, do not block the response
+    forwardComplaintToFieldproxy(complaint).catch((err) => {
+      console.error("Fieldproxy forward failed:", err);
     });
 
     return sendCreated(res, complaint, "Complaint created successfully");
