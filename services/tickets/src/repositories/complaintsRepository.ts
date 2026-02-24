@@ -96,6 +96,7 @@ export interface UpdateComplaintInput {
   assigned_to?: string;
   remarks?: string;
   internal_remarks?: string;
+  responded_at?: Date;
   resolved_at?: Date;
   end_datetime?: Date;
   reason?: string;
@@ -307,7 +308,16 @@ export async function getComplaintsBySite(
     filters.push({ fieldId: "created_at", operator: ">=", value: fromDate });
   }
   if (toDate) {
-    filters.push({ fieldId: "created_at", operator: "<=", value: toDate });
+    let normalizedToDate = toDate;
+    // If toDate is a simple date string (YYYY-MM-DD), append end of day time
+    if (typeof toDate === "string" && /^\d{4}-\d{2}-\d{2}$/.test(toDate)) {
+      normalizedToDate = `${toDate} 23:59:59.999`;
+    }
+    filters.push({
+      fieldId: "created_at",
+      operator: "<=",
+      value: normalizedToDate,
+    });
   }
 
   // 3. Add explicit identifier filters
@@ -439,6 +449,23 @@ export async function updateComplaint(
   id: string,
   updateData: UpdateComplaintInput,
 ): Promise<Complaint> {
+  // 1. Get current state and verify existence (handles flexible ID)
+  const current = await getComplaint(id);
+  if (!current) {
+    throw new Error("Complaint not found");
+  }
+
+  // Automated Timestamps
+  if (updateData.status === "Inprogress") {
+    // Only set responded_at if it's currently null.
+    // We check current state directly.
+    if (!current.responded_at) {
+      updateData.responded_at = new Date();
+    }
+  } else if (updateData.status === "Resolved") {
+    updateData.resolved_at = new Date();
+  }
+
   const entries = Object.entries(updateData).filter(
     ([, value]) => value !== undefined,
   );
@@ -450,6 +477,7 @@ export async function updateComplaint(
   const setClauses = entries.map(([key], i) => `${key} = $${i + 1}`);
   const values = entries.map(([, value]) => value);
 
+  // Always use the real UUID (current.id) for the update
   const sql = `
     UPDATE complaints
     SET ${setClauses.join(", ")}, updated_at = NOW()
@@ -457,7 +485,7 @@ export async function updateComplaint(
     RETURNING *
   `;
 
-  const complaint = await queryOne<Complaint>(sql, [...values, id]);
+  const complaint = await queryOne<Complaint>(sql, [...values, current.id]);
 
   if (!complaint) {
     throw new Error("Complaint not found");
@@ -487,8 +515,10 @@ export async function updateComplaintStatus(
 
   if (status === "Resolved") {
     updates.resolved_at = new Date();
-  } else if (status === "Closed") {
-    updates.closed_at = new Date();
+  } else if (status === "Inprogress") {
+    // Note: Inprogress logic here doesn't check for existing value
+    // but this function is now largely redundant compared to updateComplaint
+    updates.responded_at = new Date();
   }
 
   return updateComplaint(id, updates);
