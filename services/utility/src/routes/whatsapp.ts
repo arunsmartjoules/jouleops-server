@@ -9,6 +9,12 @@ const router = express.Router();
  * Base path: /api/whatsapp
  */
 
+// Channel routes
+router.get("/channels", verifyAnyAuth, whatsappController.getAllChannels);
+router.post("/channels", verifyAnyAuth, whatsappController.createChannel);
+router.put("/channels/:id", verifyAnyAuth, whatsappController.updateChannel);
+router.delete("/channels/:id", verifyAnyAuth, whatsappController.deleteChannel);
+
 // Mapping routes
 router.get("/mappings", verifyAnyAuth, whatsappController.getAllMappings);
 router.post("/mappings", verifyAnyAuth, whatsappController.createMapping);
@@ -22,9 +28,20 @@ router.post(
 
 // Template routes
 router.get("/templates", verifyAnyAuth, whatsappController.getAllTemplates);
+router.post("/templates", verifyAnyAuth, whatsappController.createTemplate);
+router.get(
+  "/templates/status/:status",
+  verifyAnyAuth,
+  whatsappController.getTemplateStatus,
+);
 router.put("/templates/:id", verifyAnyAuth, whatsappController.updateTemplate);
+router.delete(
+  "/templates/:id",
+  verifyAnyAuth,
+  whatsappController.deleteTemplate,
+);
 
-// Log routes
-router.get("/logs", verifyAnyAuth, whatsappController.getMessageLogs);
+// Sending routes
+router.post("/send", verifyAnyAuth, whatsappController.sendWhatsAppMessage);
 
 export default router;

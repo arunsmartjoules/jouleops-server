@@ -22,51 +22,47 @@ const buildKey = (prefix: string, id: string) => `${prefix}${id}`;
 
 export interface Asset {
   asset_id: string;
-  site_code: string;
+  site_id: string;
   asset_name: string;
+  category?: string;
   asset_type?: string;
+  equipment_type?: string;
   status: string;
+  criticality?: string;
   location?: string;
   floor?: string;
   make?: string;
   model?: string;
   serial_number?: string;
-  purchase_date?: Date;
-  warranty_end_date?: Date;
+  installation_date?: Date | string;
+  warranty_start_date?: Date | string;
+  warranty_end_date?: Date | string;
+  vendor_id?: string;
+  amc_cmc_provider?: string;
+  item_name?: string;
+  item_type?: string;
+  item_code?: string;
+  inventory_id?: string;
+  qr_id?: string;
+  area_type?: string;
+  area_floor_id?: string;
   specifications?: Record<string, any>;
+  created_by?: string;
+  updated_by?: string;
   created_at?: Date;
   updated_at?: Date;
 }
 
-export interface CreateAssetInput {
-  asset_id: string;
-  site_code: string;
+export interface CreateAssetInput extends Partial<
+  Omit<Asset, "id" | "created_at" | "updated_at">
+> {
+  site_id: string;
   asset_name: string;
-  asset_type?: string;
-  status?: string;
-  location?: string;
-  floor?: string;
-  make?: string;
-  model?: string;
-  serial_number?: string;
-  purchase_date?: Date;
-  warranty_end_date?: Date;
-  specifications?: Record<string, any>;
 }
 
-export interface UpdateAssetInput {
-  asset_name?: string;
-  asset_type?: string;
-  status?: string;
-  location?: string;
-  floor?: string;
-  make?: string;
-  model?: string;
-  serial_number?: string;
-  purchase_date?: Date;
-  warranty_end_date?: Date;
-  specifications?: Record<string, any>;
-}
+export interface UpdateAssetInput extends Partial<
+  Omit<Asset, "asset_id" | "id" | "created_at" | "updated_at">
+> {}
 
 export interface GetAssetsOptions {
   page?: number;
@@ -92,11 +88,25 @@ export interface AssetStats {
  * Create a new asset
  */
 export async function createAsset(data: CreateAssetInput): Promise<Asset> {
-  const columns = Object.keys(data).filter(
-    (k) => data[k as keyof CreateAssetInput] !== undefined,
+  const sanitizedData: any = { ...data };
+
+  // Auto-generate asset_id if not provided
+  if (!sanitizedData.asset_id) {
+    const randomNum = Math.floor(100000 + Math.random() * 900000);
+    sanitizedData.asset_id = `AST-${randomNum}`;
+  }
+
+  Object.keys(sanitizedData).forEach((key) => {
+    if (sanitizedData[key] === "") {
+      sanitizedData[key] = null;
+    }
+  });
+
+  const columns = Object.keys(sanitizedData).filter(
+    (k) => sanitizedData[k] !== undefined,
   );
   const values = columns.map((k) => {
-    const val = data[k as keyof CreateAssetInput];
+    const val = sanitizedData[k];
     return k === "specifications" && val ? JSON.stringify(val) : val;
   });
   const placeholders = columns.map((_, i) => `$${i + 1}`);
@@ -137,7 +147,7 @@ export async function getAssetById(assetId: string): Promise<Asset | null> {
  * Get assets by site with pagination and filtering
  */
 export async function getAssetsBySite(
-  siteCode: string,
+  siteId: string,
   options: GetAssetsOptions = {},
 ): Promise<{
   data: Asset[];
@@ -164,9 +174,9 @@ export async function getAssetsBySite(
   const params: any[] = [];
   let paramIndex = 1;
 
-  if (siteCode !== "all") {
-    conditions.push(`site_code = $${paramIndex}`);
-    params.push(siteCode);
+  if (siteId !== "all") {
+    conditions.push(`site_id = $${paramIndex}`);
+    params.push(siteId);
     paramIndex++;
   }
 
@@ -223,14 +233,14 @@ export async function getAssetsBySite(
  * Get assets by type for a site
  */
 export async function getAssetsByType(
-  siteCode: string,
+  siteId: string,
   assetType: string,
 ): Promise<Asset[]> {
   return query<Asset>(
     `SELECT * FROM assets
-     WHERE site_code = $1 AND asset_type = $2 AND status = 'Active'
+     WHERE site_id = $1 AND asset_type = $2 AND status = 'Active'
      ORDER BY asset_name ASC`,
-    [siteCode, assetType],
+    [siteId, assetType],
   );
 }
 
@@ -238,14 +248,14 @@ export async function getAssetsByType(
  * Get assets by location for a site
  */
 export async function getAssetsByLocation(
-  siteCode: string,
+  siteId: string,
   location: string,
 ): Promise<Asset[]> {
   return query<Asset>(
     `SELECT * FROM assets
-     WHERE site_code = $1 AND location ILIKE $2
+     WHERE site_id = $1 AND location ILIKE $2
      ORDER BY asset_name ASC`,
-    [siteCode, `%${location}%`],
+    [siteId, `%${location}%`],
   );
 }
 
@@ -253,30 +263,28 @@ export async function getAssetsByLocation(
  * Search assets within a site
  */
 export async function searchAssets(
-  siteCode: string,
+  siteId: string,
   searchTerm: string,
 ): Promise<Asset[]> {
   return query<Asset>(
     `SELECT * FROM assets
-     WHERE site_code = $1
+     WHERE site_id = $1
        AND (asset_name ILIKE $2 OR asset_id ILIKE $2 OR location ILIKE $2)
      ORDER BY asset_name ASC
      LIMIT 20`,
-    [siteCode, `%${searchTerm}%`],
+    [siteId, `%${searchTerm}%`],
   );
 }
 
 /**
  * Get assets under warranty
  */
-export async function getAssetsUnderWarranty(
-  siteCode: string,
-): Promise<Asset[]> {
+export async function getAssetsUnderWarranty(siteId: string): Promise<Asset[]> {
   return query<Asset>(
     `SELECT * FROM assets
-     WHERE site_code = $1 AND warranty_end_date >= CURRENT_DATE
+     WHERE site_id = $1 AND warranty_end_date >= CURRENT_DATE
      ORDER BY warranty_end_date ASC`,
-    [siteCode],
+    [siteId],
   );
 }
 
@@ -284,16 +292,16 @@ export async function getAssetsUnderWarranty(
  * Get assets with warranty expiring within N days
  */
 export async function getAssetsWarrantyExpiring(
-  siteCode: string,
+  siteId: string,
   days: number = 30,
 ): Promise<Asset[]> {
   return query<Asset>(
     `SELECT * FROM assets
-     WHERE site_code = $1
+     WHERE site_id = $1
        AND warranty_end_date >= CURRENT_DATE
        AND warranty_end_date <= CURRENT_DATE + $2::integer
      ORDER BY warranty_end_date ASC`,
-    [siteCode, days],
+    [siteId, days],
   );
 }
 
@@ -301,11 +309,20 @@ export async function getAssetsWarrantyExpiring(
  * Update an asset
  */
 export async function updateAsset(
-  assetId: string,
+  asset_id: string,
   updateData: UpdateAssetInput,
 ): Promise<Asset> {
-  const entries = Object.entries(updateData).filter(
-    ([, value]) => value !== undefined,
+  const sanitizedData: any = { ...updateData };
+  Object.keys(sanitizedData).forEach((key) => {
+    if (sanitizedData[key] === "") {
+      sanitizedData[key] = null;
+    }
+  });
+
+  const entries = Object.entries(sanitizedData).filter(
+    ([key, value]) =>
+      value !== undefined &&
+      !["updated_at", "created_at", "asset_id", "id"].includes(key),
   );
 
   if (entries.length === 0) {
@@ -324,14 +341,14 @@ export async function updateAsset(
     RETURNING *
   `;
 
-  const asset = await queryOne<Asset>(sql, [...values, assetId]);
+  const asset = await queryOne<Asset>(sql, [...values, asset_id]);
 
   if (!asset) {
     throw new Error("Asset not found");
   }
 
   // Invalidate cache
-  await del(buildKey(CACHE_PREFIX.ASSET, assetId));
+  await del(buildKey(CACHE_PREFIX.ASSET, asset_id));
 
   return asset;
 }
@@ -340,22 +357,22 @@ export async function updateAsset(
  * Update asset status
  */
 export async function updateAssetStatus(
-  assetId: string,
+  asset_id: string,
   status: string,
 ): Promise<Asset> {
-  return updateAsset(assetId, { status });
+  return updateAsset(asset_id, { status });
 }
 
 /**
  * Delete an asset
  */
-export async function deleteAsset(assetId: string): Promise<boolean> {
+export async function deleteAsset(asset_id: string): Promise<boolean> {
   const result = await queryOne<{ asset_id: string }>(
     `DELETE FROM assets WHERE asset_id = $1 RETURNING asset_id`,
-    [assetId],
+    [asset_id],
   );
 
-  await del(buildKey(CACHE_PREFIX.ASSET, assetId));
+  await del(buildKey(CACHE_PREFIX.ASSET, asset_id));
 
   return result !== null;
 }
@@ -363,10 +380,10 @@ export async function deleteAsset(assetId: string): Promise<boolean> {
 /**
  * Get asset statistics for a site
  */
-export async function getAssetStats(siteCode: string): Promise<AssetStats> {
+export async function getAssetStats(siteId: string): Promise<AssetStats> {
   const data = await query<{ status: string; asset_type: string | null }>(
-    `SELECT status, asset_type FROM assets WHERE site_code = $1`,
-    [siteCode],
+    `SELECT status, asset_type FROM assets WHERE site_id = $1`,
+    [siteId],
   );
 
   const stats: AssetStats = {

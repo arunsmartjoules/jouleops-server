@@ -9,12 +9,23 @@ import { cached, del as cacheDel } from "@jouleops/shared";
 
 const CACHE_TTL = 600; // 10 minutes
 
+export interface WhatsAppChannel {
+  id: string;
+  channel_name: string;
+  api_token: string;
+  is_active?: boolean;
+  created_at?: Date;
+  updated_at?: Date;
+}
+
 export interface WhatsAppGroupMapping {
   id: string; // Changed from number to string (UUID)
   site_code?: string;
   site_name?: string;
   whatsapp_group_id: string;
   whatsapp_group_name?: string;
+  channel_id?: string;
+  channel_name?: string;
   is_active?: boolean;
   created_at?: Date;
   updated_at?: Date;
@@ -42,6 +53,82 @@ export interface WhatsAppMessageLog {
   metadata?: any;
 }
 
+// --- Channels ---
+
+/**
+ * Get all WhatsApp channels
+ */
+export async function getChannels(): Promise<WhatsAppChannel[]> {
+  const sql = `
+    SELECT id, channel_name, api_token, is_active, created_at, updated_at
+    FROM whatsapp_channels
+    ORDER BY created_at ASC
+  `;
+  return query(sql);
+}
+
+/**
+ * Create a new channel
+ */
+export async function createChannel(
+  data: Partial<WhatsAppChannel>,
+): Promise<WhatsAppChannel> {
+  const sql = `
+    INSERT INTO whatsapp_channels (channel_name, api_token, is_active, created_at, updated_at)
+    VALUES ($1, $2, $3, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+    RETURNING *
+  `;
+  const result = await queryOne<WhatsAppChannel>(sql, [
+    data.channel_name,
+    data.api_token,
+    data.is_active ?? true,
+  ]);
+  return result!;
+}
+
+/**
+ * Update a channel
+ */
+export async function updateChannel(
+  id: string,
+  data: Partial<WhatsAppChannel>,
+): Promise<WhatsAppChannel> {
+  const setClauses: string[] = ["updated_at = CURRENT_TIMESTAMP"];
+  const params: any[] = [];
+
+  if (data.channel_name !== undefined) {
+    params.push(data.channel_name);
+    setClauses.push(`channel_name = $${params.length}`);
+  }
+
+  if (data.api_token !== undefined) {
+    params.push(data.api_token);
+    setClauses.push(`api_token = $${params.length}`);
+  }
+
+  if (data.is_active !== undefined) {
+    params.push(data.is_active);
+    setClauses.push(`is_active = $${params.length}`);
+  }
+
+  params.push(id);
+  const sql = `
+    UPDATE whatsapp_channels
+    SET ${setClauses.join(", ")}
+    WHERE id = $${params.length}
+    RETURNING *
+  `;
+  return queryOne<WhatsAppChannel>(sql, params) as Promise<WhatsAppChannel>;
+}
+
+/**
+ * Delete a channel
+ */
+export async function deleteChannel(id: string): Promise<void> {
+  const sql = `DELETE FROM whatsapp_channels WHERE id = $1`;
+  await query(sql, [id]);
+}
+
 // --- Group Mappings ---
 
 /**
@@ -60,10 +147,12 @@ export async function getMappings(filters?: {
       cacheKey,
       async () => {
         const sql = `
-          SELECT wm.id, wm.site_code, wm.whatsapp_group_id, wm.whatsapp_group_name, wm.is_active, wm.created_at, wm.updated_at,
-                 COALESCE(wm.site_name, s.name) as site_name
+          SELECT wm.id, wm.site_code, wm.whatsapp_group_id, wm.whatsapp_group_name, wm.channel_id, wm.is_active, wm.created_at, wm.updated_at,
+                 COALESCE(wm.site_name, s.name) as site_name,
+                 c.channel_name
           FROM whatsapp_group_mappings wm
           LEFT JOIN sites s ON wm.site_code = s.site_code
+          LEFT JOIN whatsapp_channels c ON wm.channel_id = c.id
           ORDER BY site_name, wm.created_at DESC
         `;
         return query(sql);
@@ -87,10 +176,12 @@ export async function getMappings(filters?: {
   }
 
   const sql = `
-    SELECT wm.id, wm.site_code, wm.whatsapp_group_id, wm.whatsapp_group_name, wm.is_active, wm.created_at, wm.updated_at,
-           COALESCE(wm.site_name, s.name) as site_name
+    SELECT wm.id, wm.site_code, wm.whatsapp_group_id, wm.whatsapp_group_name, wm.channel_id, wm.is_active, wm.created_at, wm.updated_at,
+           COALESCE(wm.site_name, s.name) as site_name,
+           c.channel_name
     FROM whatsapp_group_mappings wm
     LEFT JOIN sites s ON wm.site_code = s.site_code
+    LEFT JOIN whatsapp_channels c ON wm.channel_id = c.id
     ${whereClauses.length > 0 ? "WHERE " + whereClauses.join(" AND ") : ""}
     ORDER BY site_name, wm.created_at DESC
   `;
@@ -105,14 +196,15 @@ export async function createMapping(
   data: Partial<WhatsAppGroupMapping>,
 ): Promise<WhatsAppGroupMapping> {
   const sql = `
-    INSERT INTO whatsapp_group_mappings (site_code, whatsapp_group_id, whatsapp_group_name, is_active, created_at, updated_at)
-    VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+    INSERT INTO whatsapp_group_mappings (site_code, whatsapp_group_id, whatsapp_group_name, channel_id, is_active, created_at, updated_at)
+    VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
     RETURNING *
   `;
   const result = await queryOne<WhatsAppGroupMapping>(sql, [
     data.site_code,
     data.whatsapp_group_id,
     data.whatsapp_group_name,
+    data.channel_id,
     data.is_active ?? true,
   ]);
 
@@ -159,6 +251,11 @@ export async function updateMapping(
   if (data.is_active !== undefined) {
     params.push(data.is_active);
     setClauses.push(`is_active = $${params.length}`);
+  }
+
+  if (data.channel_id !== undefined) {
+    params.push(data.channel_id);
+    setClauses.push(`channel_id = $${params.length}`);
   }
 
   params.push(id);
@@ -233,6 +330,44 @@ export async function getTemplates(): Promise<WhatsAppTemplate[]> {
 }
 
 /**
+ * Get a specific template by its key string
+ */
+export async function getTemplateByKey(
+  template_key: string,
+): Promise<WhatsAppTemplate | null> {
+  const sql = `
+    SELECT *
+    FROM whatsapp_message_templates
+    WHERE template_key = $1 AND (is_active = true OR is_active IS NULL)
+  `;
+  return queryOne<WhatsAppTemplate>(sql, [template_key]);
+}
+
+/**
+ * Resolve the active WhatsApp token and group ID for a specific site
+ */
+export async function getActiveMappingWithToken(
+  site_code: string,
+): Promise<{
+  whatsapp_group_id: string;
+  whatsapp_group_name: string;
+  api_token: string;
+} | null> {
+  const sql = `
+    SELECT wm.whatsapp_group_id, wm.whatsapp_group_name, c.api_token
+    FROM whatsapp_group_mappings wm
+    JOIN whatsapp_channels c ON wm.channel_id = c.id
+    WHERE wm.site_code = $1 AND wm.is_active = true AND c.is_active = true
+    LIMIT 1
+  `;
+  return queryOne<{
+    whatsapp_group_id: string;
+    whatsapp_group_name: string;
+    api_token: string;
+  }>(sql, [site_code]);
+}
+
+/**
  * Update a template
  */
 export async function updateTemplate(
@@ -282,53 +417,64 @@ export async function updateTemplate(
   return result!;
 }
 
-// --- Message Logs ---
-
 /**
- * Get recent message logs
+ * Create a new template
  */
-export async function getMessageLogs(
-  limit: number = 100,
-): Promise<WhatsAppMessageLog[]> {
+export async function createTemplate(
+  data: Partial<WhatsAppTemplate>,
+): Promise<WhatsAppTemplate> {
   const sql = `
-    SELECT *
-    FROM whatsapp_message_logs
-    ORDER BY sent_at DESC
-    LIMIT $1
+    INSERT INTO whatsapp_message_templates (
+      template_name, template_key, template_content, 
+      variables, is_active, created_by, updated_by
+    ) VALUES (
+      $1, $2, $3, $4, $5, $6, $7
+    ) RETURNING *
   `;
-  return query(sql, [limit]);
-}
 
-/**
- * Create a message log entry
- */
-export async function createMessageLog(
-  data: Partial<WhatsAppMessageLog>,
-): Promise<WhatsAppMessageLog> {
-  const sql = `
-    INSERT INTO whatsapp_message_logs (template_key, recipient, message_content, status, error_message, sent_at, metadata)
-    VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP, $6)
-    RETURNING *
-  `;
-  const result = await queryOne<WhatsAppMessageLog>(sql, [
+  const params = [
+    data.template_name || null,
     data.template_key,
-    data.recipient,
-    data.message_content,
-    data.status || "sent",
-    data.error_message,
-    data.metadata ? JSON.stringify(data.metadata) : null,
-  ]);
+    data.template_content,
+    data.variables ? JSON.stringify(data.variables) : null,
+    data.is_active !== undefined ? data.is_active : true,
+    (data as any).created_by || "system",
+    (data as any).created_by || "system",
+  ];
+
+  const result = await queryOne<WhatsAppTemplate>(sql, params);
+
+  // Invalidate cache
+  await cacheDel("whatsapp:templates");
+
   return result!;
 }
 
+/**
+ * Delete a template
+ */
+export async function deleteTemplate(id: number | string): Promise<void> {
+  const sql = `DELETE FROM whatsapp_message_templates WHERE id = $1`;
+  await query(sql, [id]);
+
+  // Invalidate cache
+  await cacheDel("whatsapp:templates");
+}
+
 export default {
+  getChannels,
+  createChannel,
+  updateChannel,
+  deleteChannel,
   getMappings,
   createMapping,
   updateMapping,
   deleteMapping,
-  getTemplates,
-  updateTemplate,
-  getMessageLogs,
-  createMessageLog,
   bulkDeleteMappings,
+  getTemplates,
+  getTemplateByKey,
+  createTemplate,
+  updateTemplate,
+  deleteTemplate,
+  getActiveMappingWithToken,
 };
