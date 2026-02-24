@@ -133,6 +133,11 @@ app.use(
   ),
 );
 app.use(
+  createProxyMiddleware(
+    proxyOptions(SERVICES.tickets, "/api/complaint-categories"),
+  ),
+);
+app.use(
   createProxyMiddleware(proxyOptions(SERVICES.attendance, "/api/attendance")),
 );
 app.use(createProxyMiddleware(proxyOptions(SERVICES.rbac, "/api/auth")));

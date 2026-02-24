@@ -130,29 +130,20 @@ export async function getUserSitesWithCoordinates(
   userId: string,
   projectType?: string,
 ): Promise<SiteWithCoordinates[]> {
-  // Get assigned site IDs
-  const userSites = await query<{ site_code: string }>(
-    `SELECT site_code FROM site_user WHERE user_id = $1`,
-    [userId],
-  );
-
-  if (!userSites || userSites.length === 0) return [];
-
-  const siteCodes = userSites.map((us) => us.site_code);
-  const placeholders = siteCodes.map((_, i) => `$${i + 1}`).join(", ");
-
-  let whereClause = `WHERE site_code IN (${placeholders})`;
-  const params: any[] = [...siteCodes];
+  const params: any[] = [userId];
+  let projectFilter = "";
 
   if (projectType) {
-    whereClause += ` AND project_type = $${params.length + 1}`;
+    projectFilter = ` AND s.project_type = $2`;
     params.push(projectType);
   }
 
-  // Fetch site details with coordinates
+  // Fetch site details by joining site_user and sites on site_id
   return query<SiteWithCoordinates>(
-    `SELECT site_code, name, address, city, state, latitude, longitude, radius, project_type
-     FROM sites ${whereClause}`,
+    `SELECT s.site_code, s.name, s.address, s.city, s.state, s.latitude, s.longitude, s.radius, s.project_type
+     FROM sites s
+     JOIN site_user su ON s.site_id = su.site_id
+     WHERE su.user_id = $1${projectFilter}`,
     params,
   );
 }

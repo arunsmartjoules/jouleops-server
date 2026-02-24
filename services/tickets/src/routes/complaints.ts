@@ -1,5 +1,7 @@
 import express from "express";
 import complaintsController from "../controllers/complaintsController.ts";
+import complaintImagesController from "../controllers/complaintImagesController.ts";
+
 import {
   verifyToken,
   verifyApiKey,
@@ -62,6 +64,19 @@ router.patch(
   validate(updateComplaintStatusSchema),
   complaintsController.updateStatus,
 );
+
+// Line items routes
+router.get(
+  "/:ticketId/line-items",
+  verifyAnyAuth,
+  complaintImagesController.getLineItems,
+);
+router.post(
+  "/:ticketId/line-items",
+  verifyAnyAuth,
+  complaintImagesController.addLineItem,
+);
+
 router.delete("/:ticketId", verifyAnyAuth, complaintsController.remove);
 
 export default router;

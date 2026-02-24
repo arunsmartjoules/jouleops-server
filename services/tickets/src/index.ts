@@ -49,6 +49,7 @@ app.get("/health", async (_req, res) => {
 app.use("/api/tickets", complaintsRoutes);
 app.use("/api/complaints", complaintsRoutes);
 app.use("/api/complaint_category", categoriesRoutes);
+app.use("/api/complaint-categories", categoriesRoutes);
 
 // 404 Handler
 app.use((req, res, next) => {

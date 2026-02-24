@@ -44,7 +44,7 @@ export async function getAll(options: {
 
   if (siteCode) {
     params.push(siteCode);
-    conditions.push(`su.site_code = $${params.length}`);
+    conditions.push(`s.site_code = $${params.length}`);
   }
 
   if (userId) {
@@ -67,7 +67,7 @@ export async function getAll(options: {
     SELECT COUNT(DISTINCT u.user_id) as count
     FROM site_user su
     JOIN users u ON su.user_id = u.user_id
-    JOIN sites s ON su.site_code = s.site_code
+    JOIN sites s ON su.site_id = s.site_id
     ${whereClause}
   `;
   const countResult = await queryOne(countQuery, params);
@@ -91,7 +91,7 @@ export async function getAll(options: {
       ) ORDER BY su.is_primary DESC, s.name) as sites
     FROM site_user su
     JOIN users u ON su.user_id = u.user_id
-    JOIN sites s ON su.site_code = s.site_code
+    JOIN sites s ON su.site_id = s.site_id
     ${whereClause}
     GROUP BY u.user_id
     ORDER BY MAX(su.created_at) DESC
@@ -131,7 +131,8 @@ export async function getBySite(siteCode: string) {
           u.is_active
         FROM site_user su
         JOIN users u ON su.user_id = u.user_id
-        WHERE su.site_code = $1
+        JOIN sites s ON su.site_id = s.site_id
+        WHERE s.site_code = $1
         ORDER BY su.is_primary DESC, u.name
       `;
       return query(sql, [siteCode]);
@@ -159,7 +160,7 @@ export async function getByUser(userId: string) {
           s.longitude,
           s.radius
         FROM site_user su
-        JOIN sites s ON su.site_code = s.site_code
+        JOIN sites s ON su.site_id = s.site_id
         WHERE su.user_id = $1 AND s.is_active = true
         ORDER BY su.is_primary DESC, s.name
       `;
@@ -178,15 +179,21 @@ export async function assignUser(
   roleAtSite: string = "staff",
   isPrimary: boolean = false,
 ): Promise<SiteUser> {
+  const site = await queryOne<{ site_id: string }>(
+    `SELECT site_id FROM sites WHERE site_code = $1`,
+    [siteCode],
+  );
+  if (!site) throw new Error(`Site with code ${siteCode} not found`);
+
   const sql = `
-    INSERT INTO site_user (site_code, user_id, role_at_site, is_primary, created_at, updated_at)
-    VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-    ON CONFLICT (site_code, user_id) 
-    DO UPDATE SET role_at_site = $3, is_primary = $4, updated_at = CURRENT_TIMESTAMP
+    INSERT INTO site_user (site_id, user_id, role_at_site, is_primary, created_at)
+    VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP)
+    ON CONFLICT (site_id, user_id) 
+    DO UPDATE SET role_at_site = $3, is_primary = $4
     RETURNING *
   `;
   const result = await queryOne<SiteUser>(sql, [
-    siteCode,
+    site.site_id,
     userId,
     roleAtSite,
     isPrimary,
@@ -202,6 +209,84 @@ export async function assignUser(
 }
 
 /**
+ * Bulk assign user(s) to site(s)
+ */
+export async function assignBulkUsers(
+  assignments: Array<{
+    site_code: string;
+    user_id: string;
+    role_at_site?: string;
+    is_primary?: boolean;
+  }>,
+): Promise<{ assigned: number; errors: any[] }> {
+  if (assignments.length === 0) return { assigned: 0, errors: [] };
+
+  const uniqueSiteCodes = [...new Set(assignments.map((a) => a.site_code))];
+  const uniqueUserIds = [...new Set(assignments.map((a) => a.user_id))];
+
+  // 1. Fetch site_ids for all siteCodes in one query
+  const placeholders = uniqueSiteCodes.map((_, i) => `$${i + 1}`).join(", ");
+  const sites = await query<{ site_id: string; site_code: string }>(
+    `SELECT site_id, site_code FROM sites WHERE site_code IN (${placeholders})`,
+    uniqueSiteCodes,
+  );
+
+  const siteCodeToIdMap = new Map(sites.map((s) => [s.site_code, s.site_id]));
+
+  // 2. Prepare multi-row INSERT
+  let valuesSql: string[] = [];
+  let insertParams: any[] = [];
+  let paramIndex = 1;
+
+  const errors: any[] = [];
+  let validAssignments = 0;
+
+  for (const a of assignments) {
+    const siteId = siteCodeToIdMap.get(a.site_code);
+    if (!siteId) {
+      errors.push({ ...a, error: `Site code ${a.site_code} not found` });
+      continue;
+    }
+
+    valuesSql.push(
+      `($${paramIndex}, $${paramIndex + 1}, $${paramIndex + 2}, $${paramIndex + 3}, CURRENT_TIMESTAMP)`,
+    );
+    insertParams.push(
+      siteId,
+      a.user_id,
+      a.role_at_site || "staff",
+      a.is_primary || false,
+    );
+    paramIndex += 4;
+    validAssignments++;
+  }
+
+  if (valuesSql.length === 0) {
+    return { assigned: 0, errors };
+  }
+
+  const sql = `
+    INSERT INTO site_user (site_id, user_id, role_at_site, is_primary, created_at)
+    VALUES ${valuesSql.join(", ")}
+    ON CONFLICT (site_id, user_id) 
+    DO UPDATE SET role_at_site = EXCLUDED.role_at_site, is_primary = EXCLUDED.is_primary
+  `;
+
+  await query(sql, insertParams);
+
+  // 3. Batch Invalidate Cache
+  const cacheKeysToDel: string[] = [];
+  uniqueSiteCodes.forEach((code) =>
+    cacheKeysToDel.push(`site_users:site:${code}`),
+  );
+  uniqueUserIds.forEach((id) => cacheKeysToDel.push(`site_users:user:${id}`));
+
+  await Promise.all(cacheKeysToDel.map((key) => cacheDel(key)));
+
+  return { assigned: validAssignments, errors };
+}
+
+/**
  * Update assignment
  */
 export async function updateAssignment(
@@ -209,7 +294,13 @@ export async function updateAssignment(
   userId: string,
   updates: { role_at_site?: string; is_primary?: boolean },
 ): Promise<SiteUser> {
-  const setClauses: string[] = ["updated_at = CURRENT_TIMESTAMP"];
+  const site = await queryOne<{ site_id: string }>(
+    `SELECT site_id FROM sites WHERE site_code = $1`,
+    [siteCode],
+  );
+  if (!site) throw new Error(`Site with code ${siteCode} not found`);
+
+  const setClauses: string[] = [];
   const params: any[] = [];
 
   if (updates.role_at_site !== undefined) {
@@ -222,11 +313,15 @@ export async function updateAssignment(
     setClauses.push(`is_primary = $${params.length}`);
   }
 
-  params.push(siteCode, userId);
+  if (setClauses.length === 0) {
+    throw new Error("No updates provided");
+  }
+
+  params.push(site.site_id, userId);
   const sql = `
     UPDATE site_user
     SET ${setClauses.join(", ")}
-    WHERE site_code = $${params.length - 1} AND user_id = $${params.length}
+    WHERE site_id = $${params.length - 1} AND user_id = $${params.length}
     RETURNING *
   `;
   const result = await queryOne<SiteUser>(sql, params);
@@ -247,7 +342,7 @@ export async function removeAssignment(
   siteCode: string,
   userId: string,
 ): Promise<void> {
-  const sql = `DELETE FROM site_user WHERE site_code = $1 AND user_id = $2`;
+  const sql = `DELETE FROM site_user WHERE site_id = (SELECT site_id FROM sites WHERE site_code = $1 LIMIT 1) AND user_id = $2`;
   await query(sql, [siteCode, userId]);
 
   // Invalidate cache
@@ -262,6 +357,7 @@ export default {
   getBySite,
   getByUser,
   assignUser,
+  assignBulkUsers,
   updateAssignment,
   removeAssignment,
 };
