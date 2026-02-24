@@ -51,7 +51,7 @@ export async function logActivity(data: LogActivityInput): Promise<void> {
         data.description || null,
         data.ip_address || null,
         data.device_info || null,
-        data.metadata ? JSON.stringify(data.metadata) : null,
+        data.metadata || null,
       ],
     );
   } catch (error) {

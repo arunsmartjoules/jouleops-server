@@ -50,7 +50,7 @@ export interface ComplaintForwardPayload {
   sender_id?: string;
   message_id?: string;
   group_id?: string;
-  ticket_id?: string;
+  ticket_no?: string;
 }
 
 export async function forwardComplaintToFieldproxy(
@@ -69,7 +69,7 @@ export async function forwardComplaintToFieldproxy(
       sender_id: complaint.sender_id ?? null,
       message_id: complaint.message_id ?? null,
       group_id: complaint.group_id ?? null,
-      ticket_id: complaint.ticket_id ?? null,
+      ticket_no: complaint.ticket_no ?? null,
     },
   };
 
