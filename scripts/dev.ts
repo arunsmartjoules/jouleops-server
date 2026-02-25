@@ -27,7 +27,6 @@ const turbo = spawn("turbo", ["run", "dev", "--concurrency=10"], {
     SITELOGS_SERVICE_URL: "http://localhost:3423",
     PM_SERVICE_URL: "http://localhost:3424",
     RBAC_SERVICE_URL: "http://localhost:3425",
-    PROFILES_SERVICE_URL: "http://localhost:3426",
     UTILITY_SERVICE_URL: "http://localhost:3428",
     REDIS_URL: process.env.REDIS_URL || "redis://localhost:6379",
   }, // Explicitly pass loaded env vars with overrides

@@ -35,7 +35,6 @@ const SERVICES = {
   sitelogs: process.env.SITELOGS_SERVICE_URL || "http://localhost:3423",
   pm: process.env.PM_SERVICE_URL || "http://localhost:3424",
   rbac: process.env.RBAC_SERVICE_URL || "http://localhost:3425",
-  profiles: process.env.PROFILES_SERVICE_URL || "http://localhost:3426",
   utility: process.env.UTILITY_SERVICE_URL || "http://localhost:3428",
 };
 
@@ -146,7 +145,7 @@ app.use(createProxyMiddleware(proxyOptions(SERVICES.rbac, "/api/site-users")));
 app.use(createProxyMiddleware(proxyOptions(SERVICES.rbac, "/api/sites")));
 app.use(createProxyMiddleware(proxyOptions(SERVICES.rbac, "/api/assets")));
 app.use(createProxyMiddleware(proxyOptions(SERVICES.rbac, "/api/logs")));
-app.use(createProxyMiddleware(proxyOptions(SERVICES.profiles, "/api/users")));
+app.use(createProxyMiddleware(proxyOptions(SERVICES.rbac, "/api/users")));
 app.use(
   createProxyMiddleware(proxyOptions(SERVICES.sitelogs, "/api/site-logs")),
 );
