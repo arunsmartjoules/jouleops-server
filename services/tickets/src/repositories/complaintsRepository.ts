@@ -510,7 +510,6 @@ export async function updateComplaintStatus(
 
   if (remarks) {
     updates.internal_remarks = remarks;
-    updates.remarks = remarks;
   }
 
   if (status === "Resolved") {
