@@ -9,7 +9,6 @@ COPY package.json bun.lock ./
 COPY shared/package.json shared/
 COPY gateway/package.json gateway/
 COPY services/rbac/package.json services/rbac/
-COPY services/profiles/package.json services/profiles/
 COPY services/sitelogs/package.json services/sitelogs/
 COPY services/pm/package.json services/pm/
 COPY services/tickets/package.json services/tickets/
