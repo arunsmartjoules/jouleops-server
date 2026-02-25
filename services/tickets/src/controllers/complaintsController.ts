@@ -180,18 +180,18 @@ export const getByMessageId = async (req: Request, res: Response) => {
 
 export const update = async (req: AuthRequest, res: Response) => {
   try {
-    const ticketId = (req.params.ticketId || req.query.id) as string;
+    const id = (req.params.id || req.query.id) as string;
 
     const isUuid =
       /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
-        ticketId || "",
+        id || "",
       );
 
-    if (!ticketId || !isUuid) {
+    if (!id || !isUuid) {
       return sendError(res, "A valid ticket UUID (id) is required");
     }
 
-    const existing = await complaintsRepository.getComplaint(ticketId);
+    const existing = await complaintsRepository.getComplaintById(id);
     if (!existing) {
       return sendNotFound(res, "Complaint");
     }
@@ -224,14 +224,14 @@ export const update = async (req: AuthRequest, res: Response) => {
 
 export const updateStatus = async (req: AuthRequest, res: Response) => {
   try {
-    const ticketId = (req.params.ticketId || req.query.id) as string;
+    const id = (req.params.id || req.query.id) as string;
 
     const isUuid =
       /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
-        ticketId || "",
+        id || "",
       );
 
-    if (!ticketId || !isUuid) {
+    if (!id || !isUuid) {
       return sendError(res, "A valid ticket UUID (id) is required");
     }
 
@@ -244,7 +244,7 @@ export const updateStatus = async (req: AuthRequest, res: Response) => {
       );
     }
 
-    const existing = await complaintsRepository.getComplaint(ticketId);
+    const existing = await complaintsRepository.getComplaintById(id);
     if (!existing) {
       return sendNotFound(res, "Complaint");
     }

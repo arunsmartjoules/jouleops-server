@@ -51,7 +51,7 @@ router.get(
   verifyAnyAuth,
   complaintsController.getStats,
 );
-router.get("/:ticketId", verifyAnyAuth, complaintsController.getById);
+router.get("/:id", verifyAnyAuth, complaintsController.getById);
 router.put(
   "/",
   verifyAnyAuth,
@@ -59,7 +59,7 @@ router.put(
   complaintsController.update,
 );
 router.put(
-  "/:ticketId",
+  "/:id",
   verifyAnyAuth,
   validate(updateComplaintSchema),
   complaintsController.update,
@@ -71,7 +71,7 @@ router.patch(
   complaintsController.updateStatus,
 );
 router.patch(
-  "/:ticketId/status",
+  "/:id/status",
   verifyAnyAuth,
   validate(updateComplaintStatusSchema),
   complaintsController.updateStatus,
@@ -79,16 +79,16 @@ router.patch(
 
 // Line items routes
 router.get(
-  "/:ticketId/line-items",
+  "/:id/line-items",
   verifyAnyAuth,
   complaintImagesController.getLineItems,
 );
 router.post(
-  "/:ticketId/line-items",
+  "/:id/line-items",
   verifyAnyAuth,
   complaintImagesController.addLineItem,
 );
 
-router.delete("/:ticketId", verifyAnyAuth, complaintsController.remove);
+router.delete("/:id", verifyAnyAuth, complaintsController.remove);
 
 export default router;
