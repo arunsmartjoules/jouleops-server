@@ -449,8 +449,8 @@ export async function updateComplaint(
   id: string,
   updateData: UpdateComplaintInput,
 ): Promise<Complaint> {
-  // 1. Get current state and verify existence (handles flexible ID)
-  const current = await getComplaint(id);
+  // 1. Get current state and verify existence (UUID ONLY)
+  const current = await getComplaintById(id);
   if (!current) {
     throw new Error("Complaint not found");
   }

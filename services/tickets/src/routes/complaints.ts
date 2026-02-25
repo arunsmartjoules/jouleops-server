@@ -53,10 +53,22 @@ router.get(
 );
 router.get("/:ticketId", verifyAnyAuth, complaintsController.getById);
 router.put(
+  "/",
+  verifyAnyAuth,
+  validate(updateComplaintSchema),
+  complaintsController.update,
+);
+router.put(
   "/:ticketId",
   verifyAnyAuth,
   validate(updateComplaintSchema),
   complaintsController.update,
+);
+router.patch(
+  "/status",
+  verifyAnyAuth,
+  validate(updateComplaintStatusSchema),
+  complaintsController.updateStatus,
 );
 router.patch(
   "/:ticketId/status",

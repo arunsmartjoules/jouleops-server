@@ -180,7 +180,16 @@ export const getByMessageId = async (req: Request, res: Response) => {
 
 export const update = async (req: AuthRequest, res: Response) => {
   try {
-    const { ticketId } = req.params as { ticketId: string };
+    const ticketId = (req.params.ticketId || req.query.id) as string;
+
+    const isUuid =
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+        ticketId || "",
+      );
+
+    if (!ticketId || !isUuid) {
+      return sendError(res, "A valid ticket UUID (id) is required");
+    }
 
     const existing = await complaintsRepository.getComplaint(ticketId);
     if (!existing) {
@@ -215,7 +224,17 @@ export const update = async (req: AuthRequest, res: Response) => {
 
 export const updateStatus = async (req: AuthRequest, res: Response) => {
   try {
-    const { ticketId } = req.params as { ticketId: string };
+    const ticketId = (req.params.ticketId || req.query.id) as string;
+
+    const isUuid =
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+        ticketId || "",
+      );
+
+    if (!ticketId || !isUuid) {
+      return sendError(res, "A valid ticket UUID (id) is required");
+    }
+
     const { status, remarks } = req.body;
 
     if (!status || !VALID_STATUSES.includes(status)) {
