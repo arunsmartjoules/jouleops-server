@@ -182,16 +182,14 @@ export const update = async (req: AuthRequest, res: Response) => {
   try {
     const id = (req.params.id || req.query.id) as string;
 
-    const isUuid =
-      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
-        id || "",
+    if (!id) {
+      return sendError(
+        res,
+        "A ticket identifier (id or ticket_no) is required",
       );
-
-    if (!id || !isUuid) {
-      return sendError(res, "A valid ticket UUID (id) is required");
     }
 
-    const existing = await complaintsRepository.getComplaintById(id);
+    const existing = await complaintsRepository.getComplaint(id);
     if (!existing) {
       return sendNotFound(res, "Complaint");
     }

@@ -64,6 +64,20 @@ router.put(
   validate(updateComplaintSchema),
   complaintsController.update,
 );
+
+router.patch(
+  "/",
+  verifyAnyAuth,
+  validate(updateComplaintSchema),
+  complaintsController.update,
+);
+
+router.patch(
+  "/:id",
+  verifyAnyAuth,
+  validate(updateComplaintSchema),
+  complaintsController.update,
+);
 router.patch(
   "/status",
   verifyAnyAuth,
