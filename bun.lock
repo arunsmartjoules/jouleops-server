@@ -64,13 +64,6 @@
         "@jouleops/shared": "workspace:*",
       },
     },
-    "services/profiles": {
-      "name": "@jouleops/profiles",
-      "version": "1.0.0",
-      "dependencies": {
-        "@jouleops/shared": "workspace:*",
-      },
-    },
     "services/rbac": {
       "name": "@jouleops/rbac",
       "version": "1.0.0",
@@ -123,6 +116,22 @@
 
     "@isaacs/cliui": ["@isaacs/cliui@8.0.2", "", { "dependencies": { "string-width": "^5.1.2", "string-width-cjs": "npm:string-width@^4.2.0", "strip-ansi": "^7.0.1", "strip-ansi-cjs": "npm:strip-ansi@^6.0.1", "wrap-ansi": "^8.1.0", "wrap-ansi-cjs": "npm:wrap-ansi@^7.0.0" } }, "sha512-O8jcjabXaleOG9DQ0+ARXWZBTfnP4WNAqzuiJK7ll44AmxGKv/J2M4TPjxjY3znBCfvBXFzucm1twdyFybFqEA=="],
 
+    "@jouleops/attendance": ["@jouleops/attendance@workspace:services/attendance"],
+
+    "@jouleops/gateway": ["@jouleops/gateway@workspace:gateway"],
+
+    "@jouleops/pm": ["@jouleops/pm@workspace:services/pm"],
+
+    "@jouleops/rbac": ["@jouleops/rbac@workspace:services/rbac"],
+
+    "@jouleops/shared": ["@jouleops/shared@workspace:shared"],
+
+    "@jouleops/sitelogs": ["@jouleops/sitelogs@workspace:services/sitelogs"],
+
+    "@jouleops/tickets": ["@jouleops/tickets@workspace:services/tickets"],
+
+    "@jouleops/utility": ["@jouleops/utility@workspace:services/utility"],
+
     "@noble/hashes": ["@noble/hashes@1.8.0", "", {}, "sha512-jCs9ldd7NwzpgXDIf6P3+NrHh9/sD6CQdxHyjQI+h/6rDNo88ypBxxz45UDuZHz9r3tNz7N/VInSVoVdtXEI4A=="],
 
     "@one-ini/wasm": ["@one-ini/wasm@0.1.1", "", {}, "sha512-XuySG1E38YScSJoMlqovLru4KTUNSjgVTIjyh7qMX6aNN5HY5Ct5LhRJdxO79JtTzKfzV/bnWpz+zquYrISsvw=="],
@@ -134,24 +143,6 @@
     "@react-email/render": ["@react-email/render@0.0.16", "", { "dependencies": { "html-to-text": "9.0.5", "js-beautify": "^1.14.11", "react-promise-suspense": "0.3.4" }, "peerDependencies": { "react": "^18.2.0", "react-dom": "^18.2.0" } }, "sha512-wDaMy27xAq1cJHtSFptp0DTKPuV2GYhloqia95ub/DH9Dea1aWYsbdM918MOc/b/HvVS3w1z8DWzfAk13bGStQ=="],
 
     "@selderee/plugin-htmlparser2": ["@selderee/plugin-htmlparser2@0.11.0", "", { "dependencies": { "domhandler": "^5.0.3", "selderee": "^0.11.0" } }, "sha512-P33hHGdldxGabLFjPPpaTxVolMrzrcegejx+0GxjrIb9Zv48D8yAIA/QTDR2dFl7Uz7urX8aX6+5bCZslr+gWQ=="],
-
-    "@jouleops/attendance": ["@jouleops/attendance@workspace:services/attendance"],
-
-    "@jouleops/gateway": ["@jouleops/gateway@workspace:gateway"],
-
-    "@jouleops/pm": ["@jouleops/pm@workspace:services/pm"],
-
-    "@jouleops/profiles": ["@jouleops/profiles@workspace:services/profiles"],
-
-    "@jouleops/rbac": ["@jouleops/rbac@workspace:services/rbac"],
-
-    "@jouleops/shared": ["@jouleops/shared@workspace:shared"],
-
-    "@jouleops/sitelogs": ["@jouleops/sitelogs@workspace:services/sitelogs"],
-
-    "@jouleops/tickets": ["@jouleops/tickets@workspace:services/tickets"],
-
-    "@jouleops/utility": ["@jouleops/utility@workspace:services/utility"],
 
     "@so-ric/colorspace": ["@so-ric/colorspace@1.1.6", "", { "dependencies": { "color": "^5.0.2", "text-hex": "1.0.x" } }, "sha512-/KiKkpHNOBgkFJwu9sh48LkHSMYGyuTcSFK/qMBdnOAlrRJzRSXAOFB5qwzaVQuDl8wAvHVMkaASQDReTahxuw=="],
 
