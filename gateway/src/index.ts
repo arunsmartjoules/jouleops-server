@@ -62,7 +62,8 @@ app.use(
 // Standardized Health check
 app.get("/health", async (_req, res) => {
   const [db, redis] = await Promise.all([dbHealthCheck(), redisHealthCheck()]);
-  const status = db.connected && redis.connected ? 200 : 503;
+  // Redis is optional - only database connectivity is required for basic health
+  const status = db.connected ? 200 : 503;
 
   res.status(status).json({
     success: status === 200,
