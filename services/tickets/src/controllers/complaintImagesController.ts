@@ -8,7 +8,7 @@ class ComplaintImagesController {
    */
   async getLineItems(req: Request, res: Response) {
     try {
-      const { ticketId } = req.params;
+      const ticketId = req.params.id || (req as any).params.ticketId;
 
       if (!ticketId) {
         return sendError(res, "ticketId parameter is required", {
@@ -34,7 +34,7 @@ class ComplaintImagesController {
    */
   async addLineItem(req: Request, res: Response) {
     try {
-      const { ticketId } = req.params;
+      const ticketId = req.params.id || (req as any).params.ticketId;
       const { image_url, video_url, message_text, message_id } = req.body;
 
       if (!ticketId) {
