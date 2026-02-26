@@ -51,6 +51,7 @@ export interface ComplaintForwardPayload {
   message_id?: string;
   group_id?: string;
   ticket_no?: string;
+  created_user?: string;
 }
 
 export async function forwardComplaintToFieldproxy(
@@ -70,6 +71,7 @@ export async function forwardComplaintToFieldproxy(
       message_id: complaint.message_id ?? null,
       group_id: complaint.group_id ?? null,
       ticket_no: complaint.ticket_no ?? null,
+      created_user: complaint.created_user ?? null,
     },
   };
 
