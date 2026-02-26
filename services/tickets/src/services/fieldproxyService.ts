@@ -101,7 +101,7 @@ export async function forwardComplaintToFieldproxy(
 async function getRowIdByTicketNo(
   ticketNo: string,
   token: string,
-): Promise<string | null> {
+): Promise<{ id: string | null; response: any }> {
   // Use the where_clause format as specified by user
   const whereClause = `"ticket_no='${ticketNo}'"`;
   const url = `${FIELDPROXY_BASE}/getFilteredSheetData?sheet_id=complaints&where_clause=${encodeURIComponent(whereClause)}`;
@@ -113,21 +113,23 @@ async function getRowIdByTicketNo(
     },
   });
 
+  const responseBody = (await res.json().catch(() => ({}))) as any;
+
   if (!res.ok) {
-    const text = await res.text().catch(() => "");
     throw new Error(
-      `Fieldproxy getFilteredSheetData failed: ${res.status} — ${text}`,
+      `Fieldproxy getFilteredSheetData failed: ${res.status} — ${JSON.stringify(responseBody)}`,
     );
   }
 
-  const json = (await res.json()) as any;
-  const data = Array.isArray(json) ? json[0]?.data : json.data;
+  const data = Array.isArray(responseBody)
+    ? responseBody[0]?.data
+    : responseBody.data;
 
   if (Array.isArray(data) && data.length > 0) {
-    return String(data[0].id);
+    return { id: String(data[0].id), response: responseBody };
   }
 
-  return null;
+  return { id: null, response: responseBody };
 }
 
 /**
@@ -136,16 +138,20 @@ async function getRowIdByTicketNo(
 export async function updateComplaintInFieldproxy(
   ticketNo: string,
   complaint: Partial<ComplaintForwardPayload>,
-): Promise<any> {
+): Promise<{ lookup: any; update?: any; error?: string }> {
   const token = await getAccessToken();
 
   // 1. Get rowId
-  const rowId = await getRowIdByTicketNo(ticketNo, token);
+  const { id: rowId, response: lookupResponse } = await getRowIdByTicketNo(
+    ticketNo,
+    token,
+  );
+
   if (!rowId) {
     console.warn(
       `[FIELDPROXY] Could not find row for ticket_no: ${ticketNo}. Skipping update.`,
     );
-    return { success: false, error: "Row not found in Fieldproxy" };
+    return { lookup: lookupResponse, error: "Row not found in Fieldproxy" };
   }
 
   // 2. Prepare payload (Only title, status, location as per user request)
@@ -154,7 +160,9 @@ export async function updateComplaintInFieldproxy(
   if (complaint.status) tableData.status = complaint.status;
   if (complaint.location) tableData.location = complaint.location;
 
-  if (Object.keys(tableData).length === 0) return { skipped: true };
+  if (Object.keys(tableData).length === 0) {
+    return { lookup: lookupResponse, error: "No fields to update" };
+  }
 
   const body = {
     rowId,
@@ -171,13 +179,13 @@ export async function updateComplaintInFieldproxy(
     body: JSON.stringify(body),
   });
 
-  const responseData = await res.json().catch(() => ({}));
+  const updateResponse = (await res.json().catch(() => ({}))) as any;
 
   if (!res.ok) {
     throw new Error(
-      `Fieldproxy updateRows failed: ${res.status} ${res.statusText} — ${JSON.stringify(responseData)}`,
+      `Fieldproxy updateRows failed: ${res.status} ${res.statusText} — ${JSON.stringify(updateResponse)}`,
     );
   }
 
-  return responseData;
+  return { lookup: lookupResponse, update: updateResponse };
 }

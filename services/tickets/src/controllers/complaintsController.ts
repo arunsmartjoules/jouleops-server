@@ -217,16 +217,41 @@ export const update = async (req: AuthRequest, res: Response) => {
 
     // Sync with Fieldproxy — fire and forget
     updateComplaintInFieldproxy(existing.ticket_no, req.body)
-      .then((fpResponse) => {
+      .then((syncResult) => {
+        // Log Lookup
         logActivity({
-          action: "UPDATE_FIELDPROXY",
+          action: "LOOKUP_FIELDPROXY",
           module: "complaints",
-          description: `Complaint ${existing.ticket_no} updated in Fieldproxy successfully`,
+          description: `Fieldproxy lookup for complaint ${existing.ticket_no}`,
           metadata: {
             ticket_no: existing.ticket_no,
-            fieldproxy_response: fpResponse,
+            fieldproxy_response: syncResult.lookup,
           },
         }).catch(() => {});
+
+        // Log Update result
+        if (syncResult.update) {
+          logActivity({
+            action: "UPDATE_FIELDPROXY",
+            module: "complaints",
+            description: `Complaint ${existing.ticket_no} updated in Fieldproxy successfully`,
+            metadata: {
+              ticket_no: existing.ticket_no,
+              fieldproxy_response: syncResult.update,
+            },
+          }).catch(() => {});
+        } else if (syncResult.error) {
+          logActivity({
+            action: "UPDATE_FIELDPROXY_FAILED",
+            module: "complaints",
+            description: `Fieldproxy update for ${existing.ticket_no} skipped: ${syncResult.error}`,
+            metadata: {
+              ticket_no: existing.ticket_no,
+              error: syncResult.error,
+              lookup_response: syncResult.lookup,
+            },
+          }).catch(() => {});
+        }
       })
       .catch((err: Error) => {
         console.error("Fieldproxy update failed:", err);
@@ -316,17 +341,43 @@ export const updateStatus = async (req: AuthRequest, res: Response) => {
 
     // Sync with Fieldproxy — fire and forget
     updateComplaintInFieldproxy(existing.ticket_no, { status })
-      .then((fpResponse) => {
+      .then((syncResult) => {
+        // Log Lookup
         logActivity({
-          action: "UPDATE_FIELDPROXY",
+          action: "LOOKUP_FIELDPROXY",
           module: "complaints",
-          description: `Complaint ${existing.ticket_no} status updated to ${status} in Fieldproxy successfully`,
+          description: `Fieldproxy lookup for complaint ${existing.ticket_no}`,
           metadata: {
             ticket_no: existing.ticket_no,
-            status,
-            fieldproxy_response: fpResponse,
+            fieldproxy_response: syncResult.lookup,
           },
         }).catch(() => {});
+
+        // Log Update result
+        if (syncResult.update) {
+          logActivity({
+            action: "UPDATE_FIELDPROXY",
+            module: "complaints",
+            description: `Complaint ${existing.ticket_no} status updated to ${status} in Fieldproxy successfully`,
+            metadata: {
+              ticket_no: existing.ticket_no,
+              status,
+              fieldproxy_response: syncResult.update,
+            },
+          }).catch(() => {});
+        } else if (syncResult.error) {
+          logActivity({
+            action: "UPDATE_FIELDPROXY_FAILED",
+            module: "complaints",
+            description: `Fieldproxy update for ${existing.ticket_no} skipped: ${syncResult.error}`,
+            metadata: {
+              ticket_no: existing.ticket_no,
+              status,
+              error: syncResult.error,
+              lookup_response: syncResult.lookup,
+            },
+          }).catch(() => {});
+        }
       })
       .catch((err: Error) => {
         console.error("Fieldproxy status update failed:", err);
