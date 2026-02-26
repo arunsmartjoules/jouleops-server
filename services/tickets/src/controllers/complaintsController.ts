@@ -6,7 +6,10 @@
  */
 
 import complaintsRepository from "../repositories/complaintsRepository.ts";
-import { forwardComplaintToFieldproxy } from "../services/fieldproxyService.ts";
+import {
+  forwardComplaintToFieldproxy,
+  updateComplaintInFieldproxy,
+} from "../services/fieldproxyService.ts";
 import type { Request, Response } from "express";
 import {
   sendSuccess,
@@ -37,7 +40,7 @@ export const create = async (req: Request, res: Response) => {
 
     // Forward to Fieldproxy — fire and forget, do not block the response
     forwardComplaintToFieldproxy(complaint)
-      .then(() => {
+      .then((fpResponse) => {
         logActivity({
           action: "FORWARD_TO_FIELDPROXY",
           module: "complaints",
@@ -45,6 +48,7 @@ export const create = async (req: Request, res: Response) => {
           metadata: {
             ticket_no: complaint.ticket_no,
             site_code: complaint.site_code,
+            fieldproxy_response: fpResponse,
           },
         }).catch(() => {});
       })
@@ -211,6 +215,29 @@ export const update = async (req: AuthRequest, res: Response) => {
       },
     }).catch(() => {});
 
+    // Sync with Fieldproxy — fire and forget
+    updateComplaintInFieldproxy(existing.ticket_no, req.body)
+      .then((fpResponse) => {
+        logActivity({
+          action: "UPDATE_FIELDPROXY",
+          module: "complaints",
+          description: `Complaint ${existing.ticket_no} updated in Fieldproxy successfully`,
+          metadata: {
+            ticket_no: existing.ticket_no,
+            fieldproxy_response: fpResponse,
+          },
+        }).catch(() => {});
+      })
+      .catch((err: Error) => {
+        console.error("Fieldproxy update failed:", err);
+        logActivity({
+          action: "UPDATE_FIELDPROXY_FAILED",
+          module: "complaints",
+          description: `Failed to update complaint ${existing.ticket_no} in Fieldproxy: ${err.message}`,
+          metadata: { ticket_no: existing.ticket_no, error: err.message },
+        }).catch(() => {});
+      });
+
     return sendSuccess(res, complaint, {
       message: "Complaint updated successfully",
     });
@@ -286,6 +313,34 @@ export const updateStatus = async (req: AuthRequest, res: Response) => {
         remarks: remarks || null,
       },
     }).catch(() => {});
+
+    // Sync with Fieldproxy — fire and forget
+    updateComplaintInFieldproxy(existing.ticket_no, { status })
+      .then((fpResponse) => {
+        logActivity({
+          action: "UPDATE_FIELDPROXY",
+          module: "complaints",
+          description: `Complaint ${existing.ticket_no} status updated to ${status} in Fieldproxy successfully`,
+          metadata: {
+            ticket_no: existing.ticket_no,
+            status,
+            fieldproxy_response: fpResponse,
+          },
+        }).catch(() => {});
+      })
+      .catch((err: Error) => {
+        console.error("Fieldproxy status update failed:", err);
+        logActivity({
+          action: "UPDATE_FIELDPROXY_FAILED",
+          module: "complaints",
+          description: `Failed to update status for ${existing.ticket_no} in Fieldproxy: ${err.message}`,
+          metadata: {
+            ticket_no: existing.ticket_no,
+            status,
+            error: err.message,
+          },
+        }).catch(() => {});
+      });
 
     return sendSuccess(res, complaint, {
       message: "Status updated successfully",
