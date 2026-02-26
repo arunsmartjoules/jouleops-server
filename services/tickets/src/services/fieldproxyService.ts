@@ -102,8 +102,8 @@ async function getRowIdByTicketNo(
   ticketNo: string,
   token: string,
 ): Promise<{ id: string | null; response: any }> {
-  // Use the where_clause format as specified by user
-  const whereClause = `"ticket_no='${ticketNo}'"`;
+  // Use the format verified by user in Postman (no extra double quotes)
+  const whereClause = `ticket_no='${ticketNo}'`;
   const url = `${FIELDPROXY_BASE}/getFilteredSheetData?sheet_id=complaints&where_clause=${encodeURIComponent(whereClause)}`;
 
   const res = await fetch(url, {
