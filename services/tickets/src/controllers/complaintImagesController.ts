@@ -1,5 +1,7 @@
 import type { Request, Response } from "express";
 import complaintImagesRepository from "../repositories/complaintImagesRepository.ts";
+import complaintsRepository from "../repositories/complaintsRepository.ts";
+import whatsappService from "../services/whatsappService.ts";
 import {
   sendSuccess,
   sendError,
@@ -67,6 +69,24 @@ class ComplaintImagesController {
         message_text,
         message_id,
       });
+
+      // Trigger WhatsApp notification for text messages (Fire and Forget)
+      if (message_text) {
+        (async () => {
+          try {
+            const ticket = await complaintsRepository.getComplaint(ticketId);
+            if (ticket) {
+              await whatsappService.sendActivityMessage(
+                ticket.site_code,
+                ticket.ticket_no,
+                message_text,
+              );
+            }
+          } catch (err) {
+            console.error("WhatsApp activity trigger failed:", err);
+          }
+        })();
+      }
 
       return sendCreated(res, newItem, "Line item added successfully");
     } catch (error: any) {

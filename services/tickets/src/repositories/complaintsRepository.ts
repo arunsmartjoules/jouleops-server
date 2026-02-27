@@ -505,11 +505,16 @@ export async function updateComplaintStatus(
   id: string,
   status: string,
   remarks?: string,
+  assignedTo?: string,
 ): Promise<Complaint> {
   const updates: any = { status };
 
   if (remarks) {
     updates.internal_remarks = remarks;
+  }
+
+  if (assignedTo) {
+    updates.assigned_to = assignedTo;
   }
 
   if (status === "Resolved") {

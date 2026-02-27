@@ -375,6 +375,9 @@ export const updateStatus = async (req: AuthRequest, res: Response) => {
       existing.id,
       status,
       remarks,
+      status === "Inprogress" || status === "Cancelled"
+        ? req.user?.user_id
+        : undefined,
     );
 
     logActivity({
