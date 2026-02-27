@@ -70,9 +70,9 @@ export async function getLogsByUser(
   const { limit = 50, offset = 0 } = options;
 
   return query<ActivityLog>(
-    `SELECT * FROM activity_logs
-     WHERE user_id = $1
-     ORDER BY created_at DESC
+    `SELECT al.* FROM activity_logs al
+     WHERE al.user_id = $1
+     ORDER BY al.created_at DESC
      LIMIT $2 OFFSET $3`,
     [userId, limit, offset],
   );
@@ -88,9 +88,9 @@ export async function getLogsByModule(
   const { limit = 50, offset = 0 } = options;
 
   return query<ActivityLog>(
-    `SELECT * FROM activity_logs
-     WHERE module = $1
-     ORDER BY created_at DESC
+    `SELECT al.* FROM activity_logs al
+     WHERE al.module = $1
+     ORDER BY al.created_at DESC
      LIMIT $2 OFFSET $3`,
     [module, limit, offset],
   );
@@ -125,29 +125,29 @@ export async function getAllLogs(
 
   if (module) {
     params.push(module);
-    conditions.push(`module = $${params.length}`);
+    conditions.push(`al.module = $${params.length}`);
   }
 
   if (action) {
     params.push(action);
-    conditions.push(`action = $${params.length}`);
+    conditions.push(`al.action = $${params.length}`);
   }
 
   if (search) {
     params.push(`%${search}%`);
     conditions.push(
-      `(description ILIKE $${params.length} OR action ILIKE $${params.length})`,
+      `(al.description ILIKE $${params.length} OR al.action ILIKE $${params.length})`,
     );
   }
 
   if (from) {
     params.push(from);
-    conditions.push(`created_at >= $${params.length}::timestamp`);
+    conditions.push(`al.created_at >= $${params.length}::timestamp`);
   }
 
   if (to) {
     params.push(to);
-    conditions.push(`created_at <= $${params.length}::timestamp`);
+    conditions.push(`al.created_at <= $${params.length}::timestamp`);
   }
 
   const whereClause =
@@ -155,7 +155,7 @@ export async function getAllLogs(
 
   // Count query
   const countResult = await queryOne<{ count: string }>(
-    `SELECT COUNT(*) as count FROM activity_logs ${whereClause}`,
+    `SELECT COUNT(*) as count FROM activity_logs al ${whereClause}`,
     params,
   );
   const total = parseInt(countResult?.count || "0");
@@ -195,13 +195,13 @@ export async function getErrorTrends(days: number = 7): Promise<
 > {
   const sql = `
     SELECT 
-      DATE(created_at) as date,
-      module,
+      DATE(al.created_at) as date,
+      al.module,
       COUNT(*) as count
-    FROM activity_logs
-    WHERE action LIKE '%ERROR%' OR action LIKE '%FAIL%'
-    AND created_at >= NOW() - INTERVAL '${days} days'
-    GROUP BY DATE(created_at), module
+    FROM activity_logs al
+    WHERE (al.action LIKE '%ERROR%' OR al.action LIKE '%FAIL%')
+    AND al.created_at >= NOW() - INTERVAL '${days} days'
+    GROUP BY DATE(al.created_at), al.module
     ORDER BY date DESC, count DESC
   `;
   return query(sql);

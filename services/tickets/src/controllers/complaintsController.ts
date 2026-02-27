@@ -84,6 +84,14 @@ export const create = async (req: Request, res: Response) => {
     return sendCreated(res, complaint, "Complaint created successfully");
   } catch (error: any) {
     console.error("Create complaint error:", error);
+    logActivity({
+      user_id: (req as AuthRequest).user?.user_id,
+      action: "CREATE_COMPLAINT_ERROR",
+      module: "complaints",
+      description: `Failed to create complaint: ${error.message}`,
+      ip_address: req.ip,
+      metadata: { error: error.message, body: req.body },
+    }).catch(() => {});
     return sendServerError(res, error);
   }
 };
@@ -100,6 +108,14 @@ export const getById = async (req: Request, res: Response) => {
     return sendSuccess(res, complaint);
   } catch (error: any) {
     console.error("Get complaint error:", error);
+    logActivity({
+      user_id: (req as AuthRequest).user?.user_id,
+      action: "GET_COMPLAINT_ERROR",
+      module: "complaints",
+      description: `Failed to fetch complaint ${req.params.ticketId}: ${error.message}`,
+      ip_address: req.ip,
+      metadata: { error: error.message, ticketId: req.params.ticketId },
+    }).catch(() => {});
     return sendServerError(res, error);
   }
 };
@@ -144,6 +160,18 @@ export const getBySite = async (req: Request, res: Response) => {
     return sendSuccess(res, result.data, { pagination: result.pagination });
   } catch (error: any) {
     console.error("Get complaints error:", error);
+    logActivity({
+      user_id: (req as AuthRequest).user?.user_id,
+      action: "GET_COMPLAINTS_BY_SITE_ERROR",
+      module: "complaints",
+      description: `Failed to fetch complaints for site ${req.params.siteCode}: ${error.message}`,
+      ip_address: req.ip,
+      metadata: {
+        error: error.message,
+        siteCode: req.params.siteCode,
+        query: req.query,
+      },
+    }).catch(() => {});
     return sendServerError(res, error);
   }
 };
@@ -161,6 +189,14 @@ export const getRecentByGroup = async (req: Request, res: Response) => {
     return sendSuccess(res, complaints);
   } catch (error: any) {
     console.error("Get recent complaints error:", error);
+    logActivity({
+      user_id: (req as AuthRequest).user?.user_id,
+      action: "GET_RECENT_COMPLAINTS_ERROR",
+      module: "complaints",
+      description: `Failed to fetch recent complaints for group ${req.params.groupId}: ${error.message}`,
+      ip_address: req.ip,
+      metadata: { error: error.message, groupId: req.params.groupId },
+    }).catch(() => {});
     return sendServerError(res, error);
   }
 };
@@ -178,6 +214,14 @@ export const getByMessageId = async (req: Request, res: Response) => {
     return sendSuccess(res, complaint);
   } catch (error: any) {
     console.error("Get complaint error:", error);
+    logActivity({
+      user_id: (req as AuthRequest).user?.user_id,
+      action: "GET_COMPLAINT_BY_MESSAGE_ERROR",
+      module: "complaints",
+      description: `Failed to fetch complaint by messageId ${req.params.messageId}: ${error.message}`,
+      ip_address: req.ip,
+      metadata: { error: error.message, messageId: req.params.messageId },
+    }).catch(() => {});
     return sendServerError(res, error);
   }
 };
@@ -268,6 +312,14 @@ export const update = async (req: AuthRequest, res: Response) => {
     });
   } catch (error: any) {
     console.error("Update complaint error:", error);
+    logActivity({
+      user_id: req.user?.user_id,
+      action: "UPDATE_COMPLAINT_ERROR",
+      module: "complaints",
+      description: `Failed to update complaint: ${error.message}`,
+      ip_address: req.ip,
+      metadata: { error: error.message, id: req.params.id || req.query.id },
+    }).catch(() => {});
     return sendServerError(res, error);
   }
 };
@@ -398,6 +450,14 @@ export const updateStatus = async (req: AuthRequest, res: Response) => {
     });
   } catch (error: any) {
     console.error("Update status error:", error);
+    logActivity({
+      user_id: req.user?.user_id,
+      action: "UPDATE_COMPLAINT_STATUS_ERROR",
+      module: "complaints",
+      description: `Failed to update status for complaint: ${error.message}`,
+      ip_address: req.ip,
+      metadata: { error: error.message, id: req.params.id || req.query.id },
+    }).catch(() => {});
     return sendServerError(res, error);
   }
 };
@@ -430,6 +490,14 @@ export const remove = async (req: Request, res: Response) => {
     });
   } catch (error: any) {
     console.error("Delete complaint error:", error);
+    logActivity({
+      user_id: (req as AuthRequest).user?.user_id,
+      action: "DELETE_COMPLAINT_ERROR",
+      module: "complaints",
+      description: `Failed to delete complaint ${req.params.ticketId}: ${error.message}`,
+      ip_address: req.ip,
+      metadata: { error: error.message, ticketId: req.params.ticketId },
+    }).catch(() => {});
     return sendServerError(res, error);
   }
 };
@@ -442,6 +510,14 @@ export const getStats = async (req: Request, res: Response) => {
     return sendSuccess(res, stats);
   } catch (error: any) {
     console.error("Get stats error:", error);
+    logActivity({
+      user_id: (req as AuthRequest).user?.user_id,
+      action: "GET_COMPLAINT_STATS_ERROR",
+      module: "complaints",
+      description: `Failed to fetch stats for site ${req.params.siteCode}: ${error.message}`,
+      ip_address: req.ip,
+      metadata: { error: error.message, siteCode: req.params.siteCode },
+    }).catch(() => {});
     return sendServerError(res, error);
   }
 };
