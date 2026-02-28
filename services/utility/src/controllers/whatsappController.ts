@@ -21,12 +21,26 @@ interface AuthRequest extends Request {
   };
 }
 
+/**
+ * Mask the API token for security in the UI
+ * e.g. "whapi_token_123456789" -> "whapi_t...89"
+ */
+function maskToken(token: string): string {
+  if (!token) return "";
+  if (token.length <= 10) return "****";
+  return `${token.substring(0, 7)}...${token.slice(-4)}`;
+}
+
 // --- Channels ---
 
 export const getAllChannels = async (req: Request, res: Response) => {
   try {
     const channels = await whatsappRepository.getChannels();
-    return sendSuccess(res, channels);
+    const maskedChannels = channels.map((c) => ({
+      ...c,
+      api_token: maskToken(c.api_token),
+    }));
+    return sendSuccess(res, maskedChannels);
   } catch (error: any) {
     return sendServerError(res, error);
   }
@@ -47,7 +61,10 @@ export const createChannel = async (req: AuthRequest, res: Response) => {
       });
     }
 
-    return sendCreated(res, channel);
+    return sendCreated(res, {
+      ...channel,
+      api_token: maskToken(channel.api_token),
+    });
   } catch (error: any) {
     return sendServerError(res, error);
   }
@@ -59,7 +76,13 @@ export const updateChannel = async (req: AuthRequest, res: Response) => {
     if (!id) {
       return sendError(res, "Channel ID is required");
     }
-    const channel = await whatsappRepository.updateChannel(id, req.body);
+    const updateData = { ...req.body };
+    // If the token is masked, don't update it
+    if (updateData.api_token && updateData.api_token.includes("...")) {
+      delete updateData.api_token;
+    }
+
+    const channel = await whatsappRepository.updateChannel(id, updateData);
 
     if (req.user) {
       await logActivity({
@@ -72,7 +95,10 @@ export const updateChannel = async (req: AuthRequest, res: Response) => {
       });
     }
 
-    return sendSuccess(res, channel);
+    return sendSuccess(res, {
+      ...channel,
+      api_token: maskToken(channel.api_token),
+    });
   } catch (error: any) {
     return sendServerError(res, error);
   }

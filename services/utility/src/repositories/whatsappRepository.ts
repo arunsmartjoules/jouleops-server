@@ -5,7 +5,7 @@
  */
 
 import { query, queryOne } from "@jouleops/shared";
-import { cached, del as cacheDel } from "@jouleops/shared";
+import { cached, del as cacheDel, encrypt, decrypt } from "@jouleops/shared";
 
 const CACHE_TTL = 600; // 10 minutes
 
@@ -80,7 +80,7 @@ export async function createChannel(
   `;
   const result = await queryOne<WhatsAppChannel>(sql, [
     data.channel_name,
-    data.api_token,
+    data.api_token ? encrypt(data.api_token) : null,
     data.is_active ?? true,
   ]);
   return result!;
@@ -102,7 +102,7 @@ export async function updateChannel(
   }
 
   if (data.api_token !== undefined) {
-    params.push(data.api_token);
+    params.push(encrypt(data.api_token));
     setClauses.push(`api_token = $${params.length}`);
   }
 
@@ -346,9 +346,7 @@ export async function getTemplateByKey(
 /**
  * Resolve the active WhatsApp token and group ID for a specific site
  */
-export async function getActiveMappingWithToken(
-  site_code: string,
-): Promise<{
+export async function getActiveMappingWithToken(site_code: string): Promise<{
   whatsapp_group_id: string;
   whatsapp_group_name: string;
   api_token: string;
@@ -360,11 +358,17 @@ export async function getActiveMappingWithToken(
     WHERE wm.site_code = $1 AND wm.is_active = true AND c.is_active = true
     LIMIT 1
   `;
-  return queryOne<{
+  const result = await queryOne<{
     whatsapp_group_id: string;
     whatsapp_group_name: string;
     api_token: string;
   }>(sql, [site_code]);
+
+  if (result && result.api_token) {
+    result.api_token = decrypt(result.api_token);
+  }
+
+  return result;
 }
 
 /**

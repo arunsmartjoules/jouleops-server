@@ -46,12 +46,21 @@ export const getById = async (req: Request, res: Response) => {
 
 export const getAll = async (req: Request, res: Response) => {
   try {
-    const { page, limit, asset_type, status, floor, sortBy, sortOrder } =
-      req.query;
+    const {
+      page,
+      limit,
+      asset_type,
+      equipment_type,
+      status,
+      floor,
+      sortBy,
+      sortOrder,
+    } = req.query;
     const result = await assetsRepository.getAssetsBySite("all", {
       page: parseInt(page as string) || 1,
       limit: parseInt(limit as string) || 50,
       asset_type: asset_type as string | undefined,
+      equipment_type: equipment_type as string | undefined,
       status: status as string | undefined,
       floor: floor as string | undefined,
       sortBy: sortBy as string | undefined,
@@ -70,12 +79,21 @@ export const getBySite = async (req: Request, res: Response) => {
     if (!siteCode) {
       return sendError(res, "Site Code is required");
     }
-    const { page, limit, asset_type, status, floor, sortBy, sortOrder } =
-      req.query;
+    const {
+      page,
+      limit,
+      asset_type,
+      equipment_type,
+      status,
+      floor,
+      sortBy,
+      sortOrder,
+    } = req.query;
     const result = await assetsRepository.getAssetsBySite(siteCode, {
       page: parseInt(page as string) || 1,
       limit: parseInt(limit as string) || 50,
       asset_type: asset_type as string | undefined,
+      equipment_type: equipment_type as string | undefined,
       status: status as string | undefined,
       floor: floor as string | undefined,
       sortBy: sortBy as string | undefined,

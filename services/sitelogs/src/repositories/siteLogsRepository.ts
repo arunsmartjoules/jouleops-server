@@ -88,6 +88,7 @@ export interface GetSiteLogsOptions {
   page?: number;
   limit?: number;
   log_name?: string | null;
+  search?: string | null;
 }
 
 // ============================================================================
@@ -134,7 +135,7 @@ export async function getLogsBySite(
     totalPages: number;
   };
 }> {
-  const { page = 1, limit = 20, log_name = null } = options;
+  const { page = 1, limit = 20, log_name = null, search = null } = options;
   const offset = (page - 1) * limit;
 
   const conditions: string[] = [];
@@ -150,6 +151,14 @@ export async function getLogsBySite(
   if (log_name) {
     conditions.push(`log_name = $${paramIndex}`);
     params.push(log_name);
+    paramIndex++;
+  }
+
+  if (search) {
+    conditions.push(
+      `(site_code ILIKE $${paramIndex} OR executor_id ILIKE $${paramIndex} OR remarks ILIKE $${paramIndex})`,
+    );
+    params.push(`%${search}%`);
     paramIndex++;
   }
 

@@ -98,8 +98,8 @@ export const create = async (req: Request, res: Response) => {
 
 export const getById = async (req: Request, res: Response) => {
   try {
-    const { ticketId } = req.params as { ticketId: string };
-    const complaint = await complaintsRepository.getComplaint(ticketId);
+    const { id } = req.params as { id: string };
+    const complaint = await complaintsRepository.getComplaint(id);
 
     if (!complaint) {
       return sendNotFound(res, "Complaint");
@@ -112,9 +112,9 @@ export const getById = async (req: Request, res: Response) => {
       user_id: (req as AuthRequest).user?.user_id,
       action: "GET_COMPLAINT_ERROR",
       module: "complaints",
-      description: `Failed to fetch complaint ${req.params.ticketId}: ${error.message}`,
+      description: `Failed to fetch complaint ${req.params.id}: ${error.message}`,
       ip_address: req.ip,
-      metadata: { error: error.message, ticketId: req.params.ticketId },
+      metadata: { error: error.message, id: req.params.id },
     }).catch(() => {});
     return sendServerError(res, error);
   }
@@ -467,14 +467,15 @@ export const updateStatus = async (req: AuthRequest, res: Response) => {
 
 export const remove = async (req: Request, res: Response) => {
   try {
-    const { ticketId } = req.params as { ticketId: string };
+    const { id } = req.params as { id: string };
+    const ticketNo = id; // Maintain clarity that this could be a ticket number
 
-    const existing = await complaintsRepository.getComplaint(ticketId);
+    const existing = await complaintsRepository.getComplaint(ticketNo);
     if (!existing) {
       return sendNotFound(res, "Complaint");
     }
 
-    await complaintsRepository.deleteComplaint(ticketId);
+    await complaintsRepository.deleteComplaint(ticketNo);
 
     logActivity({
       user_id: (req as AuthRequest).user?.user_id,
@@ -497,9 +498,9 @@ export const remove = async (req: Request, res: Response) => {
       user_id: (req as AuthRequest).user?.user_id,
       action: "DELETE_COMPLAINT_ERROR",
       module: "complaints",
-      description: `Failed to delete complaint ${req.params.ticketId}: ${error.message}`,
+      description: `Failed to delete complaint ${req.params.id}: ${error.message}`,
       ip_address: req.ip,
-      metadata: { error: error.message, ticketId: req.params.ticketId },
+      metadata: { error: error.message, id: req.params.id },
     }).catch(() => {});
     return sendServerError(res, error);
   }

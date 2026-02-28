@@ -68,6 +68,7 @@ export interface GetAssetsOptions {
   page?: number;
   limit?: number;
   asset_type?: string | null;
+  equipment_type?: string | null;
   status?: string | null;
   floor?: string | null;
   sortBy?: string;
@@ -162,6 +163,7 @@ export async function getAssetsBySite(
     page = 1,
     limit = 50,
     asset_type = null,
+    equipment_type = null,
     status = null,
     floor = null,
     sortBy = "asset_name",
@@ -183,6 +185,12 @@ export async function getAssetsBySite(
   if (asset_type) {
     conditions.push(`asset_type = $${paramIndex}`);
     params.push(asset_type);
+    paramIndex++;
+  }
+
+  if (equipment_type) {
+    conditions.push(`equipment_type = $${paramIndex}`);
+    params.push(equipment_type);
     paramIndex++;
   }
 

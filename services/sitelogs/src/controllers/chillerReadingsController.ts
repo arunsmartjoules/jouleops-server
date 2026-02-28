@@ -39,8 +39,16 @@ export const getBySite = asyncHandler(async (req: Request, res: Response) => {
   if (!siteCode) {
     return sendError(res, "Site Code is required");
   }
-  const { page, limit, chiller_id, date_from, date_to, sortBy, sortOrder } =
-    req.query;
+  const {
+    page,
+    limit,
+    chiller_id,
+    date_from,
+    date_to,
+    sortBy,
+    sortOrder,
+    search,
+  } = req.query;
   const result = await chillerReadingsRepository.getChillerReadingsBySite(
     siteCode,
     {
@@ -51,6 +59,7 @@ export const getBySite = asyncHandler(async (req: Request, res: Response) => {
       date_to: date_to as string | undefined,
       sortBy: sortBy as string | undefined,
       sortOrder: sortOrder as "asc" | "desc" | undefined,
+      search: search as string | undefined,
     },
   );
   return sendSuccess(res, result.data, { pagination: result.pagination });

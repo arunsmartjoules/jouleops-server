@@ -44,6 +44,8 @@ export interface ChillerReading {
   evaporator_inlet_pressure?: number;
   evaporator_outlet_pressure?: number;
   inline_btu_meter?: number;
+  asset_name?: string;
+  asset_type?: string;
   status: string;
   remarks?: string;
   reviewed_by?: string;
@@ -84,6 +86,7 @@ export interface GetChillerReadingsOptions {
   date_to?: string | null;
   sortBy?: string;
   sortOrder?: "asc" | "desc";
+  search?: string | null;
 }
 
 export interface ChillerAverages {
@@ -160,6 +163,7 @@ export async function getChillerReadingsBySite(
     date_to = null,
     sortBy = "reading_time",
     sortOrder = "desc",
+    search = null,
   } = options;
 
   const offset = (page - 1) * limit;
@@ -192,6 +196,14 @@ export async function getChillerReadingsBySite(
     paramIndex++;
   }
 
+  if (search) {
+    conditions.push(
+      `(site_code ILIKE $${paramIndex} OR chiller_id ILIKE $${paramIndex} OR equipment_id ILIKE $${paramIndex} OR log_id ILIKE $${paramIndex})`,
+    );
+    params.push(`%${search}%`);
+    paramIndex++;
+  }
+
   const whereClause =
     conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
   const orderDirection = sortOrder === "asc" ? "ASC" : "DESC";
@@ -204,7 +216,7 @@ export async function getChillerReadingsBySite(
   const total = parseInt(countResult?.count || "0", 10);
 
   // Get data with explicit columns (avoid SELECT *)
-  const CHILLER_LIST_COLUMNS = `id, site_code, chiller_id, equipment_id, reading_time,
+  const CHILLER_LIST_COLUMNS = `id, site_code, chiller_id, equipment_id, asset_name, asset_type, reading_time,
     date_shift, compressor_load_percentage, status, remarks,
     condenser_inlet_temp, condenser_outlet_temp,
     evaporator_inlet_temp, evaporator_outlet_temp,

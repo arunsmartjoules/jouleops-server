@@ -21,7 +21,7 @@ export const create = asyncHandler(async (req: Request, res: Response) => {
 
 export const getBySite = asyncHandler(async (req: Request, res: Response) => {
   const { siteCode } = req.params;
-  const { page, limit, type } = req.query;
+  const { page, limit, type, search } = req.query;
 
   if (!siteCode) {
     return sendError(res, "Site Code is required");
@@ -31,6 +31,7 @@ export const getBySite = asyncHandler(async (req: Request, res: Response) => {
     page: parseInt(page as string) || 1,
     limit: parseInt(limit as string) || 20,
     log_name: type as string | undefined,
+    search: search as string | undefined,
   });
   return sendSuccess(res, result.data, { pagination: result.pagination });
 });
