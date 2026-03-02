@@ -92,6 +92,7 @@ export interface GetSiteLogsOptions {
   site_code?: string | null;
   log_id?: string | null;
   status?: string | null;
+  task_line_id?: string | null;
 }
 
 // ============================================================================
@@ -146,6 +147,7 @@ export async function getLogsBySite(
     site_code = null,
     log_id = null,
     status = null,
+    task_line_id = null,
   } = options;
   const offset = (page - 1) * limit;
 
@@ -178,6 +180,12 @@ export async function getLogsBySite(
   if (status) {
     conditions.push(`status = $${paramIndex}`);
     params.push(status);
+    paramIndex++;
+  }
+
+  if (task_line_id) {
+    conditions.push(`task_line_id = $${paramIndex}`);
+    params.push(task_line_id);
     paramIndex++;
   }
 
