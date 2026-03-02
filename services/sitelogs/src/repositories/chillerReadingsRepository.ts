@@ -46,6 +46,7 @@ export interface ChillerReading {
   inline_btu_meter?: number;
   asset_name?: string;
   asset_type?: string;
+  assigned_to?: string;
   status: string;
   remarks?: string;
   reviewed_by?: string;
@@ -68,6 +69,7 @@ export interface CreateChillerReadingInput {
   equipment_id?: string;
   log_id?: string;
   executor_id?: string;
+  assigned_to?: string;
   reading_time?: Date;
   date_shift?: string;
   compressor_load_percentage?: number;
@@ -216,7 +218,7 @@ export async function getChillerReadingsBySite(
   const total = parseInt(countResult?.count || "0", 10);
 
   // Get data with explicit columns (avoid SELECT *)
-  const CHILLER_LIST_COLUMNS = `id, site_code, chiller_id, equipment_id, asset_name, asset_type, reading_time,
+  const CHILLER_LIST_COLUMNS = `id, site_code, chiller_id, equipment_id, asset_name, asset_type, assigned_to, reading_time,
     date_shift, compressor_load_percentage, status, remarks,
     condenser_inlet_temp, condenser_outlet_temp,
     evaporator_inlet_temp, evaporator_outlet_temp,
