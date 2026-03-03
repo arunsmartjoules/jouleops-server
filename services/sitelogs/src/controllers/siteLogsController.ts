@@ -31,6 +31,9 @@ export const getBySite = asyncHandler(async (req: Request, res: Response) => {
     site_code,
     status,
     task_line_id,
+    date_from,
+    date_to,
+    startDate,
   } = req.query;
 
   if (!siteCode) {
@@ -46,6 +49,8 @@ export const getBySite = asyncHandler(async (req: Request, res: Response) => {
     log_id: log_id as string | undefined,
     status: status as string | undefined,
     task_line_id: task_line_id as string | undefined,
+    date_from: (date_from as string) || (startDate as string) || undefined,
+    date_to: (date_to as string) || undefined,
   });
   return sendSuccess(res, result.data, { pagination: result.pagination });
 });

@@ -48,6 +48,8 @@ export const getBySite = asyncHandler(async (req: Request, res: Response) => {
     sortBy,
     sortOrder,
     search,
+    fromDate,
+    toDate,
   } = req.query;
   const result = await chillerReadingsRepository.getChillerReadingsBySite(
     siteCode,
@@ -55,8 +57,8 @@ export const getBySite = asyncHandler(async (req: Request, res: Response) => {
       page: parseInt(page as string) || 1,
       limit: parseInt(limit as string) || 20,
       chiller_id: chiller_id as string | undefined,
-      date_from: date_from as string | undefined,
-      date_to: date_to as string | undefined,
+      date_from: (date_from as string) || (fromDate as string) || undefined,
+      date_to: (date_to as string) || (toDate as string) || undefined,
       sortBy: sortBy as string | undefined,
       sortOrder: sortOrder as "asc" | "desc" | undefined,
       search: search as string | undefined,
