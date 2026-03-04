@@ -22,6 +22,9 @@ import pmChecklistRoutes from "./routes/pmChecklist.ts";
 import pmInstancesRoutes from "./routes/pmInstances.ts";
 import tasksRoutes from "./routes/tasks.ts";
 
+import pmChecklistMasterRoutes from "./routes/pmChecklistMaster.ts";
+import pmResponseRoutes from "./routes/pmResponse.ts";
+
 const PORT = process.env.PM_PORT || 3424;
 
 const app = express();
@@ -51,6 +54,8 @@ app.get("/health", async (_req: Request, res: Response) => {
 app.use("/api/pm-checklists", pmChecklistRoutes);
 app.use("/api/pm-checklist", pmChecklistRoutes);
 app.use("/api/pm-instances", pmInstancesRoutes);
+app.use("/api/pm-checklist-master", pmChecklistMasterRoutes);
+app.use("/api/pm-response", pmResponseRoutes);
 app.use("/api/tasks", tasksRoutes);
 
 // 404 Handler

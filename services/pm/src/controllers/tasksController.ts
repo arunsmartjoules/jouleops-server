@@ -33,7 +33,9 @@ export const getById = async (req: Request, res: Response) => {
     if (!taskId) {
       return sendError(res, "Task ID is required");
     }
-    const task = await tasksRepository.getTaskById(taskId);
+    const { fields } = req.query;
+    const fieldArray = fields ? (fields as string).split(",") : undefined;
+    const task = await tasksRepository.getTaskById(taskId, fieldArray);
     if (!task) {
       return sendNotFound(res, "Task");
     }
@@ -58,6 +60,7 @@ export const getBySite = async (req: Request, res: Response) => {
       assigned_to,
       sortBy,
       sortOrder,
+      fields,
     } = req.query;
 
     const result = await tasksRepository.getTasksBySite(siteCode, {
@@ -68,6 +71,7 @@ export const getBySite = async (req: Request, res: Response) => {
       assigned_to: assigned_to as string | undefined,
       sortBy: sortBy as string | undefined,
       sortOrder: sortOrder as "asc" | "desc" | undefined,
+      fields: fields ? (fields as string).split(",") : undefined,
     });
     return sendSuccess(res, result.data, { pagination: result.pagination });
   } catch (error: any) {
@@ -82,10 +86,12 @@ export const getByUser = async (req: Request, res: Response) => {
     if (!userId) {
       return sendError(res, "User ID is required");
     }
-    const { task_status, limit } = req.query;
+    const { task_status, limit, fields } = req.query;
+    const fieldArray = fields ? (fields as string).split(",") : undefined;
     const tasks = await tasksRepository.getTasksByUser(userId, {
       task_status: task_status as string | undefined,
       limit: parseInt(limit as string) || 20,
+      fields: fieldArray,
     });
     return sendSuccess(res, tasks);
   } catch (error: any) {
@@ -100,7 +106,9 @@ export const getDueToday = async (req: Request, res: Response) => {
     if (!siteCode) {
       return sendError(res, "Site Code is required");
     }
-    const tasks = await tasksRepository.getTasksDueToday(siteCode);
+    const { fields } = req.query;
+    const fieldArray = fields ? (fields as string).split(",") : undefined;
+    const tasks = await tasksRepository.getTasksDueToday(siteCode, fieldArray);
     return sendSuccess(res, tasks);
   } catch (error: any) {
     console.error("Get tasks error:", error);

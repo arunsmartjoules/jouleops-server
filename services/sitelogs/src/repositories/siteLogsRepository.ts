@@ -224,7 +224,8 @@ export async function getLogsBySite(
 
   // Get data
   const data = await query<SiteLog>(
-    `SELECT * FROM site_logs ${whereClause}
+    `SELECT id, site_code, executor_id, log_name, task_name, temperature, rh, tds, ph, hardness, chemical_dosing, remarks, entry_time, end_time, attachment, status, created_at, updated_at 
+     FROM site_logs ${whereClause}
      ORDER BY created_at DESC
      LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`,
     [...params, limit, offset],
@@ -239,6 +240,17 @@ export async function getLogsBySite(
       totalPages: Math.ceil(total / limit),
     },
   };
+}
+
+/**
+ * Get log signature by ID
+ */
+export async function getSignatureById(id: string): Promise<string | null> {
+  const result = await queryOne<{ signature: string }>(
+    `SELECT signature FROM site_logs WHERE id = $1`,
+    [id],
+  );
+  return result?.signature || null;
 }
 
 /**

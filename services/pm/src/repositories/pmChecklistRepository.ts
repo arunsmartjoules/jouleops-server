@@ -86,9 +86,11 @@ export async function createPMChecklist(
  */
 export async function getPMChecklistById(
   checklistId: string,
+  fields?: string[],
 ): Promise<PMChecklist | null> {
+  const selectFields = fields && fields.length > 0 ? fields.join(", ") : "*";
   return queryOne<PMChecklist>(
-    `SELECT * FROM pm_checklist WHERE checklist_id = $1`,
+    `SELECT ${selectFields} FROM pm_checklist WHERE checklist_id = $1`,
     [checklistId],
   );
 }
@@ -99,8 +101,10 @@ export async function getPMChecklistById(
 export async function getPMChecklistBySite(
   siteCode: string,
   options: GetPMChecklistOptions = {},
+  fields?: string[],
 ): Promise<PMChecklist[]> {
   const { asset_type = null, status = "Active" } = options;
+  const selectFields = fields && fields.length > 0 ? fields.join(", ") : "*";
 
   const conditions: string[] = ["site_code = $1"];
   const params: any[] = [siteCode];
@@ -119,7 +123,7 @@ export async function getPMChecklistBySite(
   }
 
   return query<PMChecklist>(
-    `SELECT * FROM pm_checklist
+    `SELECT ${selectFields} FROM pm_checklist
      WHERE ${conditions.join(" AND ")}
      ORDER BY sequence_no ASC`,
     params,
@@ -132,8 +136,10 @@ export async function getPMChecklistBySite(
 export async function getPMChecklistByMaintenanceType(
   maintenanceType: string,
   siteCode?: string,
+  fields?: string[],
 ): Promise<PMChecklist[]> {
   const conditions: string[] = ["maintenance_type = $1", "status = 'Active'"];
+  const selectFields = fields && fields.length > 0 ? fields.join(", ") : "*";
   const params: any[] = [maintenanceType];
   let paramIndex = 2;
 
@@ -144,7 +150,7 @@ export async function getPMChecklistByMaintenanceType(
   }
 
   return query<PMChecklist>(
-    `SELECT * FROM pm_checklist
+    `SELECT ${selectFields} FROM pm_checklist
      WHERE ${conditions.join(" AND ")}
      ORDER BY sequence_no ASC`,
     params,
@@ -156,8 +162,10 @@ export async function getPMChecklistByMaintenanceType(
  */
 export async function getAllPMChecklists(
   options: GetPMChecklistOptions = {},
+  fields?: string[],
 ): Promise<PMChecklist[]> {
   const { asset_type = null, status = "Active" } = options;
+  const selectFields = fields && fields.length > 0 ? fields.join(", ") : "*";
 
   const conditions: string[] = [];
   const params: any[] = [];
@@ -179,7 +187,7 @@ export async function getAllPMChecklists(
     conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
 
   return query<PMChecklist>(
-    `SELECT * FROM pm_checklist
+    `SELECT ${selectFields} FROM pm_checklist
      ${whereClause}
      ORDER BY site_code, sequence_no ASC`,
     params,
@@ -274,9 +282,14 @@ export async function createChecklistResponse(data: {
  */
 export async function getChecklistResponses(
   instanceId: string,
+  fields?: string[],
 ): Promise<any[]> {
+  const selectFields =
+    fields && fields.length > 0
+      ? fields.map((f) => `r.${f}`).join(", ")
+      : "r.*";
   return query(
-    `SELECT r.*, c.task_name, c.field_type, c.sequence_no
+    `SELECT ${selectFields}, c.task_name, c.field_type, c.sequence_no
      FROM pm_checklist_responses r
      LEFT JOIN pm_checklist c ON r.checklist_id = c.checklist_id
      WHERE r.instance_id = $1
@@ -318,6 +331,19 @@ export async function updateChecklistResponse(
   return response;
 }
 
+/**
+ * Delete a checklist response
+ */
+export async function deleteChecklistResponse(
+  responseId: number,
+): Promise<boolean> {
+  const result = await queryOne<{ id: number }>(
+    `DELETE FROM pm_checklist_responses WHERE id = $1 RETURNING id`,
+    [responseId],
+  );
+  return result !== null;
+}
+
 export default {
   createPMChecklist,
   getPMChecklistById,
@@ -329,4 +355,5 @@ export default {
   createChecklistResponse,
   getChecklistResponses,
   updateChecklistResponse,
+  deleteChecklistResponse,
 };

@@ -43,10 +43,10 @@ router.get(
   verifyAnyAuth,
   pmChecklistController.getResponses,
 );
-router.put(
+router.delete(
   "/responses/:responseId",
   verifyAnyAuth,
-  pmChecklistController.updateResponse,
+  pmChecklistController.removeResponse,
 );
 
 export default router;

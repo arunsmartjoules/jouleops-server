@@ -37,6 +37,9 @@ export interface PMInstance {
   teams_name?: string;
   assigned_to_name?: string;
   remarks?: string;
+  client_sign?: string;
+  before_image?: string;
+  after_image?: string;
   created_at?: Date;
   updated_at?: Date;
 }
@@ -64,6 +67,9 @@ export interface CreatePMInstanceInput {
   teams_name?: string;
   assigned_to_name?: string;
   remarks?: string;
+  client_sign?: string;
+  before_image?: string;
+  after_image?: string;
 }
 
 export interface GetPMInstancesOptions {
@@ -74,6 +80,7 @@ export interface GetPMInstancesOptions {
   asset_type?: string | null;
   sortBy?: string;
   sortOrder?: "asc" | "desc";
+  fields?: string[];
 }
 
 // ============================================================================
@@ -115,9 +122,11 @@ export async function createPMInstance(
  */
 export async function getPMInstanceById(
   instanceId: string,
+  fields?: string[],
 ): Promise<PMInstance | null> {
+  const selectFields = fields && fields.length > 0 ? fields.join(", ") : "*";
   return queryOne<PMInstance>(
-    `SELECT * FROM pm_instances WHERE instance_id = $1`,
+    `SELECT ${selectFields} FROM pm_instances WHERE instance_id = $1`,
     [instanceId],
   );
 }
@@ -145,7 +154,10 @@ export async function getPMInstancesBySite(
     asset_type = null,
     sortBy = "start_due_date",
     sortOrder = "asc",
+    fields = [],
   } = options;
+
+  const selectFields = fields && fields.length > 0 ? fields.join(", ") : "*";
 
   const offset = (page - 1) * limit;
 
@@ -183,7 +195,7 @@ export async function getPMInstancesBySite(
 
   // Get data
   const data = await query<PMInstance>(
-    `SELECT * FROM pm_instances ${whereClause}
+    `SELECT ${selectFields} FROM pm_instances ${whereClause}
      ORDER BY ${sortBy} ${orderDirection}
      LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`,
     [...params, limit, offset],
@@ -205,9 +217,11 @@ export async function getPMInstancesBySite(
  */
 export async function getPMInstancesByAsset(
   assetId: string,
+  fields?: string[],
 ): Promise<PMInstance[]> {
+  const selectFields = fields && fields.length > 0 ? fields.join(", ") : "*";
   return query<PMInstance>(
-    `SELECT * FROM pm_instances
+    `SELECT ${selectFields} FROM pm_instances
      WHERE asset_id = $1
      ORDER BY start_due_date DESC`,
     [assetId],
@@ -220,9 +234,11 @@ export async function getPMInstancesByAsset(
 export async function getPendingPMInstances(
   siteCode: string,
   days: number = 7,
+  fields?: string[],
 ): Promise<PMInstance[]> {
+  const selectFields = fields && fields.length > 0 ? fields.join(", ") : "*";
   return query<PMInstance>(
-    `SELECT * FROM pm_instances
+    `SELECT ${selectFields} FROM pm_instances
      WHERE site_code = $1
        AND status = 'Pending'
        AND start_due_date <= CURRENT_DATE + $2::integer
@@ -236,9 +252,11 @@ export async function getPendingPMInstances(
  */
 export async function getOverduePMInstances(
   siteCode: string,
+  fields?: string[],
 ): Promise<PMInstance[]> {
+  const selectFields = fields && fields.length > 0 ? fields.join(", ") : "*";
   return query<PMInstance>(
-    `SELECT * FROM pm_instances
+    `SELECT ${selectFields} FROM pm_instances
      WHERE site_code = $1
        AND status IN ('Pending', 'In Progress')
        AND start_due_date < CURRENT_DATE

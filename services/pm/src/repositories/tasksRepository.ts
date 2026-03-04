@@ -61,6 +61,7 @@ export interface GetTasksOptions {
   assigned_to?: string | null;
   sortBy?: string;
   sortOrder?: "asc" | "desc";
+  fields?: string[];
 }
 
 // ============================================================================
@@ -95,8 +96,15 @@ export async function createTask(data: CreateTaskInput): Promise<Task> {
 /**
  * Get task by ID
  */
-export async function getTaskById(taskId: string): Promise<Task | null> {
-  return queryOne<Task>(`SELECT * FROM tasks WHERE task_id = $1`, [taskId]);
+export async function getTaskById(
+  taskId: string,
+  fields?: string[],
+): Promise<Task | null> {
+  const selectFields = fields && fields.length > 0 ? fields.join(", ") : "*";
+  return queryOne<Task>(
+    `SELECT ${selectFields} FROM tasks WHERE task_id = $1`,
+    [taskId],
+  );
 }
 
 /**
@@ -122,7 +130,10 @@ export async function getTasksBySite(
     assigned_to = null,
     sortBy = "created_at",
     sortOrder = "desc",
+    fields = [],
   } = options;
+
+  const selectFields = fields && fields.length > 0 ? fields.join(", ") : "*";
 
   const offset = (page - 1) * limit;
 
@@ -160,7 +171,7 @@ export async function getTasksBySite(
 
   // Get data
   const data = await query<Task>(
-    `SELECT * FROM tasks ${whereClause}
+    `SELECT ${selectFields} FROM tasks ${whereClause}
      ORDER BY ${sortBy} ${orderDirection}
      LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`,
     [...params, limit, offset],
@@ -182,9 +193,14 @@ export async function getTasksBySite(
  */
 export async function getTasksByUser(
   userId: string,
-  options: { task_status?: string | null; limit?: number } = {},
+  options: {
+    task_status?: string | null;
+    limit?: number;
+    fields?: string[];
+  } = {},
 ): Promise<Task[]> {
-  const { task_status = null, limit = 20 } = options;
+  const { task_status = null, limit = 20, fields = [] } = options;
+  const selectFields = fields && fields.length > 0 ? fields.join(", ") : "*";
 
   const conditions: string[] = ["assigned_to = $1"];
   const params: any[] = [userId];
@@ -197,7 +213,7 @@ export async function getTasksByUser(
   }
 
   return query<Task>(
-    `SELECT * FROM tasks
+    `SELECT ${selectFields} FROM tasks
      WHERE ${conditions.join(" AND ")}
      ORDER BY due_date ASC
      LIMIT $${paramIndex}`,
@@ -208,9 +224,13 @@ export async function getTasksByUser(
 /**
  * Get tasks due today
  */
-export async function getTasksDueToday(siteCode: string): Promise<Task[]> {
+export async function getTasksDueToday(
+  siteCode: string,
+  fields?: string[],
+): Promise<Task[]> {
+  const selectFields = fields && fields.length > 0 ? fields.join(", ") : "*";
   return query<Task>(
-    `SELECT * FROM tasks
+    `SELECT ${selectFields} FROM tasks
      WHERE site_code = $1
        AND due_date >= CURRENT_DATE
        AND due_date < CURRENT_DATE + INTERVAL '1 day'

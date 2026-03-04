@@ -15,7 +15,14 @@ import {
   sendServerError,
 } from "@jouleops/shared";
 
-const VALID_STATUSES = ["Pending", "In Progress", "Completed", "Cancelled"];
+const VALID_STATUSES = [
+  "Open",
+  "Pending",
+  "In Progress",
+  "In-progress",
+  "Completed",
+  "Cancelled",
+];
 
 interface AuthRequest extends Request {
   user?: {
@@ -39,7 +46,12 @@ export const getById = async (req: Request, res: Response) => {
     if (!instanceId) {
       return sendError(res, "Instance ID is required");
     }
-    const instance = await pmInstancesRepository.getPMInstanceById(instanceId);
+    const { fields } = req.query;
+    const fieldArray = fields ? (fields as string).split(",") : undefined;
+    const instance = await pmInstancesRepository.getPMInstanceById(
+      instanceId,
+      fieldArray,
+    );
     if (!instance) {
       return sendNotFound(res, "PM instance");
     }
@@ -56,8 +68,16 @@ export const getBySite = async (req: Request, res: Response) => {
     if (!siteCode) {
       return sendError(res, "Site Code is required");
     }
-    const { page, limit, status, frequency, asset_type, sortBy, sortOrder } =
-      req.query;
+    const {
+      page,
+      limit,
+      status,
+      frequency,
+      asset_type,
+      sortBy,
+      sortOrder,
+      fields,
+    } = req.query;
     const result = await pmInstancesRepository.getPMInstancesBySite(siteCode, {
       page: parseInt(page as string) || 1,
       limit: parseInt(limit as string) || 20,
@@ -66,6 +86,7 @@ export const getBySite = async (req: Request, res: Response) => {
       asset_type: asset_type as string | undefined,
       sortBy: sortBy as string | undefined,
       sortOrder: sortOrder as "asc" | "desc" | undefined,
+      fields: fields ? (fields as string).split(",") : undefined,
     });
     return sendSuccess(res, result.data, { pagination: result.pagination });
   } catch (error: any) {
@@ -80,8 +101,12 @@ export const getByAsset = async (req: Request, res: Response) => {
     if (!assetId) {
       return sendError(res, "Asset ID is required");
     }
-    const instances =
-      await pmInstancesRepository.getPMInstancesByAsset(assetId);
+    const { fields } = req.query;
+    const fieldArray = fields ? (fields as string).split(",") : undefined;
+    const instances = await pmInstancesRepository.getPMInstancesByAsset(
+      assetId,
+      fieldArray,
+    );
     return sendSuccess(res, instances);
   } catch (error: any) {
     console.error("Get PM instances error:", error);
@@ -95,10 +120,12 @@ export const getPending = async (req: Request, res: Response) => {
     if (!siteCode) {
       return sendError(res, "Site Code is required");
     }
-    const { days } = req.query;
+    const { days, fields } = req.query;
+    const fieldArray = fields ? (fields as string).split(",") : undefined;
     const instances = await pmInstancesRepository.getPendingPMInstances(
       siteCode,
       parseInt(days as string) || 7,
+      fieldArray,
     );
     return sendSuccess(res, instances);
   } catch (error: any) {
@@ -113,8 +140,12 @@ export const getOverdue = async (req: Request, res: Response) => {
     if (!siteCode) {
       return sendError(res, "Site Code is required");
     }
-    const instances =
-      await pmInstancesRepository.getOverduePMInstances(siteCode);
+    const { fields } = req.query;
+    const fieldArray = fields ? (fields as string).split(",") : undefined;
+    const instances = await pmInstancesRepository.getOverduePMInstances(
+      siteCode,
+      fieldArray,
+    );
     return sendSuccess(res, instances);
   } catch (error: any) {
     console.error("Get overdue PM instances error:", error);
@@ -150,7 +181,7 @@ export const updateStatus = async (req: AuthRequest, res: Response) => {
     if (!instanceId) {
       return sendError(res, "Instance ID is required");
     }
-    const { status } = req.body;
+    const { status, client_sign, before_image, after_image } = req.body;
     if (!status || !VALID_STATUSES.includes(status)) {
       return sendError(
         res,
@@ -163,11 +194,30 @@ export const updateStatus = async (req: AuthRequest, res: Response) => {
       return sendNotFound(res, "PM instance");
     }
 
+    // Use updatePMInstanceStatus for status + timestamps
     const instance = await pmInstancesRepository.updatePMInstanceStatus(
       instanceId,
       status,
       req.user?.user_id,
     );
+
+    // If completing, also save signature and images
+    if (
+      status === "Completed" &&
+      (client_sign || before_image || after_image)
+    ) {
+      const completionUpdates: Record<string, any> = {};
+      if (client_sign) completionUpdates.client_sign = client_sign;
+      if (before_image) completionUpdates.before_image = before_image;
+      if (after_image) completionUpdates.after_image = after_image;
+
+      const updated = await pmInstancesRepository.updatePMInstance(
+        instanceId,
+        completionUpdates,
+      );
+      return sendSuccess(res, updated);
+    }
+
     return sendSuccess(res, instance);
   } catch (error: any) {
     console.error("Update PM instance status error:", error);

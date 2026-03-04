@@ -31,8 +31,12 @@ export const getById = async (req: Request, res: Response) => {
     if (!checklistId) {
       return sendError(res, "Checklist ID is required");
     }
-    const checklist =
-      await pmChecklistRepository.getPMChecklistById(checklistId);
+    const { fields } = req.query;
+    const fieldArray = fields ? (fields as string).split(",") : undefined;
+    const checklist = await pmChecklistRepository.getPMChecklistById(
+      checklistId,
+      fieldArray,
+    );
     if (!checklist) {
       return sendNotFound(res, "PM checklist");
     }
@@ -49,13 +53,15 @@ export const getBySite = async (req: Request, res: Response) => {
     if (!siteCode) {
       return sendError(res, "Site Code is required");
     }
-    const { asset_type, status } = req.query;
+    const { asset_type, status, fields } = req.query;
+    const fieldArray = fields ? (fields as string).split(",") : undefined;
     const checklists = await pmChecklistRepository.getPMChecklistBySite(
       siteCode,
       {
         asset_type: asset_type as string | undefined,
         status: status as string | undefined,
       },
+      fieldArray,
     );
     return sendSuccess(res, checklists);
   } catch (error: any) {
@@ -70,11 +76,13 @@ export const getByMaintenanceType = async (req: Request, res: Response) => {
     if (!maintenanceType) {
       return sendError(res, "Maintenance Type is required");
     }
-    const { site_code } = req.query;
+    const { site_code, fields } = req.query;
+    const fieldArray = fields ? (fields as string).split(",") : undefined;
     const checklists =
       await pmChecklistRepository.getPMChecklistByMaintenanceType(
         maintenanceType,
         site_code as string | undefined,
+        fieldArray,
       );
     return sendSuccess(res, checklists);
   } catch (error: any) {
@@ -85,11 +93,15 @@ export const getByMaintenanceType = async (req: Request, res: Response) => {
 
 export const getAll = async (req: Request, res: Response) => {
   try {
-    const { asset_type, status } = req.query;
-    const checklists = await pmChecklistRepository.getAllPMChecklists({
-      asset_type: asset_type as string | undefined,
-      status: status as string | undefined,
-    });
+    const { asset_type, status, fields } = req.query;
+    const fieldArray = fields ? (fields as string).split(",") : undefined;
+    const checklists = await pmChecklistRepository.getAllPMChecklists(
+      {
+        asset_type: asset_type as string | undefined,
+        status: status as string | undefined,
+      },
+      fieldArray,
+    );
     return sendSuccess(res, checklists);
   } catch (error: any) {
     console.error("Get all PM checklists error:", error);
@@ -161,8 +173,12 @@ export const getResponses = async (req: Request, res: Response) => {
     if (!instanceId) {
       return sendError(res, "Instance ID is required");
     }
-    const responses =
-      await pmChecklistRepository.getChecklistResponses(instanceId);
+    const { fields } = req.query;
+    const fieldArray = fields ? (fields as string).split(",") : undefined;
+    const responses = await pmChecklistRepository.getChecklistResponses(
+      instanceId,
+      fieldArray,
+    );
     return sendSuccess(res, responses);
   } catch (error: any) {
     console.error("Get checklist responses error:", error);
@@ -187,6 +203,27 @@ export const updateResponse = async (req: Request, res: Response) => {
   }
 };
 
+export const removeResponse = async (req: Request, res: Response) => {
+  try {
+    const { responseId } = req.params;
+    if (!responseId) {
+      return sendError(res, "Response ID is required");
+    }
+    const deleted = await pmChecklistRepository.deleteChecklistResponse(
+      parseInt(responseId),
+    );
+    if (!deleted) {
+      return sendNotFound(res, "Checklist response");
+    }
+    return sendSuccess(res, null, {
+      message: "Checklist response deleted successfully",
+    });
+  } catch (error: any) {
+    console.error("Delete checklist response error:", error);
+    return sendServerError(res, error);
+  }
+};
+
 export default {
   create,
   getById,
@@ -198,4 +235,5 @@ export default {
   createResponse,
   getResponses,
   updateResponse,
+  removeResponse,
 };
