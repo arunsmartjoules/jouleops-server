@@ -73,6 +73,8 @@ export interface CreatePMInstanceInput {
 }
 
 export interface GetPMInstancesOptions {
+  instance_id?: string | null;
+  maintenance_id?: string | null;
   page?: number;
   limit?: number;
   status?: string | null;
@@ -147,6 +149,8 @@ export async function getPMInstancesBySite(
   };
 }> {
   const {
+    instance_id = null,
+    maintenance_id = null,
     page = 1,
     limit = 20,
     status = null,
@@ -164,6 +168,18 @@ export async function getPMInstancesBySite(
   const conditions: string[] = ["site_code = $1"];
   const params: any[] = [siteCode];
   let paramIndex = 2;
+
+  if (instance_id) {
+    conditions.push(`instance_id = $${paramIndex}`);
+    params.push(instance_id);
+    paramIndex++;
+  }
+
+  if (maintenance_id) {
+    conditions.push(`maintenance_id = $${paramIndex}`);
+    params.push(maintenance_id);
+    paramIndex++;
+  }
 
   if (status) {
     conditions.push(`status = $${paramIndex}`);

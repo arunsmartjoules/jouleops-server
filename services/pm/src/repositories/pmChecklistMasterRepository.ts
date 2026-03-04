@@ -11,18 +11,28 @@ import { query, queryOne } from "@jouleops/shared";
 // ============================================================================
 
 export interface PMChecklistMaster {
-  check_list_id: string; // character varying
+  checklist_id: string; // character varying
   title: string; // character varying
   asset_type: string; // character varying
   frequency: string; // character varying
+  site_code?: string; // text
   created_at?: Date; // timestamp without time zone
 }
 
+export interface GetPMChecklistMasterOptions {
+  checklist_id?: string;
+  site_code?: string;
+  title?: string;
+  asset_type?: string;
+  fields?: string[];
+}
+
 export interface CreatePMChecklistMasterInput {
-  check_list_id: string;
+  checklist_id: string;
   title: string;
   asset_type: string;
   frequency: string;
+  site_code?: string;
 }
 
 // ============================================================================
@@ -57,19 +67,54 @@ export async function create(
  * Get PM checklist master by ID
  */
 export async function getById(
-  checkListId: string,
+  checklistId: string,
   fields?: string[],
 ): Promise<PMChecklistMaster | null> {
   const selectFields = fields && fields.length > 0 ? fields.join(", ") : "*";
   return queryOne<PMChecklistMaster>(
-    `SELECT ${selectFields} FROM pm_checklist_master WHERE check_list_id = $1`,
-    [checkListId],
+    `SELECT ${selectFields} FROM pm_checklist_master WHERE checklist_id = $1`,
+    [checklistId],
   );
 }
 
 /**
- * Get all PM checklist master entries
+ * Get PM checklist master entries with multi-criteria filters
  */
+export async function getFiltered(
+  options: GetPMChecklistMasterOptions = {},
+): Promise<PMChecklistMaster[]> {
+  const { checklist_id, site_code, title, asset_type, fields = [] } = options;
+  const selectFields = fields && fields.length > 0 ? fields.join(", ") : "*";
+
+  const conditions: string[] = [];
+  const params: any[] = [];
+  let paramIndex = 1;
+
+  if (checklist_id) {
+    conditions.push(`checklist_id = $${paramIndex++}`);
+    params.push(checklist_id);
+  }
+  if (site_code) {
+    conditions.push(`site_code = $${paramIndex++}`);
+    params.push(site_code);
+  }
+  if (title) {
+    conditions.push(`title ILIKE $${paramIndex++}`);
+    params.push(`%${title}%`);
+  }
+  if (asset_type) {
+    conditions.push(`asset_type = $${paramIndex++}`);
+    params.push(asset_type);
+  }
+
+  const whereClause =
+    conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
+
+  return query<PMChecklistMaster>(
+    `SELECT ${selectFields} FROM pm_checklist_master ${whereClause} ORDER BY created_at DESC`,
+    params,
+  );
+}
 export async function getAll(fields?: string[]): Promise<PMChecklistMaster[]> {
   const selectFields = fields && fields.length > 0 ? fields.join(", ") : "*";
   return query<PMChecklistMaster>(
@@ -81,7 +126,7 @@ export async function getAll(fields?: string[]): Promise<PMChecklistMaster[]> {
  * Update a PM checklist master entry
  */
 export async function update(
-  checkListId: string,
+  checklistId: string,
   data: Partial<PMChecklistMaster>,
 ): Promise<PMChecklistMaster> {
   const entries = Object.entries(data).filter(
@@ -95,9 +140,9 @@ export async function update(
   const entry = await queryOne<PMChecklistMaster>(
     `UPDATE pm_checklist_master
      SET ${setClauses.join(", ")}
-     WHERE check_list_id = $${entries.length + 1}
+     WHERE checklist_id = $${entries.length + 1}
      RETURNING *`,
-    [...values, checkListId],
+    [...values, checklistId],
   );
 
   if (!entry) {
@@ -110,10 +155,10 @@ export async function update(
 /**
  * Delete a PM checklist master entry
  */
-export async function remove(checkListId: string): Promise<boolean> {
-  const result = await queryOne<{ check_list_id: string }>(
-    `DELETE FROM pm_checklist_master WHERE check_list_id = $1 RETURNING check_list_id`,
-    [checkListId],
+export async function remove(checklistId: string): Promise<boolean> {
+  const result = await queryOne<{ checklist_id: string }>(
+    `DELETE FROM pm_checklist_master WHERE checklist_id = $1 RETURNING checklist_id`,
+    [checklistId],
   );
   return result !== null;
 }
@@ -121,6 +166,7 @@ export async function remove(checkListId: string): Promise<boolean> {
 export default {
   create,
   getById,
+  getFiltered,
   getAll,
   update,
   remove,

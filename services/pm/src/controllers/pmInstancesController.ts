@@ -69,6 +69,8 @@ export const getBySite = async (req: Request, res: Response) => {
       return sendError(res, "Site Code is required");
     }
     const {
+      instance_id,
+      maintenance_id,
       page,
       limit,
       status,
@@ -79,6 +81,8 @@ export const getBySite = async (req: Request, res: Response) => {
       fields,
     } = req.query;
     const result = await pmInstancesRepository.getPMInstancesBySite(siteCode, {
+      instance_id: instance_id as string | undefined,
+      maintenance_id: maintenance_id as string | undefined,
       page: parseInt(page as string) || 1,
       limit: parseInt(limit as string) || 20,
       status: status as string | undefined,

@@ -47,6 +47,9 @@ export interface CreatePMChecklistInput {
 }
 
 export interface GetPMChecklistOptions {
+  checklist_id?: string | null;
+  site_code?: string | null;
+  task_name?: string | null;
   asset_type?: string | null;
   status?: string | null;
 }
@@ -164,12 +167,36 @@ export async function getAllPMChecklists(
   options: GetPMChecklistOptions = {},
   fields?: string[],
 ): Promise<PMChecklist[]> {
-  const { asset_type = null, status = "Active" } = options;
+  const {
+    checklist_id = null,
+    site_code = null,
+    task_name = null,
+    asset_type = null,
+    status = "Active",
+  } = options;
   const selectFields = fields && fields.length > 0 ? fields.join(", ") : "*";
 
   const conditions: string[] = [];
   const params: any[] = [];
   let paramIndex = 1;
+
+  if (checklist_id) {
+    conditions.push(`checklist_id = $${paramIndex}`);
+    params.push(checklist_id);
+    paramIndex++;
+  }
+
+  if (site_code) {
+    conditions.push(`site_code = $${paramIndex}`);
+    params.push(site_code);
+    paramIndex++;
+  }
+
+  if (task_name) {
+    conditions.push(`task_name ILIKE $${paramIndex}`);
+    params.push(`%${task_name}%`);
+    paramIndex++;
+  }
 
   if (asset_type) {
     conditions.push(`asset_type = $${paramIndex}`);

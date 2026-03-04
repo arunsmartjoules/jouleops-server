@@ -93,10 +93,14 @@ export const getByMaintenanceType = async (req: Request, res: Response) => {
 
 export const getAll = async (req: Request, res: Response) => {
   try {
-    const { asset_type, status, fields } = req.query;
+    const { checklist_id, site_code, task_name, asset_type, status, fields } =
+      req.query;
     const fieldArray = fields ? (fields as string).split(",") : undefined;
     const checklists = await pmChecklistRepository.getAllPMChecklists(
       {
+        checklist_id: checklist_id as string | undefined,
+        site_code: site_code as string | undefined,
+        task_name: task_name as string | undefined,
         asset_type: asset_type as string | undefined,
         status: status as string | undefined,
       },
