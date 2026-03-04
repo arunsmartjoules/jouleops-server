@@ -21,8 +21,13 @@ export const verifyToken = async (
   res: Response,
   next: NextFunction,
 ) => {
+  let authHeader = "";
   try {
-    const authHeader = req.headers.authorization;
+    authHeader = req.headers.authorization || "";
+    console.log(
+      `[PM Auth] Header received:`,
+      authHeader ? authHeader.substring(0, 20) + "..." : "NONE",
+    );
 
     if (!authHeader) {
       return res.status(401).json({
@@ -41,6 +46,10 @@ export const verifyToken = async (
     }
 
     const secret = process.env.JWT_SECRET;
+    console.log(
+      `[PM Auth] Found secret matching expected length?`,
+      secret ? secret.length : "NO SECRET",
+    );
     if (!secret) {
       throw new Error("JWT_SECRET is not defined");
     }
@@ -52,9 +61,12 @@ export const verifyToken = async (
     if (!decoded.id && decoded.user_id) decoded.id = decoded.user_id;
 
     req.user = decoded;
+    console.log(`[PM Auth] Successfully decoded user:`, decoded.user_id);
     next();
   } catch (error: any) {
-    console.error("JWT Verification Error:", error.message, error.name);
+    console.error(
+      `[PM Auth] JWT Verification Error: ${error.message} - Token: ${authHeader ? authHeader.substring(0, 20) + "..." : "NONE"}`,
+    );
 
     if (error.name === "TokenExpiredError") {
       return res.status(401).json({
@@ -66,6 +78,8 @@ export const verifyToken = async (
     return res.status(401).json({
       success: false,
       error: "Invalid token",
+      details: error.message,
+      name: error.name,
     });
   }
 };

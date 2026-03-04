@@ -156,8 +156,12 @@ app.use(
   ),
 );
 app.use(createProxyMiddleware(proxyOptions(SERVICES.pm, "/api/pm-checklists")));
-app.use(createProxyMiddleware(proxyOptions(SERVICES.pm, "/api/pm-instances")));
 app.use(createProxyMiddleware(proxyOptions(SERVICES.pm, "/api/pm-checklist")));
+app.use(createProxyMiddleware(proxyOptions(SERVICES.pm, "/api/pm-instances")));
+app.use(
+  createProxyMiddleware(proxyOptions(SERVICES.pm, "/api/pm-checklist-master")),
+);
+app.use(createProxyMiddleware(proxyOptions(SERVICES.pm, "/api/pm-response")));
 app.use(createProxyMiddleware(proxyOptions(SERVICES.pm, "/api/tasks")));
 app.use(createProxyMiddleware(proxyOptions(SERVICES.utility, "/api/whatsapp")));
 app.use(
