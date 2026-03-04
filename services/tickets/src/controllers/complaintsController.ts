@@ -23,9 +23,9 @@ import {
 
 const VALID_STATUSES = ["Open", "Inprogress", "Resolved", "Cancelled"];
 
-export const create = async (req: Request, res: Response) => {
+export const create = async (req: AuthRequest, res: Response) => {
   try {
-    const { site_code } = req.body;
+    const { site_code, sender_id, created_user } = req.body;
     if (!site_code) {
       return sendError(res, "site_code is required");
     }
@@ -33,10 +33,16 @@ export const create = async (req: Request, res: Response) => {
     // Auto-generate ticket number
     const ticket_no = await complaintsRepository.generateTicketNo(site_code);
 
-    const complaint = await complaintsRepository.createComplaint({
+    // Populate user info if available from auth
+    const userId = req.user?.user_id;
+    const finalData = {
       ...req.body,
       ticket_no,
-    });
+      created_user: created_user || userId,
+      sender_id: sender_id || userId,
+    };
+
+    const complaint = await complaintsRepository.createComplaint(finalData);
 
     // Forward to Fieldproxy — fire and forget, do not block the response
     forwardComplaintToFieldproxy(complaint)
