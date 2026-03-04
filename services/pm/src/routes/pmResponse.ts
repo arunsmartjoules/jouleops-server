@@ -1,6 +1,6 @@
 import express from "express";
 import pmResponseController from "../controllers/pmResponseController.ts";
-import { verifyAnyAuth, requireRole } from "../middleware/auth.ts";
+import { verifyAnyAuth } from "../middleware/auth.ts";
 
 const router = express.Router();
 
@@ -17,17 +17,7 @@ router.get(
   pmResponseController.getByInstance,
 );
 router.get("/:id", verifyAnyAuth, pmResponseController.getById);
-router.put(
-  "/:id",
-  verifyAnyAuth,
-  requireRole(["admin", "superadmin"]),
-  pmResponseController.update,
-);
-router.delete(
-  "/:id",
-  verifyAnyAuth,
-  requireRole(["admin", "superadmin"]),
-  pmResponseController.remove,
-);
+router.put("/:id", verifyAnyAuth, pmResponseController.update);
+router.delete("/:id", verifyAnyAuth, pmResponseController.remove);
 
 export default router;

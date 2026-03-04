@@ -1,6 +1,6 @@
 import express from "express";
 import tasksController from "../controllers/tasksController.ts";
-import { verifyAnyAuth, requireRole } from "../middleware/auth.ts";
+import { verifyAnyAuth } from "../middleware/auth.ts";
 
 const router = express.Router();
 
@@ -19,18 +19,8 @@ router.get(
 router.get("/site/:siteCode/stats", verifyAnyAuth, tasksController.getStats);
 router.get("/user/:userId", verifyAnyAuth, tasksController.getByUser);
 router.get("/:taskId", verifyAnyAuth, tasksController.getById);
-router.put(
-  "/:taskId",
-  verifyAnyAuth,
-  requireRole(["admin", "superadmin"]),
-  tasksController.update,
-);
+router.put("/:taskId", verifyAnyAuth, tasksController.update);
 router.patch("/:taskId/status", verifyAnyAuth, tasksController.updateStatus);
-router.delete(
-  "/:taskId",
-  verifyAnyAuth,
-  requireRole(["admin", "superadmin"]),
-  tasksController.remove,
-);
+router.delete("/:taskId", verifyAnyAuth, tasksController.remove);
 
 export default router;

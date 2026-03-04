@@ -1,6 +1,6 @@
 import express from "express";
 import pmInstancesController from "../controllers/pmInstancesController.ts";
-import { verifyAnyAuth, requireRole } from "../middleware/auth.ts";
+import { verifyAnyAuth } from "../middleware/auth.ts";
 
 const router = express.Router();
 
@@ -29,12 +29,7 @@ router.get(
 );
 router.get("/asset/:assetId", verifyAnyAuth, pmInstancesController.getByAsset);
 router.get("/:instanceId", verifyAnyAuth, pmInstancesController.getById);
-router.put(
-  "/:instanceId",
-  verifyAnyAuth,
-  requireRole(["admin", "superadmin"]),
-  pmInstancesController.update,
-);
+router.put("/:instanceId", verifyAnyAuth, pmInstancesController.update);
 router.patch(
   "/:instanceId/status",
   verifyAnyAuth,
@@ -45,11 +40,6 @@ router.patch(
   verifyAnyAuth,
   pmInstancesController.updateProgress,
 );
-router.delete(
-  "/:instanceId",
-  verifyAnyAuth,
-  requireRole(["admin", "superadmin"]),
-  pmInstancesController.remove,
-);
+router.delete("/:instanceId", verifyAnyAuth, pmInstancesController.remove);
 
 export default router;

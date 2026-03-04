@@ -1,6 +1,6 @@
 import express from "express";
 import pmChecklistMasterController from "../controllers/pmChecklistMasterController.ts";
-import { verifyAnyAuth, requireRole } from "../middleware/auth.ts";
+import { verifyAnyAuth } from "../middleware/auth.ts";
 
 const router = express.Router();
 
@@ -10,24 +10,9 @@ const router = express.Router();
  */
 
 router.get("/", verifyAnyAuth, pmChecklistMasterController.getAll);
-router.post(
-  "/",
-  verifyAnyAuth,
-  requireRole(["admin", "superadmin"]),
-  pmChecklistMasterController.create,
-);
+router.post("/", verifyAnyAuth, pmChecklistMasterController.create);
 router.get("/:id", verifyAnyAuth, pmChecklistMasterController.getById);
-router.put(
-  "/:id",
-  verifyAnyAuth,
-  requireRole(["admin", "superadmin"]),
-  pmChecklistMasterController.update,
-);
-router.delete(
-  "/:id",
-  verifyAnyAuth,
-  requireRole(["admin", "superadmin"]),
-  pmChecklistMasterController.remove,
-);
+router.put("/:id", verifyAnyAuth, pmChecklistMasterController.update);
+router.delete("/:id", verifyAnyAuth, pmChecklistMasterController.remove);
 
 export default router;
