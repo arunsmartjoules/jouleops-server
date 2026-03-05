@@ -287,8 +287,36 @@ export const getStats = async (req: Request, res: Response) => {
 };
 
 export const getAll = async (req: Request, res: Response) => {
-  req.params.siteCode = "all";
-  return getBySite(req, res);
+  try {
+    const {
+      instance_id,
+      maintenance_id,
+      page,
+      limit,
+      status,
+      frequency,
+      asset_type,
+      sortBy,
+      sortOrder,
+      fields,
+    } = req.query;
+    const result = await pmInstancesRepository.getAllPMInstances({
+      instance_id: instance_id as string | undefined,
+      maintenance_id: maintenance_id as string | undefined,
+      page: parseInt(page as string) || 1,
+      limit: parseInt(limit as string) || 20,
+      status: status as string | undefined,
+      frequency: frequency as string | undefined,
+      asset_type: asset_type as string | undefined,
+      sortBy: sortBy as string | undefined,
+      sortOrder: sortOrder as "asc" | "desc" | undefined,
+      fields: fields ? (fields as string).split(",") : undefined,
+    });
+    return sendSuccess(res, result.data, { pagination: result.pagination });
+  } catch (error: any) {
+    console.error("Get PM instances error:", error);
+    return sendServerError(res, error);
+  }
 };
 
 export default {

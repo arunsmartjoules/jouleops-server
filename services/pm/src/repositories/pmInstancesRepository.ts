@@ -229,6 +229,98 @@ export async function getPMInstancesBySite(
 }
 
 /**
+ * Get all PM instances with pagination
+ */
+export async function getAllPMInstances(
+  options: GetPMInstancesOptions = {},
+): Promise<{
+  data: PMInstance[];
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+  };
+}> {
+  const {
+    instance_id = null,
+    maintenance_id = null,
+    page = 1,
+    limit = 20,
+    status = null,
+    frequency = null,
+    asset_type = null,
+    sortBy = "start_due_date",
+    sortOrder = "asc",
+    fields = [],
+  } = options;
+
+  const selectFields = fields && fields.length > 0 ? fields.join(", ") : "*";
+  const offset = (page - 1) * limit;
+
+  const conditions: string[] = [];
+  const params: any[] = [];
+  let paramIndex = 1;
+
+  if (instance_id) {
+    conditions.push(`instance_id = $${paramIndex}`);
+    params.push(instance_id);
+    paramIndex++;
+  }
+
+  if (maintenance_id) {
+    conditions.push(`maintenance_id = $${paramIndex}`);
+    params.push(maintenance_id);
+    paramIndex++;
+  }
+
+  if (status) {
+    conditions.push(`status = $${paramIndex}`);
+    params.push(status);
+    paramIndex++;
+  }
+
+  if (frequency) {
+    conditions.push(`frequency = $${paramIndex}`);
+    params.push(frequency);
+    paramIndex++;
+  }
+
+  if (asset_type) {
+    conditions.push(`asset_type = $${paramIndex}`);
+    params.push(asset_type);
+    paramIndex++;
+  }
+
+  const whereClause =
+    conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
+  const orderDirection = sortOrder === "asc" ? "ASC" : "DESC";
+
+  const countResult = await queryOne<{ count: string }>(
+    `SELECT COUNT(*) as count FROM pm_instances ${whereClause}`,
+    params,
+  );
+  const total = parseInt(countResult?.count || "0", 10);
+
+  const data = await query<PMInstance>(
+    `SELECT ${selectFields} FROM pm_instances ${whereClause}
+     ORDER BY ${sortBy} ${orderDirection}
+     LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`,
+    [...params, limit, offset],
+  );
+
+  return {
+    data,
+    pagination: {
+      page,
+      limit,
+      total,
+      totalPages: Math.ceil(total / limit),
+    },
+  };
+}
+
+/**
  * Get PM instances by asset
  */
 export async function getPMInstancesByAsset(
@@ -394,6 +486,7 @@ export default {
   createPMInstance,
   getPMInstanceById,
   getPMInstancesBySite,
+  getAllPMInstances,
   getPMInstancesByAsset,
   getPendingPMInstances,
   getOverduePMInstances,

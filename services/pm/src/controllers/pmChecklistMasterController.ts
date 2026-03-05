@@ -39,9 +39,18 @@ export const getById = async (req: Request, res: Response) => {
 
 export const getAll = async (req: Request, res: Response) => {
   try {
-    const { fields } = req.query;
+    const { fields, checklist_id, site_code, title, asset_type } = req.query;
     const fieldArray = fields ? (fields as string).split(",") : undefined;
-    const entries = await pmChecklistMasterRepository.getAll(fieldArray);
+
+    // Use getFiltered to support filtering by checklist_id, site_code, etc.
+    const entries = await pmChecklistMasterRepository.getFiltered({
+      checklist_id: checklist_id as string | undefined,
+      site_code: site_code as string | undefined,
+      title: title as string | undefined,
+      asset_type: asset_type as string | undefined,
+      fields: fieldArray,
+    });
+
     return sendSuccess(res, entries);
   } catch (error: any) {
     console.error("Get all PM checklist master error:", error);
