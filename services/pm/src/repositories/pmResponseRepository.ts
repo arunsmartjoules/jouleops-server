@@ -43,6 +43,8 @@ export async function create(data: CreatePMResponseInput): Promise<PMResponse> {
     throw new Error("Failed to create PM response");
   }
 
+  await updateInstanceProgress(response.instance_id);
+
   return response;
 }
 
@@ -108,6 +110,8 @@ export async function update(
     throw new Error("PM response not found");
   }
 
+  await updateInstanceProgress(response.instance_id);
+
   return response;
 }
 
@@ -120,6 +124,28 @@ export async function remove(id: string): Promise<boolean> {
     [id],
   );
   return result !== null;
+}
+
+/**
+ * Update PM instance progress string 'X/Y'
+ */
+async function updateInstanceProgress(instanceId: string): Promise<void> {
+  const stats = await queryOne<{ answered: string; total: string }>(
+    `SELECT 
+      (SELECT COUNT(DISTINCT checklist_id) FROM pm_response WHERE instance_id = $1) as answered,
+      (SELECT COUNT(*) FROM pm_checklist pc
+       JOIN pm_instances pi ON pc.checklist_id = pi.maintenance_id
+       WHERE pi.instance_id = $1) as total`,
+    [instanceId],
+  );
+
+  if (stats) {
+    const progressStr = `${stats.answered}/${stats.total}`;
+    await query(
+      `UPDATE pm_instances SET progress = $1, updated_at = NOW() WHERE instance_id = $2`,
+      [progressStr, instanceId],
+    );
+  }
 }
 
 export default {

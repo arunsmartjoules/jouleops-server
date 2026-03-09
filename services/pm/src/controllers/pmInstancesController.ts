@@ -236,8 +236,8 @@ export const updateProgress = async (req: Request, res: Response) => {
       return sendError(res, "Instance ID is required");
     }
     const { progress } = req.body;
-    if (progress === undefined || progress < 0 || progress > 100) {
-      return sendError(res, "progress must be between 0 and 100");
+    if (progress === undefined) {
+      return sendError(res, "progress is required");
     }
 
     const instance = await pmInstancesRepository.updatePMInstanceProgress(
