@@ -21,6 +21,10 @@ router.get("/:checklistId", verifyAnyAuth, pmChecklistController.getById);
 router.put("/:checklistId", verifyAnyAuth, pmChecklistController.update);
 router.delete("/:checklistId", verifyAnyAuth, pmChecklistController.remove);
 
+// Individual Item CRUD (UUID based)
+router.put("/item/:id", verifyAnyAuth, pmChecklistController.updateItem);
+router.delete("/item/:id", verifyAnyAuth, pmChecklistController.removeItem);
+
 // Checklist Responses
 router.post("/responses", verifyAnyAuth, pmChecklistController.createResponse);
 router.get(

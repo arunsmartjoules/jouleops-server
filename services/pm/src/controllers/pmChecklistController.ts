@@ -158,6 +158,42 @@ export const remove = async (req: Request, res: Response) => {
   }
 };
 
+export const updateItem = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    if (!id) {
+      return sendError(res, "Item ID is required");
+    }
+    const checklist = await pmChecklistRepository.updatePMChecklistItem(
+      id,
+      req.body,
+    );
+    return sendSuccess(res, checklist);
+  } catch (error: any) {
+    console.error("Update PM checklist item error:", error);
+    return sendServerError(res, error);
+  }
+};
+
+export const removeItem = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    if (!id) {
+      return sendError(res, "Item ID is required");
+    }
+    const deleted = await pmChecklistRepository.deletePMChecklistItem(id);
+    if (!deleted) {
+      return sendNotFound(res, "PM checklist item");
+    }
+    return sendSuccess(res, null, {
+      message: "PM checklist item deleted successfully",
+    });
+  } catch (error: any) {
+    console.error("Delete PM checklist item error:", error);
+    return sendServerError(res, error);
+  }
+};
+
 // Checklist Responses
 export const createResponse = async (req: Request, res: Response) => {
   try {
@@ -236,6 +272,8 @@ export default {
   getAll,
   update,
   remove,
+  updateItem,
+  removeItem,
   createResponse,
   getResponses,
   updateResponse,

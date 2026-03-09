@@ -67,11 +67,16 @@ export async function getByInstance(
   instanceId: string,
   fields?: string[],
 ): Promise<PMResponse[]> {
-  const selectFields = fields && fields.length > 0 ? fields.join(", ") : "*";
+  const selectFields =
+    fields && fields.length > 0
+      ? fields.join(", ")
+      : "pr.*, pc.task_name, pc.sequence_no";
   return query<PMResponse>(
-    `SELECT ${selectFields} FROM pm_response 
-     WHERE instance_id = $1 
-     ORDER BY created_at ASC`,
+    `SELECT ${selectFields} 
+     FROM pm_response pr
+     LEFT JOIN pm_checklist pc ON pr.checklist_id = pc.id
+     WHERE pr.instance_id = $1 
+     ORDER BY pc.sequence_no ASC NULLS LAST, pr.created_at ASC`,
     [instanceId],
   );
 }

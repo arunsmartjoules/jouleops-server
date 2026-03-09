@@ -257,12 +257,72 @@ export async function updatePMChecklist(
 }
 
 /**
- * Delete PM checklist
+ * Delete PM checklist (all items for a checklist business ID)
  */
 export async function deletePMChecklist(checklistId: string): Promise<boolean> {
   const result = await queryOne<{ checklist_id: string }>(
     `DELETE FROM pm_checklist WHERE checklist_id = $1 RETURNING checklist_id`,
     [checklistId],
+  );
+  return result !== null;
+}
+
+/**
+ * Get a specific PM checklist line item by UUID
+ */
+export async function getPMChecklistItemById(
+  id: string,
+  fields?: string[],
+): Promise<PMChecklist | null> {
+  const selectFields = fields && fields.length > 0 ? fields.join(", ") : "*";
+  return queryOne<PMChecklist>(
+    `SELECT ${selectFields} FROM pm_checklist WHERE id = $1`,
+    [id],
+  );
+}
+
+/**
+ * Update a specific PM checklist line item by UUID
+ */
+export async function updatePMChecklistItem(
+  id: string,
+  updateData: Partial<PMChecklist>,
+): Promise<PMChecklist> {
+  const { id: _, created_at, ...allowedUpdates } = updateData as any;
+
+  const entries = Object.entries(allowedUpdates).filter(
+    ([, value]) => value !== undefined,
+  );
+
+  if (entries.length === 0) {
+    throw new Error("No fields to update");
+  }
+
+  const setClauses = entries.map(([key], i) => `${key} = $${i + 1}`);
+  const values = entries.map(([, value]) => value);
+
+  const checklist = await queryOne<PMChecklist>(
+    `UPDATE pm_checklist
+     SET ${setClauses.join(", ")}, updated_at = NOW()
+     WHERE id = $${entries.length + 1}
+     RETURNING *`,
+    [...values, id],
+  );
+
+  if (!checklist) {
+    throw new Error("PM checklist item not found");
+  }
+
+  return checklist;
+}
+
+/**
+ * Delete a specific PM checklist line item by UUID
+ */
+export async function deletePMChecklistItem(id: string): Promise<boolean> {
+  const result = await queryOne<{ id: string }>(
+    `DELETE FROM pm_checklist WHERE id = $1 RETURNING id`,
+    [id],
   );
   return result !== null;
 }
@@ -379,6 +439,9 @@ export default {
   getAllPMChecklists,
   updatePMChecklist,
   deletePMChecklist,
+  getPMChecklistItemById,
+  updatePMChecklistItem,
+  deletePMChecklistItem,
   createChecklistResponse,
   getChecklistResponses,
   updateChecklistResponse,

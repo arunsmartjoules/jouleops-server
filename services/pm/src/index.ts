@@ -52,6 +52,7 @@ app.get("/health", async (_req: Request, res: Response) => {
 
 // Routes
 app.use("/api/pm-checklists", pmChecklistRoutes);
+app.use("/api/pm-checklist", pmChecklistRoutes); // Frontend expects singular path
 app.use("/api/pm-instances", pmInstancesRoutes);
 app.use("/api/pm-checklist-master", pmChecklistMasterRoutes);
 app.use("/api/pm-response", pmResponseRoutes);
