@@ -4,7 +4,8 @@
  * Data access layer for pm_instances table.
  */
 
-import { query, queryOne } from "@jouleops/shared";
+import { query, queryOne, buildQuery } from "@jouleops/shared";
+import type { FilterRule } from "@jouleops/shared";
 
 // ============================================================================
 // Types
@@ -75,19 +76,24 @@ export interface CreatePMInstanceInput {
 export interface GetPMInstancesOptions {
   instance_id?: string | null;
   maintenance_id?: string | null;
-  page?: number;
-  limit?: number;
+  page?: number | string;
+  limit?: number | string;
   status?: string | null;
   frequency?: string | null;
   asset_type?: string | null;
   sortBy?: string;
   sortOrder?: "asc" | "desc";
   fields?: string[];
+  search?: string | null;
+  filters?: FilterRule[] | string | null;
 }
 
 // ============================================================================
 // Helper Functions
 // ============================================================================
+
+const isUuid = (id: string) =>
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
 
 // ============================================================================
 // Repository Functions
@@ -127,8 +133,9 @@ export async function getPMInstanceById(
   fields?: string[],
 ): Promise<PMInstance | null> {
   const selectFields = fields && fields.length > 0 ? fields.join(", ") : "*";
+  const column = isUuid(instanceId) ? "id" : "instance_id";
   return queryOne<PMInstance>(
-    `SELECT ${selectFields} FROM pm_instances WHERE instance_id = $1`,
+    `SELECT ${selectFields} FROM pm_instances WHERE ${column} = $1`,
     [instanceId],
   );
 }
@@ -149,81 +156,112 @@ export async function getPMInstancesBySite(
   };
 }> {
   const {
-    instance_id = null,
-    maintenance_id = null,
     page = 1,
     limit = 20,
     status = null,
     frequency = null,
     asset_type = null,
-    sortBy = "start_due_date",
-    sortOrder = "asc",
-    fields = [],
+    search = null,
+    filters: optFilters = null,
   } = options;
 
-  const selectFields = fields && fields.length > 0 ? fields.join(", ") : "*";
-
-  const offset = (page - 1) * limit;
-
-  const conditions: string[] = ["site_code = $1"];
-  const params: any[] = [siteCode];
-  let paramIndex = 2;
-
-  if (instance_id) {
-    conditions.push(`instance_id = $${paramIndex}`);
-    params.push(instance_id);
-    paramIndex++;
+  const filters: FilterRule[] = [];
+  if (optFilters) {
+    if (typeof optFilters === "string") {
+      try {
+        filters.push(...JSON.parse(optFilters));
+      } catch (e) {
+        console.error("[PM-REPO] Failed to parse filters", e);
+      }
+    } else if (Array.isArray(optFilters)) {
+      filters.push(...optFilters);
+    }
   }
 
-  if (maintenance_id) {
-    conditions.push(`maintenance_id = $${paramIndex}`);
-    params.push(maintenance_id);
-    paramIndex++;
+  if (siteCode && siteCode !== "all") {
+    filters.push({ fieldId: "site_code", operator: "=", value: siteCode });
+  }
+  if (status && status !== "All" && status !== "all") {
+    filters.push({ fieldId: "status", operator: "=", value: status });
+  }
+  if (frequency && frequency !== "All" && frequency !== "all") {
+    filters.push({ fieldId: "frequency", operator: "=", value: frequency });
+  }
+  if (asset_type && asset_type !== "All" && asset_type !== "all") {
+    filters.push({ fieldId: "asset_type", operator: "=", value: asset_type });
   }
 
-  if (status) {
-    conditions.push(`status = $${paramIndex}`);
-    params.push(status);
-    paramIndex++;
+  if (options.instance_id) {
+    filters.push({ fieldId: "instance_id", operator: "=", value: options.instance_id });
+  }
+  if (options.maintenance_id) {
+    filters.push({ fieldId: "maintenance_id", operator: "=", value: options.maintenance_id });
   }
 
-  if (frequency) {
-    conditions.push(`frequency = $${paramIndex}`);
-    params.push(frequency);
-    paramIndex++;
-  }
+  const selectFields = options.fields && options.fields.length > 0 ? options.fields.join(", ") : "*";
 
-  if (asset_type) {
-    conditions.push(`asset_type = $${paramIndex}`);
-    params.push(asset_type);
-    paramIndex++;
-  }
+  const { whereClause, orderClause, limitClause, values } = buildQuery(
+    {
+      ...options,
+      search: search ?? undefined,
+      filters: filters.length > 0 ? filters : undefined,
+    },
+    {
+      tableAlias: "",
+      searchFields: [
+        "instance_id",
+        "title",
+        "location",
+        "asset_id",
+        "assigned_to_name",
+        "teams_name"
+      ],
+      allowedFields: [
+        "id",
+        "instance_id",
+        "site_code",
+        "asset_id",
+        "maintenance_id",
+        "title",
+        "location",
+        "asset_type",
+        "frequency",
+        "start_due_date",
+        "start_datetime",
+        "end_datetime",
+        "status",
+        "progress",
+        "assigned_to_name",
+        "teams_name",
+        "created_at",
+        "updated_at",
+      ],
+      defaultSort: "start_due_date",
+      defaultSortOrder: "asc",
+    },
+  );
 
-  const whereClause = `WHERE ${conditions.join(" AND ")}`;
-  const orderDirection = sortOrder === "asc" ? "ASC" : "DESC";
-
-  // Get count
   const countResult = await queryOne<{ count: string }>(
     `SELECT COUNT(*) as count FROM pm_instances ${whereClause}`,
-    params,
+    values.slice(0, -2),
   );
   const total = parseInt(countResult?.count || "0", 10);
 
-  // Get data
   const data = await query<PMInstance>(
-    `SELECT ${selectFields} FROM pm_instances ${whereClause}
-     ORDER BY ${sortBy} ${orderDirection}
-     LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`,
-    [...params, limit, offset],
+    `SELECT ${selectFields} FROM pm_instances ${whereClause} ${orderClause} ${limitClause}`,
+    values,
   );
+
+  const numPage = Number(page);
+  const numLimit = Number(limit);
 
   return {
     data,
     pagination: {
-      page,
-      limit,
+      page: numPage,
+      limit: numLimit,
       total,
-      totalPages: Math.ceil(total / limit),
+      totalPages: Math.ceil(total / numLimit),
     },
   };
 }
@@ -242,82 +280,7 @@ export async function getAllPMInstances(
     totalPages: number;
   };
 }> {
-  const {
-    instance_id = null,
-    maintenance_id = null,
-    page = 1,
-    limit = 20,
-    status = null,
-    frequency = null,
-    asset_type = null,
-    sortBy = "start_due_date",
-    sortOrder = "asc",
-    fields = [],
-  } = options;
-
-  const selectFields = fields && fields.length > 0 ? fields.join(", ") : "*";
-  const offset = (page - 1) * limit;
-
-  const conditions: string[] = [];
-  const params: any[] = [];
-  let paramIndex = 1;
-
-  if (instance_id) {
-    conditions.push(`instance_id = $${paramIndex}`);
-    params.push(instance_id);
-    paramIndex++;
-  }
-
-  if (maintenance_id) {
-    conditions.push(`maintenance_id = $${paramIndex}`);
-    params.push(maintenance_id);
-    paramIndex++;
-  }
-
-  if (status) {
-    conditions.push(`status = $${paramIndex}`);
-    params.push(status);
-    paramIndex++;
-  }
-
-  if (frequency) {
-    conditions.push(`frequency = $${paramIndex}`);
-    params.push(frequency);
-    paramIndex++;
-  }
-
-  if (asset_type) {
-    conditions.push(`asset_type = $${paramIndex}`);
-    params.push(asset_type);
-    paramIndex++;
-  }
-
-  const whereClause =
-    conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
-  const orderDirection = sortOrder === "asc" ? "ASC" : "DESC";
-
-  const countResult = await queryOne<{ count: string }>(
-    `SELECT COUNT(*) as count FROM pm_instances ${whereClause}`,
-    params,
-  );
-  const total = parseInt(countResult?.count || "0", 10);
-
-  const data = await query<PMInstance>(
-    `SELECT ${selectFields} FROM pm_instances ${whereClause}
-     ORDER BY ${sortBy} ${orderDirection}
-     LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`,
-    [...params, limit, offset],
-  );
-
-  return {
-    data,
-    pagination: {
-      page,
-      limit,
-      total,
-      totalPages: Math.ceil(total / limit),
-    },
-  };
+  return getPMInstancesBySite("all", options);
 }
 
 /**
@@ -393,10 +356,11 @@ export async function updatePMInstance(
   const setClauses = entries.map(([key], i) => `${key} = $${i + 1}`);
   const values = entries.map(([, value]) => value);
 
+  const column = isUuid(instanceId) ? "id" : "instance_id";
   const instance = await queryOne<PMInstance>(
     `UPDATE pm_instances
      SET ${setClauses.join(", ")}, updated_at = NOW()
-     WHERE instance_id = $${entries.length + 1}
+     WHERE ${column} = $${entries.length + 1}
      RETURNING *`,
     [...values, instanceId],
   );
@@ -445,8 +409,9 @@ export async function updatePMInstanceProgress(
  * Delete a PM instance
  */
 export async function deletePMInstance(instanceId: string): Promise<boolean> {
-  const result = await queryOne<{ instance_id: string }>(
-    `DELETE FROM pm_instances WHERE instance_id = $1 RETURNING instance_id`,
+  const column = isUuid(instanceId) ? "id" : "instance_id";
+  const result = await queryOne<{ id: string }>(
+    `DELETE FROM pm_instances WHERE ${column} = $1 RETURNING id`,
     [instanceId],
   );
   return result !== null;

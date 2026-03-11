@@ -13,6 +13,7 @@ import {
   sendError,
   sendNotFound,
   sendServerError,
+  logActivity,
 } from "@jouleops/shared";
 
 const VALID_STATUSES = [
@@ -79,6 +80,8 @@ export const getBySite = async (req: Request, res: Response) => {
       sortBy,
       sortOrder,
       fields,
+      search,
+      filters,
     } = req.query;
     const result = await pmInstancesRepository.getPMInstancesBySite(siteCode, {
       instance_id: instance_id as string | undefined,
@@ -91,6 +94,8 @@ export const getBySite = async (req: Request, res: Response) => {
       sortBy: sortBy as string | undefined,
       sortOrder: sortOrder as "asc" | "desc" | undefined,
       fields: fields ? (fields as string).split(",") : undefined,
+      search: search as string | undefined,
+      filters: filters as any | undefined,
     });
     return sendSuccess(res, result.data, { pagination: result.pagination });
   } catch (error: any) {
@@ -222,6 +227,15 @@ export const updateStatus = async (req: AuthRequest, res: Response) => {
       return sendSuccess(res, updated);
     }
 
+    // Log the activity
+    logActivity({
+      user_id: req.user?.user_id,
+      action: "UPDATE_STATUS",
+      module: "PM",
+      description: `Updated PM instance ${instanceId} status to ${status}`,
+      metadata: { instanceId, status, siteCode: instance?.site_code },
+    });
+
     return sendSuccess(res, instance);
   } catch (error: any) {
     console.error("Update PM instance status error:", error);
@@ -244,6 +258,16 @@ export const updateProgress = async (req: Request, res: Response) => {
       instanceId,
       progress,
     );
+
+    // Log the activity
+    logActivity({
+      user_id: (req as any).user?.user_id,
+      action: "UPDATE_PROGRESS",
+      module: "PM",
+      description: `Updated PM instance ${instanceId} progress to ${progress}`,
+      metadata: { instanceId, progress, siteCode: instance?.site_code },
+    });
+
     return sendSuccess(res, instance);
   } catch (error: any) {
     console.error("Update progress error:", error);
@@ -299,6 +323,8 @@ export const getAll = async (req: Request, res: Response) => {
       sortBy,
       sortOrder,
       fields,
+      search,
+      filters,
     } = req.query;
     const result = await pmInstancesRepository.getAllPMInstances({
       instance_id: instance_id as string | undefined,
@@ -311,6 +337,8 @@ export const getAll = async (req: Request, res: Response) => {
       sortBy: sortBy as string | undefined,
       sortOrder: sortOrder as "asc" | "desc" | undefined,
       fields: fields ? (fields as string).split(",") : undefined,
+      search: search as string | undefined,
+      filters: filters as any | undefined,
     });
     return sendSuccess(res, result.data, { pagination: result.pagination });
   } catch (error: any) {

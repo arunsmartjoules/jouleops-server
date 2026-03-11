@@ -144,6 +144,7 @@ export const getBySite = async (req: Request, res: Response) => {
       group_id,
       ticket_no,
       id,
+      priority,
     } = req.query;
 
     const result = await complaintsRepository.getComplaintsBySite(siteCode, {
@@ -161,6 +162,7 @@ export const getBySite = async (req: Request, res: Response) => {
       group_id: group_id as string,
       ticket_no: ticket_no as string,
       id: id as string,
+      priority: priority as string,
     });
 
     return sendSuccess(res, result.data, { pagination: result.pagination });

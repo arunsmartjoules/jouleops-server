@@ -23,6 +23,18 @@ export interface QuerierConfig {
 }
 
 /**
+ * Detects if a value is a date string (ISO or YYYY-MM-DD)
+ */
+function isDateValue(val: any): boolean {
+  if (typeof val !== "string") return false;
+  // Match YYYY-MM-DD or ISO 8601
+  return (
+    /^\d{4}-\d{2}-\d{2}$/.test(val) ||
+    /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/.test(val)
+  );
+}
+
+/**
  * Builds standard SQL clauses (WHERE, ORDER BY, LIMIT/OFFSET) for server-side
  * pagination, filtering, and sorting.
  */
@@ -75,10 +87,16 @@ export function buildQuery(options: QueryOptions, config: QuerierConfig = {}) {
       continue;
 
     const field = `${aliasPrefix}${rule.fieldId}`;
+    const useDateCast = isDateValue(rule.value);
+
     switch (rule.operator) {
       case "equals":
       case "=":
-        whereParts.push(`${field} = $${paramIdx++}`);
+        if (useDateCast) {
+          whereParts.push(`${field}::date = $${paramIdx++}::date`);
+        } else {
+          whereParts.push(`${field} = $${paramIdx++}`);
+        }
         values.push(rule.value);
         break;
       case "contains":
@@ -87,28 +105,59 @@ export function buildQuery(options: QueryOptions, config: QuerierConfig = {}) {
         break;
       case "gt":
       case ">":
-        whereParts.push(`${field} > $${paramIdx++}`);
+        if (useDateCast) {
+          whereParts.push(`${field}::date > $${paramIdx++}::date`);
+        } else {
+          whereParts.push(`${field} > $${paramIdx++}`);
+        }
         values.push(rule.value);
         break;
       case "lt":
       case "<":
-        whereParts.push(`${field} < $${paramIdx++}`);
+        if (useDateCast) {
+          whereParts.push(`${field}::date < $${paramIdx++}::date`);
+        } else {
+          whereParts.push(`${field} < $${paramIdx++}`);
+        }
         values.push(rule.value);
         break;
       case "gte":
       case ">=":
-        whereParts.push(`${field} >= $${paramIdx++}`);
+        if (useDateCast) {
+          whereParts.push(`${field}::date >= $${paramIdx++}::date`);
+        } else {
+          whereParts.push(`${field} >= $${paramIdx++}`);
+        }
         values.push(rule.value);
         break;
       case "lte":
       case "<=":
-        whereParts.push(`${field} <= $${paramIdx++}`);
+        if (useDateCast) {
+          whereParts.push(`${field}::date <= $${paramIdx++}::date`);
+        } else {
+          whereParts.push(`${field} <= $${paramIdx++}`);
+        }
         values.push(rule.value);
         break;
       case "between":
         if (rule.value !== undefined && rule.valueEnd !== undefined) {
-          whereParts.push(`${field} BETWEEN $${paramIdx++} AND $${paramIdx++}`);
+          if (useDateCast) {
+            whereParts.push(
+              `${field}::date BETWEEN $${paramIdx++}::date AND $${paramIdx++}::date`,
+            );
+          } else {
+            whereParts.push(
+              `${field} BETWEEN $${paramIdx++} AND $${paramIdx++}`,
+            );
+          }
           values.push(rule.value, rule.valueEnd);
+        }
+        break;
+      case "in":
+        if (Array.isArray(rule.value) && rule.value.length > 0) {
+          const placeholders = rule.value.map(() => `$${paramIdx++}`).join(", ");
+          whereParts.push(`${field} IN (${placeholders})`);
+          values.push(...rule.value);
         }
         break;
     }

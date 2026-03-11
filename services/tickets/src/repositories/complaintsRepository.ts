@@ -119,6 +119,7 @@ export interface GetComplaintsOptions {
   message_id?: string | null;
   group_id?: string | null;
   id?: string | null;
+  priority?: string | null;
 }
 
 // ============================================================================
@@ -278,6 +279,7 @@ export async function getComplaintsBySite(
     toDate = null,
     search = null,
     filters: optFilters = null,
+    priority = null,
   } = options;
 
   // 1. Normalize filters
@@ -345,6 +347,9 @@ export async function getComplaintsBySite(
   if (options.id) {
     filters.push({ fieldId: "id", operator: "=", value: options.id });
   }
+  if (priority && priority !== "All" && priority !== "all") {
+    filters.push({ fieldId: "priority", operator: "=", value: priority });
+  }
 
   // 3. Build Query using shared utility
   const { whereClause, orderClause, limitClause, values } = buildQuery(
@@ -375,6 +380,7 @@ export async function getComplaintsBySite(
         "location",
         "area_asset",
         "assigned_to",
+        "priority",
         "message_id",
         "group_id",
         "created_at",
@@ -393,15 +399,23 @@ export async function getComplaintsBySite(
   const total = parseInt(countResult?.count || "0", 10);
 
   // 5. Get Paginated Data
-  const data = await query<Complaint>(
-    `SELECT c.*, s.name as site_name
-     FROM complaints c
-     LEFT JOIN sites s ON c.site_code = s.site_code
-     ${whereClause}
-     ${orderClause}
-     ${limitClause}`,
-    values,
-  );
+  const sql = `
+    SELECT c.*, s.name as site_name
+    FROM complaints c
+    LEFT JOIN sites s ON c.site_code = s.site_code
+    ${whereClause}
+    ORDER BY 
+      CASE 
+        WHEN c.priority = 'Very High' THEN 1
+        WHEN c.priority = 'High' THEN 2
+        WHEN c.priority = 'Medium' THEN 3
+        ELSE 4
+      END ASC,
+      c.created_at DESC
+    ${limitClause}
+  `;
+
+  const data = await query<Complaint>(sql, values);
 
   // 6. Next Cursor (optional for keyset pagination support)
   const lastItem = data[data.length - 1];

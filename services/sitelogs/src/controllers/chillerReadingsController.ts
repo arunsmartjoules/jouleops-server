@@ -13,12 +13,23 @@ import {
   sendError,
   sendNotFound,
   asyncHandler,
+  logActivity,
 } from "@jouleops/shared";
 
 export const create = asyncHandler(async (req: Request, res: Response) => {
   const reading = await chillerReadingsRepository.createChillerReading(
     req.body,
   );
+  
+  // Log the activity
+  logActivity({
+    user_id: (req as any).user?.user_id || (req as any).user?.id,
+    action: "CREATE_CHILLER_READING",
+    module: "CHILLER_READING",
+    description: `Created chiller reading ${reading.id} for chiller ${reading.chiller_id}`,
+    metadata: { readingId: reading.id, chillerId: reading.chiller_id, siteCode: reading.site_code },
+  });
+
   return sendCreated(res, reading);
 });
 
@@ -125,6 +136,16 @@ export const update = asyncHandler(async (req: Request, res: Response) => {
     id,
     req.body,
   );
+
+  // Log the activity
+  logActivity({
+    user_id: (req as any).user?.user_id || (req as any).user?.id,
+    action: "UPDATE_CHILLER_READING",
+    module: "CHILLER_READING",
+    description: `Updated chiller reading ${id} for chiller ${reading.chiller_id}`,
+    metadata: { readingId: id, chillerId: reading.chiller_id, siteCode: reading.site_code },
+  });
+
   return sendSuccess(res, reading);
 });
 
@@ -139,6 +160,16 @@ export const remove = asyncHandler(async (req: Request, res: Response) => {
   }
 
   await chillerReadingsRepository.deleteChillerReading(id);
+
+  // Log the activity
+  logActivity({
+    user_id: (req as any).user?.user_id || (req as any).user?.id,
+    action: "DELETE_CHILLER_READING",
+    module: "CHILLER_READING",
+    description: `Deleted chiller reading ${id}`,
+    metadata: { readingId: id, chillerId: existing.chiller_id, siteCode: existing.site_code },
+  });
+
   return sendSuccess(res, null, {
     message: "Chiller reading deleted successfully",
   });

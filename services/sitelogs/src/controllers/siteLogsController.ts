@@ -12,10 +12,21 @@ import {
   sendCreated,
   sendError,
   asyncHandler,
+  logActivity,
 } from "@jouleops/shared";
 
 export const create = asyncHandler(async (req: Request, res: Response) => {
   const result = await siteLogsRepository.createLog(req.body);
+
+  // Log the activity
+  logActivity({
+    user_id: (req as any).user?.user_id,
+    action: "CREATE_LOG",
+    module: "SITE_LOG",
+    description: `Created site log ${result.id} of type ${result.log_name}`,
+    metadata: { logId: result.id, logName: result.log_name, siteCode: result.site_code },
+  });
+
   return sendCreated(res, result);
 });
 
@@ -68,6 +79,16 @@ export const update = asyncHandler(async (req: Request, res: Response) => {
     return sendError(res, "Log ID is required");
   }
   const result = await siteLogsRepository.updateLog(id, req.body);
+
+  // Log the activity
+  logActivity({
+    user_id: (req as any).user?.user_id,
+    action: "UPDATE_LOG",
+    module: "SITE_LOG",
+    description: `Updated site log ${id} of type ${result.log_name}`,
+    metadata: { logId: id, logName: result.log_name, siteCode: result.site_code },
+  });
+
   return sendSuccess(res, result);
 });
 

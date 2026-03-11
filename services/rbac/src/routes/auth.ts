@@ -18,6 +18,7 @@ const router = express.Router();
 
 router.post("/login", validate(loginSchema), authController.login);
 router.post("/signup", validate(signupSchema), authController.signup);
+router.post("/google", authController.googleLogin);
 router.post("/reset-password", authController.resetPassword);
 router.post("/logout", verifyAnyAuth, authController.logout);
 router.post(

@@ -9,6 +9,7 @@
 import jwt from "jsonwebtoken";
 import bcrypt from "bcryptjs";
 import { v4 as uuidv4 } from "uuid";
+import { OAuth2Client } from "google-auth-library";
 import type { Request, Response } from "express";
 
 import usersRepository from "../repositories/usersRepository.ts";
@@ -59,7 +60,7 @@ export const login = asyncHandler(async (req: Request, res: Response) => {
     });
   }
 
-  const isPasswordValid = await bcrypt.compare(password, user.password);
+  const isPasswordValid = await bcrypt.compare(password, user.password!);
   if (!isPasswordValid) {
     return res.status(401).json({
       success: false,
@@ -68,7 +69,7 @@ export const login = asyncHandler(async (req: Request, res: Response) => {
   }
 
   // Generate JWT
-  const secret = process.env.JWT_SECRET;
+  const secret = (process.env.JWT_SECRET || "") as string;
   if (!secret) {
     throw new Error("JWT_SECRET is not defined");
   }
@@ -89,16 +90,16 @@ export const login = asyncHandler(async (req: Request, res: Response) => {
   const token = jwt.sign(tokenPayload, secret, { expiresIn: "7d" });
 
   // Generate refresh token
-  const refreshToken = jwt.sign(
+  const newRefreshToken = jwt.sign(
     { user_id: user.user_id, type: "refresh" },
-    process.env.JWT_REFRESH_SECRET || secret,
+    (process.env.JWT_REFRESH_SECRET || secret) as string,
     { expiresIn: "60d" },
   );
 
   // Store refresh token
   await authRepository.storeRefreshToken({
     user_id: user.user_id,
-    token: refreshToken,
+    token: newRefreshToken,
     expires_at: new Date(Date.now() + 60 * 24 * 60 * 60 * 1000),
     device_info: req.headers["user-agent"] as string,
   });
@@ -115,7 +116,7 @@ export const login = asyncHandler(async (req: Request, res: Response) => {
 
   return sendSuccess(res, {
     token,
-    refresh_token: refreshToken,
+    refresh_token: newRefreshToken,
     expires_in: 604800,
     user: {
       id: user.user_id,
@@ -152,7 +153,7 @@ export const signup = asyncHandler(async (req: Request, res: Response) => {
   const salt = await bcrypt.genSalt(10);
   const hashedPassword = await bcrypt.hash(password, salt);
 
-  let user;
+  let user: any;
 
   if (existingUser) {
     // Scenario A: User exists but has no password (Claiming)
@@ -174,7 +175,7 @@ export const signup = asyncHandler(async (req: Request, res: Response) => {
   }
 
   // Generate JWT
-  const secret = process.env.JWT_SECRET;
+  const secret = (process.env.JWT_SECRET || "") as string;
   if (!secret) {
     throw new Error("JWT_SECRET is not defined");
   }
@@ -197,16 +198,16 @@ export const signup = asyncHandler(async (req: Request, res: Response) => {
   );
 
   // Generate refresh token
-  const refreshToken = jwt.sign(
+  const newRefreshToken = jwt.sign(
     { user_id: user.user_id, type: "refresh" },
-    process.env.JWT_REFRESH_SECRET || secret,
+    (process.env.JWT_REFRESH_SECRET || secret) as string,
     { expiresIn: "60d" },
   );
 
   // Store refresh token
   await authRepository.storeRefreshToken({
     user_id: user.user_id,
-    token: refreshToken,
+    token: newRefreshToken,
     expires_at: new Date(Date.now() + 60 * 24 * 60 * 60 * 1000),
     device_info: req.headers["user-agent"] as string,
   });
@@ -223,7 +224,7 @@ export const signup = asyncHandler(async (req: Request, res: Response) => {
 
   return sendCreated(res, {
     token,
-    refresh_token: refreshToken,
+    refresh_token: newRefreshToken,
     expires_in: 604800,
     user: {
       id: user.user_id,
@@ -331,7 +332,7 @@ export const changePassword = asyncHandler(
     // Verify current password
     const isCurrentPasswordValid = await bcrypt.compare(
       currentPassword,
-      user.password,
+      user.password!,
     );
 
     if (!isCurrentPasswordValid) {
@@ -427,7 +428,9 @@ export const refreshToken = asyncHandler(
     }
 
     // Verify refresh token
-    const secret = process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET!;
+    const secret = (process.env.JWT_REFRESH_SECRET ||
+      process.env.JWT_SECRET ||
+      "") as string;
     let decoded: any;
 
     try {
@@ -481,7 +484,7 @@ export const refreshToken = asyncHandler(
         is_superadmin: user.is_superadmin || false,
         jti: uuidv4(),
       },
-      process.env.JWT_SECRET!,
+      (process.env.JWT_SECRET || "") as string,
       { expiresIn: "7d" },
     );
 
@@ -635,12 +638,144 @@ export const resetPasswordWithCode = asyncHandler(
 );
 
 // ============================================================================
+// Google Login (Mobile Only)
+// ============================================================================
+
+export const googleLogin = asyncHandler(async (req: Request, res: Response) => {
+  const { idToken } = req.body;
+
+  if (!idToken) {
+    return sendError(res, "Google ID Token is required");
+  }
+
+  const client = new OAuth2Client();
+
+  try {
+    // Verify Google ID Token
+    const ticket = await client.verifyIdToken({
+      idToken,
+    });
+
+    const payload = ticket.getPayload();
+    if (!payload || !payload.email) {
+      return sendError(res, "Invalid Google token payload");
+    }
+
+    const email = payload.email!;
+    const name = (payload.name || email.split("@")[0]) as string;
+
+    // Strict Domain Enforcement
+    if (!email.endsWith("@smartjoules.in")) {
+      return res.status(403).json({
+        success: false,
+        error: "Access restricted to @smartjoules.in domain only.",
+      });
+    }
+
+    // Find or create user
+    let userRecord = await usersRepository.getUserByEmail(email);
+
+    if (!userRecord) {
+      // Provision new user
+      userRecord = await usersRepository.createUser({
+        user_id: uuidv4(),
+        email,
+        name,
+        role: "staff",
+        is_active: true,
+      });
+
+      await logActivity({
+        user_id: userRecord.user_id,
+        action: "SIGNUP_GOOGLE",
+        module: "AUTH",
+        description: `User ${email} provisioned via Google SSO`,
+        ip_address: req.ip,
+        device_info: req.headers["user-agent"] as string,
+      });
+    }
+
+    const user = userRecord!; // Guaranteed non-null here
+
+    // Generate JWT
+    const secret = (process.env.JWT_SECRET || "") as string;
+    if (!secret) {
+      throw new Error("JWT_SECRET is not defined");
+    }
+
+    const tokenPayload = {
+      user_id: user.user_id,
+      role: user.role,
+      email: user.email,
+      is_admin:
+        user.role === "Admin" ||
+        user.role === "admin" ||
+        user.is_superadmin ||
+        false,
+      is_superadmin: user.is_superadmin || false,
+      jti: uuidv4(),
+    };
+
+    const token = jwt.sign(tokenPayload, secret, { expiresIn: "7d" });
+
+    // Generate refresh token
+    const newRefreshToken = jwt.sign(
+      { user_id: user.user_id, type: "refresh" },
+      (process.env.JWT_REFRESH_SECRET || secret) as string,
+      { expiresIn: "60d" },
+    );
+
+    // Store refresh token
+    await authRepository.storeRefreshToken({
+      user_id: user.user_id,
+      token: newRefreshToken,
+      expires_at: new Date(Date.now() + 60 * 24 * 60 * 60 * 1000),
+      device_info: req.headers["user-agent"] as string,
+    });
+
+    // Log successful login
+    await logActivity({
+      user_id: user.user_id,
+      action: "LOGIN_GOOGLE_SUCCESS",
+      module: "AUTH",
+      description: `User ${user.email} logged in via Google SSO`,
+      ip_address: req.ip,
+      device_info: req.headers["user-agent"] as string,
+    });
+
+    return sendSuccess(res, {
+      token,
+      refresh_token: newRefreshToken,
+      expires_in: 604800,
+      user: {
+        id: user.user_id,
+        email: user.email,
+        name: user.name,
+        role: user.role,
+        is_superadmin: user.is_superadmin || false,
+        department: user.department,
+        designation: user.designation,
+        work_location_type: user.work_location_type,
+      },
+    });
+  } catch (error: any) {
+    console.error("Google Auth Error:", error);
+    return res.status(401).json({
+      success: false,
+      error:
+        "Google authentication failed: " + (error.message || "Invalid token"),
+    });
+  }
+});
+
+// ============================================================================
 // Export
 // ============================================================================
 
 export default {
   login,
   signup,
+  googleLogin,
   getProfile,
   logout,
   changePassword,
