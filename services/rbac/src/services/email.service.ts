@@ -1,7 +1,5 @@
-import { Resend } from "resend";
+import nodemailer from "nodemailer";
 import { logActivity } from "../repositories/logsRepository.ts";
-
-const resend = new Resend(process.env.RESEND_API_KEY);
 
 // In-memory store for verification codes (in production, use Redis or database)
 interface VerificationCode {
@@ -89,15 +87,23 @@ export async function sendVerificationEmail(
     "superadmin-change": `A request to change the superadmin has been made.<br>Your verification code is: <strong>${code}</strong><br>This code will expire in 15 minutes.<br>If you didn't request this, please contact your administrator immediately.`,
   };
 
-  // Log OTP to console for development/debugging - REMOVED FOR SECURITY
-  // console.log(`\n========================================`);
-  // console.log(`📧 OTP for ${email}: ${code}`);
-  // console.log(`   Type: ${type}`);
-  // console.log(`========================================\n`);
+  // Log OTP to console for development/debugging
+  console.log(`\n========================================`);
+  console.log(`📧 OTP for ${email}: ${code}`);
+  console.log(`   Type: ${type}`);
+  console.log(`========================================\n`);
 
   try {
-    const result = await resend.emails.send({
-      from: "JouleOps Admin <onboarding@resend.dev>", // You'll update this with your domain
+    const transporter = nodemailer.createTransport({
+       service: 'gmail',
+       auth: {
+         user: process.env.SMTP_USER,
+         pass: process.env.SMTP_PASS,
+       },
+    });
+
+    const result = await transporter.sendMail({
+      from: `"JouleOps Admin" <${process.env.SMTP_USER}>`,
       to: email,
       subject: subjects[type],
       html: `
@@ -116,7 +122,7 @@ export async function sendVerificationEmail(
           <body>
             <div class="container">
               <div class="header">
-                <h1>JouleOps Admin</h1>
+                <h1 style="color: white; margin: 0;">JouleOps Admin</h1>
               </div>
               <div class="content">
                 <p>${messages[type]}</p>
@@ -124,14 +130,14 @@ export async function sendVerificationEmail(
                 <p style="color: #666; font-size: 14px;">This verification code will expire in 15 minutes.</p>
               </div>
               <div class="footer">
-                <p>© 2026 SmartJoules. All rights reserved.</p>
+                <p>© ${new Date().getFullYear()} SmartJoules. All rights reserved.</p>
               </div>
             </div>
           </body>
         </html>
       `,
     });
-    console.log("Email sent successfully:", result);
+    console.log("Email sent successfully:", result.messageId);
 
     // Log successful email send
     await logActivity({
@@ -141,7 +147,6 @@ export async function sendVerificationEmail(
     }).catch(() => {}); // Ignore log errors
   } catch (error: any) {
     console.error("❌ Error sending email:", error);
-    console.error("   Error details:", JSON.stringify(error, null, 2));
 
     // Log email error to app logs
     await logActivity({

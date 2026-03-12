@@ -25,6 +25,27 @@ export const getLogs = async (req: Request, res: Response) => {
   }
 };
 
+export const createLog = async (req: Request, res: Response) => {
+  try {
+    const { action, module, description, device_info, metadata } = req.body;
+    const user_id = (req as any).user?.userId || "system";
+
+    await logsRepository.logActivity({
+      user_id: user_id,
+      action: action || "APP_LOG",
+      module: module || "MOBILE_APP",
+      description: description || "App log entry",
+      metadata: { device_info, ...metadata },
+    });
+
+    return sendSuccess(res, { success: true }, { message: "Log created" });
+  } catch (error: any) {
+    console.error("Create log error:", error);
+    return sendServerError(res, error);
+  }
+};
+
 export default {
   getLogs,
+  createLog,
 };

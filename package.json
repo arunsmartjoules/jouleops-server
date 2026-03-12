@@ -23,6 +23,7 @@
     "@types/jsonwebtoken": "^9.0.10",
     "@types/morgan": "^1.9.10",
     "@types/node-cron": "^3.0.11",
+    "@types/nodemailer": "^7.0.11",
     "@types/pg": "^8.16.0",
     "@types/uuid": "^11.0.0",
     "turbo": "^2.0.0"
@@ -47,8 +48,8 @@
     "morgan": "^1.10.1",
     "multer": "^2.0.2",
     "node-cron": "^4.2.1",
+    "nodemailer": "^8.0.2",
     "pg": "^8.18.0",
-    "resend": "^6.7.0",
     "uuid": "^13.0.0",
     "winston": "^3.19.0",
     "xlsx": "^0.18.5",
