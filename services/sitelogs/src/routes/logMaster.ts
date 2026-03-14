@@ -12,6 +12,7 @@ const router = express.Router();
 router.get("/", verifyAnyAuth, logMasterController.getAll);
 router.post("/", verifyAnyAuth, logMasterController.create);
 router.post("/bulk-upsert", verifyAnyAuth, logMasterController.bulkUpsert);
+router.post("/bulk-delete", verifyAnyAuth, logMasterController.bulkDelete);
 router.put("/:id", verifyAnyAuth, logMasterController.update);
 router.delete("/:id", verifyAnyAuth, logMasterController.remove);
 

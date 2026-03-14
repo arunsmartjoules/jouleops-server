@@ -109,10 +109,33 @@ export const bulkUpsert = async (req: Request, res: Response, next: NextFunction
   }
 };
 
+/**
+ * Bulk delete log master entries
+ */
+export const bulkDelete = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
+  try {
+    const { ids } = req.body;
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return sendError(res, "Invalid input: ids must be a non-empty array");
+    }
+    await logMasterRepository.bulkDeleteLogMasters(ids);
+    return sendSuccess(res, null, {
+      message: "Log master entries deleted successfully",
+    });
+  } catch (error: any) {
+    return sendServerError(res, error);
+  }
+};
+
 export default {
   getAll,
   create,
   update,
   remove,
   bulkUpsert,
+  bulkDelete,
 };

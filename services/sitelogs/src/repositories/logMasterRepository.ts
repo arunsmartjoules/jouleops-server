@@ -233,22 +233,37 @@ export async function deleteLogMaster(id: string): Promise<boolean> {
 /**
  * Bulk create/update log master entries
  */
-export async function bulkUpsertLogMasters(logs: CreateLogMasterInput[]): Promise<void> {
-    // This is a simple implementation, ideally would use a more efficient bulk insert
-    for (const log of logs) {
-        // Use task_name and log_name as a unique constraint if possible, 
-        // but for now we'll just check if it exists or create new
-        const existing = await queryOne<LogMaster>(
-            `SELECT id FROM log_master WHERE task_name = $1 AND log_name = $2`,
-            [log.task_name, log.log_name]
-        );
+export async function bulkUpsertLogMasters(
+  logs: CreateLogMasterInput[],
+): Promise<void> {
+  // This is a simple implementation, ideally would use a more efficient bulk insert
+  for (const log of logs) {
+    // Use task_name and log_name as a unique constraint if possible,
+    // but for now we'll just check if it exists or create new
+    const existing = await queryOne<LogMaster>(
+      `SELECT id FROM log_master WHERE task_name = $1 AND log_name = $2`,
+      [log.task_name, log.log_name],
+    );
 
-        if (existing) {
-            await updateLogMaster(existing.id, log);
-        } else {
-            await createLogMaster(log);
-        }
+    if (existing) {
+      await updateLogMaster(existing.id, log);
+    } else {
+      await createLogMaster(log);
     }
+  }
+}
+
+/**
+ * Bulk delete log master entries
+ */
+export async function bulkDeleteLogMasters(ids: string[]): Promise<boolean> {
+  if (!ids || ids.length === 0) return false;
+  const placeholders = ids.map((_, i) => `$${i + 1}`).join(", ");
+  const result = await query(
+    `DELETE FROM log_master WHERE id IN (${placeholders}) RETURNING id`,
+    ids,
+  );
+  return result.length > 0;
 }
 
 export default {
@@ -258,4 +273,5 @@ export default {
   updateLogMaster,
   deleteLogMaster,
   bulkUpsertLogMasters,
+  bulkDeleteLogMasters,
 };
