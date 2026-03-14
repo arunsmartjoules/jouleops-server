@@ -20,6 +20,7 @@ import {
 // Import routes
 import siteLogsRoutes from "./routes/siteLogs.ts";
 import chillerReadingsRoutes from "./routes/chillerReadings.ts";
+import logMasterRoutes from "./routes/logMaster.ts";
 
 const PORT = process.env.SITELOGS_PORT || 3423;
 
@@ -49,6 +50,7 @@ app.get("/health", async (_req: Request, res: Response) => {
 // Routes
 app.use("/api/site-logs", siteLogsRoutes);
 app.use("/api/chiller-readings", chillerReadingsRoutes);
+app.use("/api/log-master", logMasterRoutes);
 
 // 404 Handler
 app.use((req: Request, _res: Response, next: NextFunction) => {

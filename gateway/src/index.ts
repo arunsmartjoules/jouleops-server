@@ -151,10 +151,9 @@ app.use(
   createProxyMiddleware(proxyOptions(SERVICES.sitelogs, "/api/site-logs")),
 );
 app.use(
-  createProxyMiddleware(
-    proxyOptions(SERVICES.sitelogs, "/api/chiller-readings"),
-  ),
+  createProxyMiddleware(proxyOptions(SERVICES.sitelogs, "/api/chiller-readings")),
 );
+app.use(createProxyMiddleware(proxyOptions(SERVICES.sitelogs, "/api/log-master")));
 app.use(createProxyMiddleware(proxyOptions(SERVICES.pm, "/api/pm-checklists")));
 app.use(createProxyMiddleware(proxyOptions(SERVICES.pm, "/api/pm-checklist")));
 app.use(createProxyMiddleware(proxyOptions(SERVICES.pm, "/api/pm-instances")));

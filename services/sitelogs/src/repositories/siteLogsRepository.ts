@@ -222,11 +222,13 @@ export async function getLogsBySite(
   );
   const total = parseInt(countResult?.count || "0", 10);
 
-  // Get data
+  // Get data with sorting by log_master.sequence_number
   const data = await query<SiteLog>(
-    `SELECT id, site_code, executor_id, log_name, task_name, temperature, rh, tds, ph, hardness, chemical_dosing, remarks, entry_time, end_time, attachment, status, created_at, updated_at 
-     FROM site_logs ${whereClause}
-     ORDER BY created_at DESC
+    `SELECT sl.*, lm.sequence_number 
+     FROM site_logs sl
+     LEFT JOIN log_master lm ON sl.task_name = lm.task_name AND sl.log_name = lm.log_name
+     ${whereClause.replace(/([^a-zA-Z0-9_])(site_code|log_name|log_id|status|task_line_id|created_at|remarks|executor_id)/g, "$1sl.$2")}
+     ORDER BY lm.sequence_number ASC NULLS LAST, sl.created_at DESC
      LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`,
     [...params, limit, offset],
   );

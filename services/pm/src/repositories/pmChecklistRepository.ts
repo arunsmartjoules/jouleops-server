@@ -28,6 +28,7 @@ export interface PMChecklistResponse {
   instance_id: string;
   checklist_id: string;
   response_value?: string;
+  readings?: string;
   remarks?: string;
   image_url?: string;
   completed_by?: string;
@@ -338,19 +339,21 @@ export async function createChecklistResponse(data: {
   instance_id: string;
   checklist_id: string;
   response_value?: string;
+  readings?: string;
   remarks?: string;
   image_url?: string;
   completed_by?: string;
 }): Promise<PMChecklistResponse> {
   const response = await queryOne<PMChecklistResponse>(
     `INSERT INTO pm_checklist_responses 
-     (instance_id, checklist_id, response_value, remarks, image_url, completed_by, completed_at)
-     VALUES ($1, $2, $3, $4, $5, $6, NOW())
+     (instance_id, checklist_id, response_value, readings, remarks, image_url, completed_by, completed_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
      RETURNING *`,
     [
       data.instance_id,
       data.checklist_id,
       data.response_value || null,
+      data.readings || null,
       data.remarks || null,
       data.image_url || null,
       data.completed_by || null,
