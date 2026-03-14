@@ -145,6 +145,7 @@ app.use(createProxyMiddleware(proxyOptions(SERVICES.rbac, "/api/admin")));
 app.use(createProxyMiddleware(proxyOptions(SERVICES.rbac, "/api/site-users")));
 app.use(createProxyMiddleware(proxyOptions(SERVICES.rbac, "/api/sites")));
 app.use(createProxyMiddleware(proxyOptions(SERVICES.rbac, "/api/assets")));
+app.use(createProxyMiddleware(proxyOptions(SERVICES.sitelogs, "/api/log-master")));
 app.use(createProxyMiddleware(proxyOptions(SERVICES.rbac, "/api/logs")));
 app.use(createProxyMiddleware(proxyOptions(SERVICES.rbac, "/api/users")));
 app.use(
@@ -153,13 +154,12 @@ app.use(
 app.use(
   createProxyMiddleware(proxyOptions(SERVICES.sitelogs, "/api/chiller-readings")),
 );
-app.use(createProxyMiddleware(proxyOptions(SERVICES.sitelogs, "/api/log-master")));
 app.use(createProxyMiddleware(proxyOptions(SERVICES.pm, "/api/pm-checklists")));
-app.use(createProxyMiddleware(proxyOptions(SERVICES.pm, "/api/pm-checklist")));
-app.use(createProxyMiddleware(proxyOptions(SERVICES.pm, "/api/pm-instances")));
 app.use(
   createProxyMiddleware(proxyOptions(SERVICES.pm, "/api/pm-checklist-master")),
 );
+app.use(createProxyMiddleware(proxyOptions(SERVICES.pm, "/api/pm-checklist")));
+app.use(createProxyMiddleware(proxyOptions(SERVICES.pm, "/api/pm-instances")));
 app.use(createProxyMiddleware(proxyOptions(SERVICES.pm, "/api/pm-response")));
 app.use(createProxyMiddleware(proxyOptions(SERVICES.pm, "/api/tasks")));
 app.use(createProxyMiddleware(proxyOptions(SERVICES.utility, "/api/whatsapp")));
