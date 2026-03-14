@@ -322,7 +322,7 @@ export async function updateChillerReading(
   const { created_at, ...allowedUpdates } = updateData as any;
 
   const entries = Object.entries(allowedUpdates).filter(
-    ([, value]) => value !== undefined,
+    ([key, value]) => value !== undefined && !['id', 'created_at', 'updated_at', 'createdat', 'updatedat'].includes(key),
   );
 
   if (entries.length === 0) {

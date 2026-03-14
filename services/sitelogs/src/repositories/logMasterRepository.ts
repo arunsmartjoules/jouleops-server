@@ -194,7 +194,7 @@ export async function updateLogMaster(
   updateData: UpdateLogMasterInput,
 ): Promise<LogMaster> {
   const entries = Object.entries(updateData).filter(
-    ([, value]) => value !== undefined,
+    ([key, value]) => value !== undefined && !['id', 'created_at', 'updated_at'].includes(key),
   );
 
   if (entries.length === 0) {

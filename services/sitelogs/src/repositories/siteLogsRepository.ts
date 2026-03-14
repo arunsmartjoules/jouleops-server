@@ -271,7 +271,7 @@ export async function updateLog(
   updateData: UpdateSiteLogInput,
 ): Promise<SiteLog> {
   const entries = Object.entries(updateData).filter(
-    ([, value]) => value !== undefined,
+    ([key, value]) => value !== undefined && !['id', 'created_at', 'updated_at'].includes(key),
   );
 
   if (entries.length === 0) {
