@@ -45,10 +45,25 @@ export const getBySite = asyncHandler(async (req: Request, res: Response) => {
     date_from,
     date_to,
     startDate,
+    remarks,
+    filters,
   } = req.query;
 
   if (!siteCode) {
     return sendError(res, "Site Code is required");
+  }
+
+  let remarksFilter = remarks as string | undefined;
+  if (filters) {
+    try {
+      const parsedFilters = JSON.parse(filters as string);
+      const remarkRule = parsedFilters.find((f: any) => f.fieldId === "remarks");
+      if (remarkRule) {
+        remarksFilter = remarkRule.value;
+      }
+    } catch (e) {
+      console.error("[SITE_LOGS_CONTROLLER] Error parsing filters:", e);
+    }
   }
 
   const result = await siteLogsRepository.getLogsBySite(siteCode, {
@@ -62,6 +77,7 @@ export const getBySite = asyncHandler(async (req: Request, res: Response) => {
     task_line_id: task_line_id as string | undefined,
     date_from: (date_from as string) || (startDate as string) || undefined,
     date_to: (date_to as string) || undefined,
+    remarks: remarksFilter,
   });
   return sendSuccess(res, result.data, { pagination: result.pagination });
 });

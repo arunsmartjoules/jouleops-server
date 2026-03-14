@@ -95,6 +95,7 @@ export interface GetSiteLogsOptions {
   task_line_id?: string | null;
   date_from?: string | null;
   date_to?: string | null;
+  remarks?: string | null;
 }
 
 // ============================================================================
@@ -152,6 +153,7 @@ export async function getLogsBySite(
     task_line_id = null,
     date_from = null,
     date_to = null,
+    remarks: remarksFilter = null,
   } = options;
   const offset = (page - 1) * limit;
 
@@ -201,6 +203,12 @@ export async function getLogsBySite(
   if (date_to) {
     conditions.push(`created_at <= $${paramIndex}`);
     params.push(date_to);
+    paramIndex++;
+  }
+  
+  if (remarksFilter) {
+    conditions.push(`remarks ILIKE $${paramIndex}`);
+    params.push(`%${remarksFilter}%`);
     paramIndex++;
   }
 
