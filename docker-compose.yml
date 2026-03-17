@@ -50,6 +50,7 @@ services:
     environment:
       - PORT=3425
       - REDIS_URL=redis://redis:6379
+      - SUPABASE_JWT_JWK=${SUPABASE_JWT_JWK}
     depends_on:
       - redis
 
@@ -63,6 +64,7 @@ services:
         SERVICE_NAME: services/utility
     environment:
       - PORT=3428
+      - SUPABASE_JWT_JWK=${SUPABASE_JWT_JWK}
 
   # Tickets Service
   tickets:
@@ -74,6 +76,7 @@ services:
         SERVICE_NAME: services/tickets
     environment:
       - PORT=3421
+      - SUPABASE_JWT_JWK=${SUPABASE_JWT_JWK}
 
   # Attendance Service
   attendance:
@@ -85,6 +88,7 @@ services:
         SERVICE_NAME: services/attendance
     environment:
       - PORT=3422
+      - SUPABASE_JWT_JWK=${SUPABASE_JWT_JWK}
 
   # SiteLogs Service
   sitelogs:
@@ -96,6 +100,7 @@ services:
         SERVICE_NAME: services/sitelogs
     environment:
       - PORT=3423
+      - SUPABASE_JWT_JWK=${SUPABASE_JWT_JWK}
 
   # PM Service
   pm:
@@ -107,6 +112,7 @@ services:
         SERVICE_NAME: services/pm
     environment:
       - PORT=3424
+      - SUPABASE_JWT_JWK=${SUPABASE_JWT_JWK}
 
   # Caddy (Automatic HTTPS)
   caddy:

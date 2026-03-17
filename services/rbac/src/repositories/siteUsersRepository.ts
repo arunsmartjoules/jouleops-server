@@ -151,18 +151,20 @@ export async function getByUser(userId: string) {
     async () => {
       const sql = `
         SELECT 
-          su.*,
-          s.name as site_name,
-          s.site_code,
-          s.address,
-          s.city,
-          s.latitude,
-          s.longitude,
-          s.radius
+          su.site_id, su.user_id, su.role_at_site, su.is_primary, su.created_at,
+          s.name as site_name, s.site_code, s.address, s.city, s.latitude, s.longitude, s.radius, s.project_type
         FROM site_user su
         JOIN sites s ON su.site_id = s.site_id
         WHERE su.user_id = $1 AND s.is_active = true
-        ORDER BY su.is_primary DESC, s.name
+        UNION
+        SELECT
+          s.site_id, u.user_id, 'staff' as role_at_site, true as is_primary, u.created_at,
+          s.name as site_name, s.site_code, s.address, s.city, s.latitude, s.longitude, s.radius, s.project_type
+        FROM users u
+        JOIN sites s ON u.site_code = s.site_code
+        WHERE u.user_id = $1 AND s.is_active = true
+          AND NOT EXISTS (SELECT 1 FROM site_user su2 WHERE su2.user_id = u.user_id)
+        ORDER BY is_primary DESC, site_name
       `;
       return query(sql, [userId]);
     },

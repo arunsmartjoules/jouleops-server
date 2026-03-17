@@ -242,7 +242,13 @@ export const signup = asyncHandler(async (req: Request, res: Response) => {
 
 export const getProfile = asyncHandler(
   async (req: AuthRequest, res: Response) => {
-    const user = await usersRepository.getUserById(req.user!.user_id);
+    // Try by user_id first; fall back to email for Supabase tokens
+    // where the sub (Supabase UUID) may differ from the DB user_id
+    let user = await usersRepository.getUserById(req.user!.user_id);
+
+    if (!user && req.user!.email) {
+      user = await usersRepository.getUserByEmail(req.user!.email);
+    }
 
     if (!user) {
       return sendNotFound(res, "User");

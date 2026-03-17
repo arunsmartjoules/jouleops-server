@@ -16,7 +16,8 @@
                 "SUPABASE_DB_PASSWORD",
                 "RESEND_API_KEY",
                 "WHAPI_TOKEN",
-                "JWT_EXPIRES_IN"
+                "JWT_EXPIRES_IN",
+                "SUPABASE_JWT_JWK"
             ]
         },
         "build": {
@@ -43,7 +44,8 @@
                 "WHAPI_TOKEN",
                 "SUPABASE_SERVICE_ROLE_KEY",
                 "SUPABASE_DB_PASSWORD",
-                "JWT_EXPIRES_IN"
+                "JWT_EXPIRES_IN",
+                "SUPABASE_JWT_JWK"
             ]
         },
         "test": {

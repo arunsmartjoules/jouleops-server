@@ -1,9 +1,24 @@
 import jwt from "jsonwebtoken";
+import { createPublicKey } from "crypto";
 import type { Request, Response, NextFunction } from "express";
+import usersRepository from "../repositories/usersRepository.ts";
 import {
   isTokenBlacklisted,
   validateApiKey,
 } from "../repositories/authRepository.ts";
+
+/** Convert a Supabase EC JWK (ES256) to a Node.js KeyObject for jwt.verify */
+function getSupabasePublicKey(): string | null {
+  const jwk = process.env.SUPABASE_JWT_JWK;
+  if (!jwk) return null;
+  try {
+    const parsed = JSON.parse(jwk);
+    return createPublicKey({ key: parsed, format: "jwk" })
+      .export({ type: "spki", format: "pem" }) as string;
+  } catch {
+    return null;
+  }
+}
 
 export interface AuthRequest extends Request {
   user?: {
@@ -23,7 +38,8 @@ export interface AuthRequest extends Request {
 }
 
 /**
- * Verify JWT token and attach user to request
+ * Verify JWT token and attach user to request.
+ * Accepts both legacy custom JWTs (JWT_SECRET) and Supabase JWTs (SUPABASE_JWT_SECRET).
  */
 export const verifyToken = async (
   req: AuthRequest,
@@ -54,14 +70,56 @@ export const verifyToken = async (
       throw new Error("JWT_SECRET is not defined");
     }
 
-    const decoded = jwt.verify(token, secret) as any;
+    let decoded: any;
+    let isSupabaseToken = false;
 
-    // Check if token is blacklisted
-    if (decoded.jti && (await isTokenBlacklisted(decoded.jti))) {
+    try {
+      // Try legacy JWT secret first
+      decoded = jwt.verify(token, secret);
+    } catch (legacyErr: any) {
+      // Fall back to Supabase public key (ES256 asymmetric signing)
+      const supabasePublicKey = getSupabasePublicKey();
+      if (!supabasePublicKey) {
+        throw legacyErr;
+      }
+      decoded = jwt.verify(token, supabasePublicKey, { algorithms: ["ES256"] });
+      isSupabaseToken = true;
+    }
+
+    // Check if legacy token is blacklisted (Supabase manages its own revocation)
+    if (!isSupabaseToken && decoded.jti && (await isTokenBlacklisted(decoded.jti))) {
       return res.status(401).json({
         success: false,
         error: "Token revoked",
       });
+    }
+
+    // Normalize Supabase token claims to the expected user shape
+    if (isSupabaseToken) {
+      const meta = decoded.user_metadata || {};
+      const appMeta = decoded.app_metadata || {};
+      decoded.user_id = decoded.sub;
+      decoded.id = decoded.sub;
+      decoded.email = decoded.email || meta.email || "";
+      // Prefer app_metadata (set server-side) over user_metadata, then JWT role claim
+      decoded.role = appMeta.role ?? meta.role ?? decoded.role ?? "user";
+      decoded.is_admin = appMeta.is_admin ?? meta.is_admin ?? false;
+      decoded.is_superadmin = appMeta.is_superadmin ?? meta.is_superadmin ?? false;
+
+      // Sync with database to ensure latest permissions
+      try {
+        const dbUser = await usersRepository.getUserByEmail(decoded.email);
+        if (dbUser) {
+          decoded.role = dbUser.role || decoded.role;
+          decoded.is_superadmin = dbUser.is_superadmin ?? decoded.is_superadmin;
+          decoded.is_admin =
+            decoded.is_superadmin ||
+            dbUser.role?.toLowerCase() === "admin" ||
+            dbUser.role?.toLowerCase() === "superadmin";
+        }
+      } catch (dbErr) {
+        console.error("[AuthMiddleware] DB sync failed:", dbErr);
+      }
     }
 
     // Ensure user_id and id are consistent (backward compatibility)

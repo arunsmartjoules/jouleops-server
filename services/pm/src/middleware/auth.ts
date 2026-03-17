@@ -1,5 +1,18 @@
 import jwt from "jsonwebtoken";
+import { createPublicKey } from "crypto";
 import type { Request, Response, NextFunction } from "express";
+
+function getSupabasePublicKey(): string | null {
+  const jwk = process.env.SUPABASE_JWT_JWK;
+  if (!jwk) return null;
+  try {
+    const parsed = JSON.parse(jwk);
+    return createPublicKey({ key: parsed, format: "jwk" })
+      .export({ type: "spki", format: "pem" }) as string;
+  } catch {
+    return null;
+  }
+}
 
 export interface AuthRequest extends Request {
   user?: {
@@ -14,7 +27,8 @@ export interface AuthRequest extends Request {
 }
 
 /**
- * Verify JWT token and attach user to request
+ * Verify JWT token and attach user to request.
+ * Accepts both legacy custom JWTs (JWT_SECRET) and Supabase JWTs (ES256 via SUPABASE_JWT_JWK).
  */
 export const verifyToken = async (
   req: AuthRequest,
@@ -46,15 +60,32 @@ export const verifyToken = async (
     }
 
     const secret = process.env.JWT_SECRET;
-    console.log(
-      `[PM Auth] Found secret matching expected length?`,
-      secret ? secret.length : "NO SECRET",
-    );
     if (!secret) {
       throw new Error("JWT_SECRET is not defined");
     }
 
-    const decoded = jwt.verify(token, secret) as any;
+    let decoded: any;
+    let isSupabaseToken = false;
+
+    try {
+      decoded = jwt.verify(token, secret);
+    } catch (legacyErr: any) {
+      const supabasePublicKey = getSupabasePublicKey();
+      if (!supabasePublicKey) throw legacyErr;
+      decoded = jwt.verify(token, supabasePublicKey, { algorithms: ["ES256"] });
+      isSupabaseToken = true;
+    }
+
+    if (isSupabaseToken) {
+      const meta = decoded.user_metadata || {};
+      const appMeta = decoded.app_metadata || {};
+      decoded.user_id = decoded.sub;
+      decoded.id = decoded.sub;
+      decoded.email = decoded.email || meta.email || "";
+      decoded.role = appMeta.role ?? meta.role ?? decoded.role ?? "user";
+      decoded.is_admin = appMeta.is_admin ?? meta.is_admin ?? false;
+      decoded.is_superadmin = appMeta.is_superadmin ?? meta.is_superadmin ?? false;
+    }
 
     // Ensure user_id and id are consistent (backward compatibility)
     if (!decoded.user_id && decoded.id) decoded.user_id = decoded.id;

@@ -139,11 +139,17 @@ export async function getUserSitesWithCoordinates(
   }
 
   // Fetch site details by joining site_user and sites on site_id
+  // UNION with the primary site_code directly assigned in the users table for users missing mappings in site_user
   return query<SiteWithCoordinates>(
     `SELECT s.site_code, s.name, s.address, s.city, s.state, s.latitude, s.longitude, s.radius, s.project_type
      FROM sites s
      JOIN site_user su ON s.site_id = su.site_id
-     WHERE su.user_id = $1${projectFilter}`,
+     WHERE su.user_id = $1${projectFilter}
+     UNION
+     SELECT s.site_code, s.name, s.address, s.city, s.state, s.latitude, s.longitude, s.radius, s.project_type
+     FROM sites s
+     JOIN users u ON s.site_code = u.site_code
+     WHERE u.user_id = $1${projectFilter}`,
     params,
   );
 }
@@ -517,6 +523,16 @@ export async function deleteAttendanceLog(id: string): Promise<boolean> {
   return result !== null;
 }
 
+/**
+ * Get a user record by email (used for auth fallback when Supabase UUID differs from DB user_id)
+ */
+export async function getUserByEmail(email: string): Promise<{ user_id: string; email: string } | null> {
+  return queryOne<{ user_id: string; email: string }>(
+    `SELECT user_id, email FROM users WHERE email = $1 LIMIT 1`,
+    [email],
+  );
+}
+
 export default {
   calculateDistance,
   getUserWorkLocationType,
@@ -532,11 +548,8 @@ export default {
   updateAttendanceLog,
   deleteAttendanceLog,
   bulkUpsertAttendance,
+  getUserByEmail,
 };
-
-/**
- * Bulk upsert attendance logs
- */
 export async function bulkUpsertAttendance(logs: any[]): Promise<{ count: number }> {
   if (!logs || logs.length === 0) {
     return { count: 0 };

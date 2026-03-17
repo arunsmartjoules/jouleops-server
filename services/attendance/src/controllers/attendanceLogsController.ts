@@ -20,6 +20,7 @@ interface AuthRequest extends Request {
   user?: {
     user_id?: string;
     id?: string;
+    email?: string;
     role?: string;
     is_superadmin?: boolean;
   };
@@ -35,6 +36,22 @@ const isAdmin = (user: AuthRequest["user"]) => {
 
 const getUserId = (user: AuthRequest["user"]) => {
   return user?.user_id || user?.id;
+};
+
+/**
+ * Check if the requesting user is authorized to access the given userId's data.
+ * Allows access if: admin, userId matches JWT user_id, or userId matches a user
+ * whose email matches the JWT email (handles Supabase UUID vs DB user_id mismatch).
+ */
+const isAuthorized = async (user: AuthRequest["user"], userId: string): Promise<boolean> => {
+  if (isAdmin(user)) return true;
+  if (userId === getUserId(user)) return true;
+  // Fallback: look up DB user_id by email
+  if (user?.email) {
+    const dbUser = await attendanceRepository.getUserByEmail(user.email).catch(() => null);
+    if (dbUser && dbUser.user_id === userId) return true;
+  }
+  return false;
 };
 
 export const create = async (req: Request, res: Response) => {
@@ -182,7 +199,7 @@ export const validateLocation = async (req: AuthRequest, res: Response) => {
     const { latitude, longitude } = req.query;
 
     const user = req.user;
-    if (!isAdmin(user) && userId !== getUserId(user)) {
+    if (!await isAuthorized(user, userId)) {
       return sendForbidden(res, "Unauthorized");
     }
 
@@ -254,7 +271,7 @@ export const getUserSites = async (req: AuthRequest, res: Response) => {
     }
 
     const user = req.user;
-    if (!isAdmin(user) && userId !== getUserId(user)) {
+    if (!await isAuthorized(user, userId)) {
       return sendForbidden(res, "Unauthorized");
     }
 
@@ -280,8 +297,7 @@ export const getById = async (req: AuthRequest, res: Response) => {
       return sendNotFound(res, "Attendance log");
     }
 
-    const user = req.user;
-    if (!isAdmin(user) && log.user_id !== getUserId(user)) {
+    if (!await isAuthorized(req.user, log.user_id)) {
       return sendForbidden(res, "Unauthorized");
     }
 
@@ -299,8 +315,7 @@ export const getTodayByUser = async (req: AuthRequest, res: Response) => {
       return sendError(res, "User ID is required");
     }
 
-    const user = req.user;
-    if (!isAdmin(user) && userId !== getUserId(user)) {
+    if (!await isAuthorized(req.user, userId)) {
       return sendForbidden(res, "Unauthorized");
     }
 
@@ -319,8 +334,7 @@ export const getByUser = async (req: AuthRequest, res: Response) => {
       return sendError(res, "User ID is required");
     }
 
-    const user = req.user;
-    if (!isAdmin(user) && userId !== getUserId(user)) {
+    if (!await isAuthorized(req.user, userId)) {
       return sendForbidden(res, "Unauthorized");
     }
 
