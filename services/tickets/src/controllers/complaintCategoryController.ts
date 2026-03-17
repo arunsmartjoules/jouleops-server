@@ -95,10 +95,24 @@ export const remove = async (req: Request, res: Response) => {
   }
 };
 
+export const bulkUpsert = async (req: Request, res: Response) => {
+  try {
+    const { categories } = req.body;
+    if (!categories || !Array.isArray(categories)) {
+      return sendError(res, "Invalid categories provided");
+    }
+    const result = await complaintCategoryRepository.bulkUpsertCategories(categories);
+    return sendSuccess(res, result);
+  } catch (error: any) {
+    return sendServerError(res, error);
+  }
+};
+
 export default {
   getAll,
   getById,
   create,
   update,
   remove,
+  bulkUpsert,
 };

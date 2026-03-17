@@ -379,4 +379,47 @@ export default {
   deleteUser,
   bulkUpdateUsers,
   bulkDeleteUsers,
+  bulkUpsertUsers,
 };
+
+/**
+ * Bulk upsert users
+ */
+export async function bulkUpsertUsers(users: CreateUserInput[]): Promise<{ count: number }> {
+  if (!users || users.length === 0) {
+    return { count: 0 };
+  }
+
+  const allColumns = Array.from(new Set(users.flatMap(u => Object.keys(u))));
+  const updateColumns = allColumns.filter(col => col !== 'email' && col !== 'user_id' && col !== 'created_at');
+  
+  const placeholders: string[] = [];
+  const values: any[] = [];
+  
+  users.forEach((user, i) => {
+    const rowPlaceholders = allColumns.map((col, j) => {
+      values.push((user as any)[col]);
+      return `$${i * allColumns.length + j + 1}`;
+    });
+    placeholders.push(`(${rowPlaceholders.join(", ")})`);
+  });
+
+  const updateClause = updateColumns.map(col => `${col} = EXCLUDED.${col}`).join(", ");
+
+  const sql = `
+    INSERT INTO users (${allColumns.join(", ")})
+    VALUES ${placeholders.join(", ")}
+    ON CONFLICT (email) DO UPDATE SET
+    ${updateClause}, updated_at = NOW()
+    RETURNING user_id
+  `;
+
+  const results = await query<{ user_id: string }>(sql, values);
+  
+  // Invalidate cache for all affected users
+  for (const res of results) {
+    await del(buildKey(CACHE_PREFIX.USER, res.user_id));
+  }
+  
+  return { count: results.length };
+}

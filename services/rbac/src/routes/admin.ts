@@ -33,4 +33,7 @@ router.post(
   adminController.verifySuperadminChange
 );
 
+// Get dashboard stats (admin or superadmin)
+router.get("/stats", requireAdmin, adminController.getDashboardStats);
+
 export default router;

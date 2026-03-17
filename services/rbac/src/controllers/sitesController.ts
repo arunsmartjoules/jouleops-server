@@ -63,15 +63,19 @@ export const getById = async (req: Request, res: Response) => {
 
 export const getAll = async (req: Request, res: Response) => {
   try {
-    const { is_active, city, search, project_type } = req.query;
-    const sites = await sitesRepository.getAllSites({
+    const { is_active, city, search, project_type, page, limit, sortBy, sortOrder } = req.query;
+    const result = await sitesRepository.getAllSites({
       is_active:
         is_active === "true" ? true : is_active === "false" ? false : null,
       city: city as string | undefined,
       search: search as string | undefined,
       project_type: project_type as string | undefined,
+      page: parseInt(page as string) || 1,
+      limit: parseInt(limit as string) || 50,
+      sortBy: sortBy as string | undefined,
+      sortOrder: sortOrder as "asc" | "desc" | undefined,
     });
-    return sendSuccess(res, sites);
+    return sendSuccess(res, result.data, { pagination: result.pagination });
   } catch (error: any) {
     console.error("Get sites error:", error);
     return sendServerError(res, error);
@@ -201,6 +205,33 @@ export const bulkRemove = async (req: AuthRequest, res: Response) => {
   }
 };
 
+export const bulkUpsert = async (req: AuthRequest, res: Response) => {
+  try {
+    const { sites } = req.body;
+    if (!Array.isArray(sites) || sites.length === 0) {
+      return sendError(res, "No sites data provided");
+    }
+
+    const { count } = await sitesRepository.bulkUpsertSites(sites);
+
+    if (req.user) {
+      await logActivity({
+        user_id: req.user.user_id,
+        action: "SITE_BULK_IMPORT",
+        module: "SITES",
+        description: `Admin imported/updated ${count} sites`,
+        metadata: { count },
+        ip_address: req.ip,
+      });
+    }
+
+    return sendSuccess(res, { count }, { message: `Successfully imported ${count} sites` });
+  } catch (error: any) {
+    console.error("Bulk upsert sites error:", error);
+    return sendServerError(res, error);
+  }
+};
+
 export default {
   create,
   getById,
@@ -209,4 +240,5 @@ export default {
   remove,
   bulkUpdate,
   bulkRemove,
+  bulkUpsert,
 };

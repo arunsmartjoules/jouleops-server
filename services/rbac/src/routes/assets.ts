@@ -42,6 +42,12 @@ router.get("/:assetId", verifyAnyAuth, assetsController.getById);
 // Modification and privileged operations (unifying auth but still requiring role if needed)
 // NOTE: For now, we unify auth for GET. Admin ops stay protected.
 router.post(
+  "/bulk-upsert",
+  verifyAnyAuth,
+  requireRole(["admin", "superadmin"]),
+  assetsController.bulkUpsert,
+);
+router.post(
   "/",
   verifyAnyAuth,
   requireRole(["admin", "superadmin"]),

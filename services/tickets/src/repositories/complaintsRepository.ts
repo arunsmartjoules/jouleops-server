@@ -648,4 +648,39 @@ export default {
   updateComplaintStatus,
   deleteComplaint,
   getComplaintStats,
+  bulkUpsertComplaints,
 };
+
+/**
+ * Bulk upsert complaints
+ */
+export async function bulkUpsertComplaints(complaints: CreateComplaintInput[]): Promise<{ count: number }> {
+  if (!complaints || complaints.length === 0) {
+    return { count: 0 };
+  }
+
+  const allColumns = Array.from(new Set(complaints.flatMap(c => Object.keys(c))));
+  const placeholders: string[] = [];
+  const values: any[] = [];
+  
+  complaints.forEach((complaint, i) => {
+    const rowPlaceholders = allColumns.map((col, j) => {
+      values.push((complaint as any)[col]);
+      return `$${i * allColumns.length + j + 1}`;
+    });
+    placeholders.push(`(${rowPlaceholders.join(", ")})`);
+  });
+
+  const sql = `
+    INSERT INTO complaints (${allColumns.join(", ")})
+    VALUES ${placeholders.join(", ")}
+    RETURNING id
+  `;
+
+  const results = await query<{ id: string }>(sql, values);
+  
+  // Invalidate stats cache
+  cacheInvalidate("complaint_stats:*").catch(() => {});
+  
+  return { count: results.length };
+}

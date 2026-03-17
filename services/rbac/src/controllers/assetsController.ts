@@ -51,20 +51,24 @@ export const getAll = async (req: Request, res: Response) => {
       limit,
       asset_type,
       equipment_type,
+      category,
       status,
       floor,
       sortBy,
       sortOrder,
+      search,
     } = req.query;
     const result = await assetsRepository.getAssetsBySite("all", {
       page: parseInt(page as string) || 1,
       limit: parseInt(limit as string) || 50,
       asset_type: asset_type as string | undefined,
       equipment_type: equipment_type as string | undefined,
+      category: category as string | undefined,
       status: status as string | undefined,
       floor: floor as string | undefined,
       sortBy: sortBy as string | undefined,
       sortOrder: sortOrder as "asc" | "desc" | undefined,
+      search: search as string | undefined,
     });
     return sendSuccess(res, result.data, { pagination: result.pagination });
   } catch (error: any) {
@@ -267,6 +271,22 @@ export const getStats = async (req: Request, res: Response) => {
   }
 };
 
+export const bulkUpsert = async (req: Request, res: Response) => {
+  try {
+    const { assets } = req.body;
+    if (!Array.isArray(assets) || assets.length === 0) {
+      return sendError(res, "No assets data provided");
+    }
+
+    const { count } = await assetsRepository.bulkUpsertAssets(assets);
+
+    return sendSuccess(res, { count }, { message: `Successfully imported ${count} assets` });
+  } catch (error: any) {
+    console.error("Bulk upsert assets error:", error);
+    return sendServerError(res, error);
+  }
+};
+
 export default {
   create,
   getById,
@@ -281,4 +301,5 @@ export default {
   updateStatus,
   remove,
   getStats,
+  bulkUpsert,
 };

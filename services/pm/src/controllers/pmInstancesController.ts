@@ -83,14 +83,37 @@ export const getBySite = async (req: Request, res: Response) => {
       search,
       filters,
     } = req.query;
+    let statusFilter = status as string | undefined;
+    let frequencyFilter = frequency as string | undefined;
+    let assetTypeFilter = asset_type as string | undefined;
+
+    if (filters) {
+      try {
+        const parsedFilters =
+          typeof filters === "string" ? JSON.parse(filters) : filters;
+        if (Array.isArray(parsedFilters)) {
+          const statusRule = parsedFilters.find((f: any) => f.fieldId === "status");
+          if (statusRule) statusFilter = statusRule.value;
+
+          const freqRule = parsedFilters.find((f: any) => f.fieldId === "frequency");
+          if (freqRule) frequencyFilter = freqRule.value;
+
+          const assetRule = parsedFilters.find((f: any) => f.fieldId === "asset_type");
+          if (assetRule) assetTypeFilter = assetRule.value;
+        }
+      } catch (e) {
+        console.error("[PM_INSTANCES_CONTROLLER] Error parsing filters:", e);
+      }
+    }
+
     const result = await pmInstancesRepository.getPMInstancesBySite(siteCode, {
       instance_id: instance_id as string | undefined,
       maintenance_id: maintenance_id as string | undefined,
       page: parseInt(page as string) || 1,
       limit: parseInt(limit as string) || 20,
-      status: status as string | undefined,
-      frequency: frequency as string | undefined,
-      asset_type: asset_type as string | undefined,
+      status: statusFilter,
+      frequency: frequencyFilter,
+      asset_type: assetTypeFilter,
       sortBy: sortBy as string | undefined,
       sortOrder: sortOrder as "asc" | "desc" | undefined,
       fields: fields ? (fields as string).split(",") : undefined,
@@ -326,14 +349,37 @@ export const getAll = async (req: Request, res: Response) => {
       search,
       filters,
     } = req.query;
+    let statusFilter = status as string | undefined;
+    let frequencyFilter = frequency as string | undefined;
+    let assetTypeFilter = asset_type as string | undefined;
+
+    if (filters) {
+      try {
+        const parsedFilters =
+          typeof filters === "string" ? JSON.parse(filters) : filters;
+        if (Array.isArray(parsedFilters)) {
+          const statusRule = parsedFilters.find((f: any) => f.fieldId === "status");
+          if (statusRule) statusFilter = statusRule.value;
+
+          const freqRule = parsedFilters.find((f: any) => f.fieldId === "frequency");
+          if (freqRule) frequencyFilter = freqRule.value;
+
+          const assetRule = parsedFilters.find((f: any) => f.fieldId === "asset_type");
+          if (assetRule) assetTypeFilter = assetRule.value;
+        }
+      } catch (e) {
+        console.error("[PM_INSTANCES_CONTROLLER] Error parsing filters:", e);
+      }
+    }
+
     const result = await pmInstancesRepository.getAllPMInstances({
       instance_id: instance_id as string | undefined,
       maintenance_id: maintenance_id as string | undefined,
       page: parseInt(page as string) || 1,
       limit: parseInt(limit as string) || 20,
-      status: status as string | undefined,
-      frequency: frequency as string | undefined,
-      asset_type: asset_type as string | undefined,
+      status: statusFilter,
+      frequency: frequencyFilter,
+      asset_type: assetTypeFilter,
       sortBy: sortBy as string | undefined,
       sortOrder: sortOrder as "asc" | "desc" | undefined,
       fields: fields ? (fields as string).split(",") : undefined,

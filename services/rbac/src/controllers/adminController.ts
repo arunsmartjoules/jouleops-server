@@ -226,10 +226,21 @@ export const verifySuperadminChange = async (
   }
 };
 
+export const getDashboardStats = async (req: AuthRequest, res: Response) => {
+  try {
+    const stats = await adminRepository.getDashboardStats();
+    return sendSuccess(res, stats);
+  } catch (error: any) {
+    console.error("Dashboard stats error:", error);
+    return sendServerError(res, error);
+  }
+};
+
 export default {
   listAdmins,
   promoteToAdmin,
   demoteAdmin,
   requestSuperadminChange,
   verifySuperadminChange,
+  getDashboardStats,
 };

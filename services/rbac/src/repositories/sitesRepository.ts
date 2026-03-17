@@ -81,6 +81,10 @@ export interface GetSitesOptions {
   city?: string | null;
   search?: string;
   project_type?: string | null;
+  page?: number;
+  limit?: number;
+  sortBy?: string;
+  sortOrder?: "asc" | "desc";
 }
 
 // ============================================================================
@@ -128,18 +132,31 @@ export async function getSiteById(siteCode: string): Promise<Site | null> {
 }
 
 /**
- * Get all sites with filtering
+ * Get all sites with filtering and pagination
  */
 export async function getAllSites(
   options: GetSitesOptions = {},
-): Promise<Site[]> {
+): Promise<{
+  data: Site[];
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+  };
+}> {
   const {
     is_active = null,
     city = null,
     search = "",
     project_type = null,
+    page = 1,
+    limit = 50,
+    sortBy = "name",
+    sortOrder = "asc",
   } = options;
 
+  const offset = (page - 1) * limit;
   const conditions: string[] = [];
   const params: any[] = [];
   let paramIndex = 1;
@@ -164,7 +181,7 @@ export async function getAllSites(
 
   if (search) {
     conditions.push(
-      `(name ILIKE $${paramIndex} OR location ILIKE $${paramIndex})`,
+      `(name ILIKE $${paramIndex} OR location ILIKE $${paramIndex} OR site_code ILIKE $${paramIndex})`,
     );
     params.push(`%${search}%`);
     paramIndex++;
@@ -172,11 +189,33 @@ export async function getAllSites(
 
   const whereClause =
     conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
+  const orderDirection = sortOrder === "asc" ? "ASC" : "DESC";
 
-  return query<Site>(
-    `SELECT * FROM sites ${whereClause} ORDER BY name ASC`,
+  // Get total count
+  const countResult = await queryOne<{ count: string }>(
+    `SELECT COUNT(*) as count FROM sites ${whereClause}`,
     params,
   );
+  const total = parseInt(countResult?.count || "0", 10);
+
+  // Get paginated data
+  const dataParams = [...params, limit, offset];
+  const data = await query<Site>(
+    `SELECT * FROM sites ${whereClause}
+     ORDER BY ${sortBy} ${orderDirection}
+     LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`,
+    dataParams,
+  );
+
+  return {
+    data,
+    pagination: {
+      page,
+      limit,
+      total,
+      totalPages: Math.ceil(total / limit),
+    },
+  };
 }
 
 /**
@@ -301,4 +340,47 @@ export default {
   deleteSite,
   bulkUpdateSites,
   bulkDeleteSites,
+  bulkUpsertSites,
 };
+
+/**
+ * Bulk upsert sites
+ */
+export async function bulkUpsertSites(sites: CreateSiteInput[]): Promise<{ count: number }> {
+  if (!sites || sites.length === 0) {
+    return { count: 0 };
+  }
+
+  const allColumns = Array.from(new Set(sites.flatMap(s => Object.keys(s))));
+  const updateColumns = allColumns.filter(col => col !== 'site_code' && col !== 'created_at');
+  
+  const placeholders: string[] = [];
+  const values: any[] = [];
+  
+  sites.forEach((site, i) => {
+    const rowPlaceholders = allColumns.map((col, j) => {
+      values.push((site as any)[col]);
+      return `$${i * allColumns.length + j + 1}`;
+    });
+    placeholders.push(`(${rowPlaceholders.join(", ")})`);
+  });
+
+  const updateClause = updateColumns.map(col => `${col} = EXCLUDED.${col}`).join(", ");
+
+  const sql = `
+    INSERT INTO sites (${allColumns.join(", ")})
+    VALUES ${placeholders.join(", ")}
+    ON CONFLICT (site_code) DO UPDATE SET
+    ${updateClause}, updated_at = NOW()
+    RETURNING site_code
+  `;
+
+  const results = await query<{ site_code: string }>(sql, values);
+  
+  // Invalidate cache for all affected sites
+  for (const res of results) {
+    await del(buildKey(CACHE_PREFIX.SITE, res.site_code));
+  }
+  
+  return { count: results.length };
+}

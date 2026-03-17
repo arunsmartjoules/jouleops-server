@@ -16,6 +16,7 @@ const router = express.Router();
  */
 
 router.post("/bulk-delete", verifyAnyAuth, siteLogsController.bulkRemove);
+router.post("/bulk-upsert", verifyAnyAuth, siteLogsController.bulkUpsert);
 router.get("/", verifyAnyAuth, siteLogsController.getAll);
 router.post(
   "/",

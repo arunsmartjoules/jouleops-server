@@ -122,6 +122,80 @@ export async function isSuperadmin(userId: string): Promise<boolean> {
   return user?.is_superadmin || user?.email === SUPERADMIN_EMAIL;
 }
 
+/**
+ * Get aggregated dashboard statistics
+ */
+export async function getDashboardStats() {
+  const statsQueries = {
+    totalUsers: "SELECT COUNT(*)::int FROM users",
+    totalSites: "SELECT COUNT(*)::int FROM sites",
+    totalAssets: "SELECT COUNT(*)::int FROM assets",
+    totalTickets: "SELECT COUNT(*)::int FROM complaints",
+    openTickets:
+      "SELECT COUNT(*)::int FROM complaints WHERE status NOT IN ('Resolved', 'Completed', 'Cancelled')",
+    criticalTickets:
+      "SELECT COUNT(*)::int FROM complaints WHERE priority IN ('High', 'Critical')",
+    checkInToday:
+      "SELECT COUNT(*)::int FROM attendance_logs WHERE date = CURRENT_DATE",
+    pendingPMs:
+      "SELECT COUNT(*)::int FROM pm_instances WHERE status NOT IN ('Completed')",
+    pendingSiteLogs:
+      "SELECT COUNT(*)::int FROM site_logs WHERE status NOT IN ('Completed')",
+  };
+
+  const results: any = {};
+  await Promise.all(
+    Object.entries(statsQueries).map(async ([key, sql]) => {
+      const res = await queryOne<{ count: number }>(sql);
+      results[key] = res?.count || 0;
+    }),
+  );
+
+  // Get ticket trends for last 7 days
+  const trendSql = `
+    SELECT 
+      TO_CHAR(d, 'Mon DD') as date,
+      (SELECT COUNT(*)::int FROM complaints WHERE created_at::date = d::date) as tickets,
+      (SELECT COUNT(*)::int FROM attendance_logs WHERE date = d::date) as check_ins
+    FROM generate_series(CURRENT_DATE - INTERVAL '6 days', CURRENT_DATE, '1 day'::interval) d
+    ORDER BY d ASC
+  `;
+  const rawTrends = await query(trendSql);
+  // Re-map to match ChartsSection expectations (date, tickets, checkIns)
+  results.ticketTrends = rawTrends.map((t: any) => ({
+    date: t.date,
+    tickets: t.tickets,
+    checkIns: t.check_ins,
+  }));
+
+  // Get category distribution
+  const categorySql = `
+    SELECT 
+      COALESCE(NULLIF(category, ''), 'Uncategorized') as name, 
+      COUNT(*)::int as value 
+    FROM complaints 
+    GROUP BY name 
+    ORDER BY value DESC
+  `;
+  const allCategories = await query(categorySql);
+
+  // Take top 5 and group others
+  if (allCategories.length > 5) {
+    const top5 = allCategories.slice(0, 5);
+    const othersValue = allCategories
+      .slice(5)
+      .reduce((acc: number, curr: any) => acc + curr.value, 0);
+    results.ticketsByCategory = [
+      ...top5,
+      { name: "Others", value: othersValue },
+    ];
+  } else {
+    results.ticketsByCategory = allCategories;
+  }
+
+  return results;
+}
+
 export default {
   listAdmins,
   getUserById,
@@ -130,5 +204,6 @@ export default {
   removeSuperadmin,
   setSuperadmin,
   isSuperadmin,
+  getDashboardStats,
   SUPERADMIN_EMAIL,
 };

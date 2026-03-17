@@ -13,6 +13,7 @@ const router = express.Router();
  * Base path: /api/attendance
  */
 
+router.post("/bulk-upsert", verifyAnyAuth, attendanceLogsController.bulkUpsert);
 router.post("/", verifyAnyAuth, attendanceLogsController.create);
 router.get("/", verifyAnyAuth, attendanceLogsController.getAll);
 router.post("/check-in", verifyAnyAuth, attendanceLogsController.checkIn);

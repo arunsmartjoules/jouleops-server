@@ -53,21 +53,36 @@ export const getBySite = asyncHandler(async (req: Request, res: Response) => {
   const {
     page,
     limit,
+    search,
+    fromDate,
+    toDate,
     chiller_id,
     date_from,
     date_to,
     sortBy,
     sortOrder,
-    search,
-    fromDate,
-    toDate,
+    filters,
   } = req.query;
+
+  let chillerIdFilter = chiller_id as string | undefined;
+  if (filters) {
+    try {
+      const parsedFilters = JSON.parse(filters as string);
+      const chillerRule = parsedFilters.find(
+        (f: any) => f.fieldId === "chiller_id",
+      );
+      if (chillerRule) chillerIdFilter = chillerRule.value;
+    } catch (e) {
+      console.error("[CHILLER_READINGS_CONTROLLER] Error parsing filters:", e);
+    }
+  }
+
   const result = await chillerReadingsRepository.getChillerReadingsBySite(
     siteCode,
     {
       page: parseInt(page as string) || 1,
       limit: parseInt(limit as string) || 20,
-      chiller_id: chiller_id as string | undefined,
+      chiller_id: chillerIdFilter,
       date_from: (date_from as string) || (fromDate as string) || undefined,
       date_to: (date_to as string) || (toDate as string) || undefined,
       sortBy: sortBy as string | undefined,

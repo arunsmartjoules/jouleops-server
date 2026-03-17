@@ -69,10 +69,12 @@ export interface GetAssetsOptions {
   limit?: number;
   asset_type?: string | null;
   equipment_type?: string | null;
+  category?: string | null;
   status?: string | null;
   floor?: string | null;
   sortBy?: string;
   sortOrder?: "asc" | "desc";
+  search?: string;
 }
 
 export interface AssetStats {
@@ -164,10 +166,12 @@ export async function getAssetsBySite(
     limit = 50,
     asset_type = null,
     equipment_type = null,
+    category = null,
     status = null,
     floor = null,
     sortBy = "asset_name",
     sortOrder = "asc",
+    search = "",
   } = options;
 
   const offset = (page - 1) * limit;
@@ -194,6 +198,12 @@ export async function getAssetsBySite(
     paramIndex++;
   }
 
+  if (category) {
+    conditions.push(`category = $${paramIndex}`);
+    params.push(category);
+    paramIndex++;
+  }
+
   if (status) {
     conditions.push(`status = $${paramIndex}`);
     params.push(status);
@@ -203,6 +213,14 @@ export async function getAssetsBySite(
   if (floor) {
     conditions.push(`floor = $${paramIndex}`);
     params.push(floor);
+    paramIndex++;
+  }
+
+  if (search) {
+    conditions.push(
+      `(asset_name ILIKE $${paramIndex} OR asset_id ILIKE $${paramIndex} OR serial_number ILIKE $${paramIndex} OR make ILIKE $${paramIndex} OR model ILIKE $${paramIndex})`,
+    );
+    params.push(`%${search}%`);
     paramIndex++;
   }
 
@@ -424,4 +442,57 @@ export default {
   updateAssetStatus,
   deleteAsset,
   getAssetStats,
+  bulkUpsertAssets,
 };
+
+/**
+ * Bulk upsert assets
+ */
+export async function bulkUpsertAssets(assets: any[]): Promise<{ count: number }> {
+  if (!assets || assets.length === 0) {
+    return { count: 0 };
+  }
+
+  // Sanitizing and auto-generating asset_ids if missing
+  const processedAssets = assets.map(asset => {
+    const sanitized = { ...asset };
+    if (!sanitized.asset_id) {
+      const randomNum = Math.floor(100000 + Math.random() * 900000);
+      sanitized.asset_id = `AST-${randomNum}`;
+    }
+    Object.keys(sanitized).forEach(key => {
+      if (sanitized[key] === "") sanitized[key] = null;
+    });
+    return sanitized;
+  });
+
+  const allColumns = Array.from(new Set(processedAssets.flatMap(a => Object.keys(a))));
+  const values: any[] = [];
+  const placeholders: string[] = [];
+  
+  processedAssets.forEach((asset, i) => {
+    const rowPlaceholders = allColumns.map((col, j) => {
+      let val = (asset as any)[col];
+      if (col === "specifications" && val) val = JSON.stringify(val);
+      values.push(val);
+      return `$${i * allColumns.length + j + 1}`;
+    });
+    placeholders.push(`(${rowPlaceholders.join(", ")})`);
+  });
+
+  const sql = `
+    INSERT INTO assets (${allColumns.join(", ")})
+    VALUES ${placeholders.join(", ")}
+    RETURNING asset_id
+  `;
+
+  // For now, we'll do simple batch insert. 
+  const results = await query<{ asset_id: string }>(sql, values);
+  
+  // Invalidate cache for all affected assets
+  for (const res of results) {
+    await del(buildKey(CACHE_PREFIX.ASSET, res.asset_id));
+  }
+  
+  return { count: results.length };
+}

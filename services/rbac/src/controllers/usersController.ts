@@ -247,6 +247,35 @@ export const bulkRemove = async (req: AuthRequest, res: Response) => {
   }
 };
 
+export const bulkUpsert = async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.user || !req.user.is_superadmin) {
+      return sendForbidden(res, "Only superadmins can bulk import users");
+    }
+
+    const { users } = req.body;
+    if (!Array.isArray(users) || users.length === 0) {
+      return sendError(res, "No users data provided");
+    }
+
+    const { count } = await usersRepository.bulkUpsertUsers(users);
+
+    await logActivity({
+      user_id: req.user.user_id,
+      action: "USER_BULK_IMPORT",
+      module: "USERS",
+      description: `Admin imported/updated ${count} users`,
+      metadata: { count },
+      ip_address: req.ip,
+    });
+
+    return sendSuccess(res, { count }, { message: `Successfully imported ${count} users` });
+  } catch (error: any) {
+    console.error("Bulk upsert users error:", error);
+    return sendServerError(res, error);
+  }
+};
+
 export default {
   create,
   getById,
@@ -257,4 +286,5 @@ export default {
   remove,
   bulkUpdate,
   bulkRemove,
+  bulkUpsert,
 };

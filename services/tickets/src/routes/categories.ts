@@ -12,6 +12,9 @@ const router = express.Router();
 // Get all categories
 router.get("/", verifyAnyAuth, complaintCategoryController.getAll);
 
+// Bulk upsert categories
+router.post("/bulk-upsert", verifyAnyAuth, complaintCategoryController.bulkUpsert);
+
 // Get category by ID
 router.get("/:id", verifyAnyAuth, complaintCategoryController.getById);
 

@@ -44,6 +44,7 @@ export const getBySite = asyncHandler(async (req: Request, res: Response) => {
     task_line_id,
     date_from,
     date_to,
+    site_codes,
     startDate,
     remarks,
     filters,
@@ -54,13 +55,27 @@ export const getBySite = asyncHandler(async (req: Request, res: Response) => {
   }
 
   let remarksFilter = remarks as string | undefined;
+  let statusFilter = status as string | undefined;
+  let siteCodeFilter = site_code as string | undefined;
+  let logIdFilter = log_id as string | undefined;
+
   if (filters) {
     try {
       const parsedFilters = JSON.parse(filters as string);
+
       const remarkRule = parsedFilters.find((f: any) => f.fieldId === "remarks");
-      if (remarkRule) {
-        remarksFilter = remarkRule.value;
-      }
+      if (remarkRule) remarksFilter = remarkRule.value;
+
+      const statusRule = parsedFilters.find((f: any) => f.fieldId === "status");
+      if (statusRule) statusFilter = statusRule.value;
+
+      const siteCodeRule = parsedFilters.find(
+        (f: any) => f.fieldId === "site_code",
+      );
+      if (siteCodeRule) siteCodeFilter = siteCodeRule.value;
+
+      const logIdRule = parsedFilters.find((f: any) => f.fieldId === "log_id");
+      if (logIdRule) logIdFilter = logIdRule.value;
     } catch (e) {
       console.error("[SITE_LOGS_CONTROLLER] Error parsing filters:", e);
     }
@@ -71,13 +86,14 @@ export const getBySite = asyncHandler(async (req: Request, res: Response) => {
     limit: parseInt(limit as string) || 20,
     log_name: (log_name as string) || (type as string) || undefined,
     search: search as string | undefined,
-    site_code: site_code as string | undefined,
-    log_id: log_id as string | undefined,
-    status: status as string | undefined,
+    site_code: siteCodeFilter,
+    log_id: logIdFilter,
+    status: statusFilter,
     task_line_id: task_line_id as string | undefined,
     date_from: (date_from as string) || (startDate as string) || undefined,
     date_to: (date_to as string) || undefined,
     remarks: remarksFilter,
+    site_codes: site_codes ? (site_codes as string).split(",") : undefined,
   });
   return sendSuccess(res, result.data, { pagination: result.pagination });
 });
@@ -126,4 +142,13 @@ export const bulkRemove = asyncHandler(async (req: Request, res: Response) => {
   return sendSuccess(res, result);
 });
 
-export default { create, getBySite, getAll, update, remove, bulkRemove };
+export const bulkUpsert = asyncHandler(async (req: Request, res: Response) => {
+  const { logs } = req.body;
+  if (!logs || !Array.isArray(logs)) {
+    return sendError(res, "Invalid logs provided");
+  }
+  const result = await siteLogsRepository.bulkUpsertLogs(logs);
+  return sendSuccess(res, result);
+});
+
+export default { create, getBySite, getAll, update, remove, bulkRemove, bulkUpsert };

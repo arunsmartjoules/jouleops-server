@@ -456,6 +456,31 @@ export const getAll = async (req: Request, res: Response) => {
   }
 };
 
+export const bulkUpsert = async (req: AuthRequest, res: Response) => {
+  try {
+    if (!isAdmin(req.user)) {
+      return sendForbidden(res, "Only admins can bulk import attendance");
+    }
+
+    const { attendance } = req.body;
+    if (!Array.isArray(attendance) || attendance.length === 0) {
+      return sendError(res, "No attendance data provided");
+    }
+
+    const { count } =
+      await attendanceRepository.bulkUpsertAttendance(attendance);
+
+    return sendSuccess(
+      res,
+      { count },
+      { message: `Successfully imported ${count} attendance logs` },
+    );
+  } catch (error: any) {
+    console.error("Bulk upsert attendance error:", error);
+    return sendServerError(res, error);
+  }
+};
+
 export default {
   create,
   checkIn,
@@ -471,4 +496,5 @@ export default {
   validateLocation,
   getUserSites,
   getAll,
+  bulkUpsert,
 };

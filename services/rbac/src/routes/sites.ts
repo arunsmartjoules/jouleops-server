@@ -43,5 +43,11 @@ router.post(
   requireRole(["admin", "superadmin"]),
   sitesController.bulkRemove,
 );
+router.post(
+  "/bulk-upsert",
+  verifyToken,
+  requireRole(["admin", "superadmin"]),
+  sitesController.bulkUpsert,
+);
 
 export default router;

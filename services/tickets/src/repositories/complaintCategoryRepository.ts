@@ -109,10 +109,40 @@ export async function deleteCategory(id: number | string): Promise<void> {
   await cacheDel("complaint_categories:all");
 }
 
+/**
+ * Bulk upsert categories
+ */
+export async function bulkUpsertCategories(categories: { category: string }[]): Promise<{ count: number }> {
+  if (!categories || categories.length === 0) {
+    return { count: 0 };
+  }
+
+  const values: any[] = [];
+  const placeholders = categories.map((c, i) => {
+    values.push(c.category);
+    return `($${i + 1})`;
+  }).join(", ");
+
+  const sql = `
+    INSERT INTO complaint_category (category)
+    VALUES ${placeholders}
+    ON CONFLICT (category) DO NOTHING
+    RETURNING id
+  `;
+
+  const results = await query<{ id: number }>(sql, values);
+  
+  // Invalidate cache
+  await cacheDel("complaint_categories:all");
+  
+  return { count: results.length };
+}
+
 export default {
   getAllCategories,
   getCategoryById,
   createCategory,
   updateCategory,
   deleteCategory,
+  bulkUpsertCategories,
 };

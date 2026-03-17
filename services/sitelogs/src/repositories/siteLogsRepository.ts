@@ -96,6 +96,7 @@ export interface GetSiteLogsOptions {
   date_from?: string | null;
   date_to?: string | null;
   remarks?: string | null;
+  site_codes?: string[];
 }
 
 // ============================================================================
@@ -165,6 +166,10 @@ export async function getLogsBySite(
     conditions.push(`site_code = $${paramIndex}`);
     params.push(siteCode);
     paramIndex++;
+  } else if (options.site_codes && options.site_codes.length > 0) {
+    conditions.push(`site_code = ANY($${paramIndex}::text[])`);
+    params.push(options.site_codes);
+    paramIndex++;
   } else if (site_code) {
     conditions.push(`site_code = $${paramIndex}`);
     params.push(site_code);
@@ -183,7 +188,13 @@ export async function getLogsBySite(
     paramIndex++;
   }
 
-  if (status) {
+  const isPendingSearch = status?.toLowerCase() === "pending";
+
+  if (isPendingSearch) {
+    conditions.push(`status != $${paramIndex}`);
+    params.push("Completed");
+    paramIndex++;
+  } else if (status) {
     conditions.push(`status = $${paramIndex}`);
     params.push(status);
     paramIndex++;
@@ -194,16 +205,20 @@ export async function getLogsBySite(
     params.push(task_line_id);
     paramIndex++;
   }
-  if (date_from) {
-    conditions.push(`created_at >= $${paramIndex}`);
-    params.push(date_from);
-    paramIndex++;
-  }
 
-  if (date_to) {
-    conditions.push(`created_at <= $${paramIndex}`);
-    params.push(date_to);
-    paramIndex++;
+  // Only apply date filters if NOT searching for all pending logs
+  if (!isPendingSearch) {
+    if (date_from) {
+      conditions.push(`created_at >= $${paramIndex}`);
+      params.push(date_from);
+      paramIndex++;
+    }
+
+    if (date_to) {
+      conditions.push(`created_at <= $${paramIndex}`);
+      params.push(date_to);
+      paramIndex++;
+    }
   }
   
   if (remarksFilter) {
@@ -325,10 +340,44 @@ export async function deleteLogs(ids: string[]): Promise<{ count: number }> {
   return { count: results.length };
 }
 
+/**
+ * Bulk upsert site logs
+ */
+export async function bulkUpsertLogs(logs: CreateSiteLogInput[]): Promise<{ count: number }> {
+  if (!logs || logs.length === 0) {
+    return { count: 0 };
+  }
+
+  // Since site_logs doesn't have a natural unique constraint, we just perform batch inserts
+  // We'll build a single multi-row INSERT query for efficiency
+  
+  const allColumns = Array.from(new Set(logs.flatMap(l => Object.keys(l))));
+  const placeholders: string[] = [];
+  const values: any[] = [];
+  
+  logs.forEach((log, i) => {
+    const rowPlaceholders = allColumns.map((col, j) => {
+      values.push((log as any)[col]);
+      return `$${i * allColumns.length + j + 1}`;
+    });
+    placeholders.push(`(${rowPlaceholders.join(", ")})`);
+  });
+
+  const sql = `
+    INSERT INTO site_logs (${allColumns.join(", ")})
+    VALUES ${placeholders.join(", ")}
+    RETURNING id
+  `;
+
+  const results = await query<{ id: string }>(sql, values);
+  return { count: results.length };
+}
+
 export default {
   createLog,
   getLogsBySite,
   updateLog,
   deleteLog,
   deleteLogs,
+  bulkUpsertLogs,
 };

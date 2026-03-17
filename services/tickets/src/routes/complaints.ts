@@ -24,6 +24,7 @@ const router = express.Router();
 
 // Protected routes (accepts JWT or API Key)
 router.get("/", verifyAnyAuth, complaintsController.getAll);
+router.post("/bulk-upsert", verifyAnyAuth, complaintsController.bulkUpsert);
 
 // Protected routes (require API key for external systems)
 router.post(

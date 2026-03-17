@@ -18,6 +18,7 @@ import {
   sendNotFound,
   sendServerError,
   logActivity,
+  asyncHandler,
   type AuthRequest,
 } from "@jouleops/shared";
 
@@ -147,22 +148,57 @@ export const getBySite = async (req: Request, res: Response) => {
       priority,
     } = req.query;
 
+    let statusFilter = status as string | undefined;
+    let categoryFilter = category as string | undefined;
+    let fromDateFilter = fromDate as string | undefined;
+    let toDateFilter = toDate as string | undefined;
+    let priorityFilter = priority as string | undefined;
+
+    if (filters) {
+      try {
+        const parsedFilters =
+          typeof filters === "string" ? JSON.parse(filters) : filters;
+        if (Array.isArray(parsedFilters)) {
+          const statusRule = parsedFilters.find((f: any) => f.fieldId === "status");
+          if (statusRule) statusFilter = statusRule.value;
+
+          const catRule = parsedFilters.find((f: any) => f.fieldId === "category");
+          if (catRule) categoryFilter = catRule.value;
+
+          const fromRule = parsedFilters.find(
+            (f: any) => f.fieldId === "fromDate" || f.fieldId === "date_from",
+          );
+          if (fromRule) fromDateFilter = fromRule.value;
+
+          const toRule = parsedFilters.find(
+            (f: any) => f.fieldId === "toDate" || f.fieldId === "date_to",
+          );
+          if (toRule) toDateFilter = toRule.value;
+
+          const prioRule = parsedFilters.find((f: any) => f.fieldId === "priority");
+          if (prioRule) priorityFilter = prioRule.value;
+        }
+      } catch (e) {
+        console.error("[COMPLAINTS_CONTROLLER] Error parsing filters:", e);
+      }
+    }
+
     const result = await complaintsRepository.getComplaintsBySite(siteCode, {
       page: page as string,
       limit: limit as string,
-      status: status as string,
-      category: category as string,
-      fromDate: fromDate as string,
-      toDate: toDate as string,
+      status: statusFilter,
+      category: categoryFilter,
+      fromDate: fromDateFilter,
+      toDate: toDateFilter,
       sortBy: sortBy as string,
-      sortOrder: sortOrder as "asc" | "desc",
+      sortOrder: sortOrder as "asc" | "desc" | undefined,
       search: search as string,
-      filters: (filters || []) as any,
+      filters: filters as any,
       message_id: message_id as string,
       group_id: group_id as string,
       ticket_no: ticket_no as string,
       id: id as string,
-      priority: priority as string,
+      priority: priorityFilter,
     });
 
     return sendSuccess(res, result.data, { pagination: result.pagination });
@@ -539,6 +575,15 @@ export const getAll = async (req: Request, res: Response) => {
   return getBySite(req, res);
 };
 
+export const bulkUpsert = asyncHandler(async (req: Request, res: Response) => {
+  const { tickets } = req.body;
+  if (!tickets || !Array.isArray(tickets)) {
+    return sendError(res, "Invalid tickets provided");
+  }
+  const result = await complaintsRepository.bulkUpsertComplaints(tickets);
+  return sendSuccess(res, result);
+});
+
 export default {
   create,
   getById,
@@ -550,4 +595,5 @@ export default {
   updateStatus,
   remove,
   getStats,
+  bulkUpsert,
 };

@@ -11,6 +11,7 @@ const router = express.Router();
  */
 
 // Bulk operations (must come before /:userId to avoid param clash)
+router.post("/bulk-upsert", verifyAnyAuth, usersController.bulkUpsert);
 router.post("/bulk-update", verifyAnyAuth, usersController.bulkUpdate);
 router.post("/bulk-delete", verifyAnyAuth, usersController.bulkRemove);
 
