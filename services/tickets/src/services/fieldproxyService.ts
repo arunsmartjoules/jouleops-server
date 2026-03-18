@@ -52,6 +52,13 @@ export interface ComplaintForwardPayload {
   group_id?: string;
   ticket_no?: string;
   created_user?: string;
+  // Update fields
+  area_asset?: string;
+  category?: string;
+  internal_remarks?: string;
+  responded_at?: string;
+  resolved_at?: string;
+  assigned_to?: string;
 }
 
 export async function forwardComplaintToFieldproxy(
@@ -133,7 +140,9 @@ async function getRowIdByTicketNo(
 }
 
 /**
- * Updates a ticket in Fieldproxy (Only title, status, location)
+ * Updates a ticket in Fieldproxy.
+ * Maps: status, area_asset (→ location), category, internal_remarks,
+ *       responded_at, resolved_at, assigned_to, title, location
  */
 export async function updateComplaintInFieldproxy(
   ticketNo: string,
@@ -154,11 +163,17 @@ export async function updateComplaintInFieldproxy(
     return { lookup: lookupResponse, error: "Row not found in Fieldproxy" };
   }
 
-  // 2. Prepare payload (Only title, status, location as per user request)
+  // 2. Prepare payload — map our fields to Fieldproxy tableData keys
   const tableData: Record<string, any> = {};
-  if (complaint.title) tableData.title = complaint.title;
-  if (complaint.status) tableData.status = complaint.status;
-  if (complaint.location) tableData.location = complaint.location;
+  if (complaint.title)            tableData.title             = complaint.title;
+  if (complaint.status)           tableData.status            = complaint.status;
+  if (complaint.location)         tableData.location          = complaint.location;
+  if (complaint.area_asset)       tableData.location          = complaint.area_asset; // area_asset maps to location
+  if (complaint.category)         tableData.category          = complaint.category;
+  if (complaint.internal_remarks) tableData.internal_remarks  = complaint.internal_remarks;
+  if (complaint.responded_at)     tableData.responded_at      = complaint.responded_at;
+  if (complaint.resolved_at)      tableData.resolved_at       = complaint.resolved_at;
+  if (complaint.assigned_to)      tableData.assigned_to       = complaint.assigned_to;
 
   if (Object.keys(tableData).length === 0) {
     return { lookup: lookupResponse, error: "No fields to update" };

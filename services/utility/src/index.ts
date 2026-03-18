@@ -25,6 +25,7 @@ import notificationRoutes from "./routes/notifications.ts";
 
 // Import jobs
 import { initAttendanceReminders } from "./jobs/attendanceReminderJob.ts";
+import { startNotificationScheduler } from "./jobs/notificationSchedulerJob.ts";
 
 const PORT = process.env.UTILITY_PORT || 3428;
 
@@ -76,6 +77,13 @@ const server = app.listen(Number(PORT), "0.0.0.0", () => {
     initAttendanceReminders();
   } catch (error) {
     logger.error("Failed to initialize attendance reminders", { error });
+  }
+
+  // Start push notification scheduler
+  try {
+    startNotificationScheduler();
+  } catch (error) {
+    logger.error("Failed to start notification scheduler", { error });
   }
 });
 
