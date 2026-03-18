@@ -262,6 +262,39 @@ export const getProfile = asyncHandler(
 );
 
 // ============================================================================
+// Get Profile By Email (Public endpoint for Supabase auth fallback)
+// ============================================================================
+
+export const getProfileByEmail = asyncHandler(
+  async (req: Request, res: Response) => {
+    const { email } = req.body;
+
+    if (!email) {
+      return sendError(res, "Email is required");
+    }
+
+    // Only allow @smartjoules.in domain for security
+    if (!email.endsWith("@smartjoules.in")) {
+      return res.status(403).json({
+        success: false,
+        error: "Access restricted to @smartjoules.in domain only.",
+      });
+    }
+
+    const user = await usersRepository.getUserByEmail(email);
+
+    if (!user) {
+      return sendNotFound(res, "User");
+    }
+
+    // Remove password from response
+    const { password, ...userWithoutPassword } = user;
+
+    return sendSuccess(res, userWithoutPassword);
+  },
+);
+
+// ============================================================================
 // Logout
 // ============================================================================
 
@@ -783,6 +816,7 @@ export default {
   signup,
   googleLogin,
   getProfile,
+  getProfileByEmail,
   logout,
   changePassword,
   resetPassword,

@@ -29,6 +29,7 @@ router.post(
 );
 router.post("/refresh", authController.refreshToken);
 router.get("/profile", verifyAnyAuth, authController.getProfile);
+router.post("/profile-by-email", authController.getProfileByEmail);
 
 // Email verification routes
 router.post("/send-verification", authController.sendVerificationCode);
