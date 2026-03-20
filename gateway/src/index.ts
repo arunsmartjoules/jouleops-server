@@ -22,6 +22,7 @@ import {
   setupGracefulShutdown,
   dbHealthCheck,
   redisHealthCheck,
+  connectRedis,
 } from "@jouleops/shared";
 
 // Environment config
@@ -190,6 +191,11 @@ const server = app.listen(Number(PORT), "0.0.0.0", () => {
   logger.info(`JouleOps API Gateway running on port ${PORT}`);
   logger.info(`Proxying to monolith: ${MONOLITH_URL}`);
   logger.info(`Health check: http://localhost:${PORT}/health`);
+});
+
+// Connect to Redis on startup
+connectRedis().catch((err) => {
+  logger.warn("Redis initial connection failed, will retry automatically", { error: err.message });
 });
 
 server.setMaxListeners(50); // Increase limit to resolve MaxListenersExceededWarning from many proxies
