@@ -106,10 +106,15 @@ export const verifyToken = async (
       decoded.is_admin = appMeta.is_admin ?? meta.is_admin ?? false;
       decoded.is_superadmin = appMeta.is_superadmin ?? meta.is_superadmin ?? false;
 
-      // Sync with database to ensure latest permissions
+      // Sync with database to resolve the real DB user_id (Supabase sub ≠ DB user_id)
+      // and pull latest permissions
       try {
         const dbUser = await usersRepository.getUserByEmail(decoded.email);
         if (dbUser) {
+          // Replace Supabase UUID with the actual DB user_id so all downstream
+          // queries (attendance, site-users, etc.) use the correct identifier
+          decoded.user_id = dbUser.user_id;
+          decoded.id = dbUser.user_id;
           decoded.role = dbUser.role || decoded.role;
           decoded.is_superadmin = dbUser.is_superadmin ?? decoded.is_superadmin;
           decoded.is_admin =

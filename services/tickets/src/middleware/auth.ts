@@ -79,6 +79,23 @@ export const verifyToken = async (
       decoded.role = appMeta.role ?? meta.role ?? decoded.role ?? "user";
       decoded.is_admin = appMeta.is_admin ?? meta.is_admin ?? false;
       decoded.is_superadmin = appMeta.is_superadmin ?? meta.is_superadmin ?? false;
+
+      // Resolve real DB user_id via email — Supabase UUID ≠ DB user_id
+      if (decoded.email) {
+        try {
+          const { queryOne } = await import("@jouleops/shared");
+          const dbUser = await queryOne<{ user_id: string }>(
+            `SELECT user_id FROM users WHERE email = $1 OR platform_email = $1 LIMIT 1`,
+            [decoded.email],
+          );
+          if (dbUser) {
+            decoded.user_id = dbUser.user_id;
+            decoded.id = dbUser.user_id;
+          }
+        } catch (dbErr) {
+          console.error("[TicketsAuthMiddleware] DB user_id resolution failed:", dbErr);
+        }
+      }
     }
 
     // Ensure user_id and id are consistent (backward compatibility)

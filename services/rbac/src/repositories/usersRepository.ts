@@ -133,9 +133,13 @@ export async function getUserByIdUncached(
 
 /**
  * Get user by email (no caching - used for auth)
+ * Checks both email and platform_email columns since some users only have one set.
  */
 export async function getUserByEmail(email: string): Promise<User | null> {
-  return queryOne<User>(`SELECT * FROM users WHERE email = $1`, [email]);
+  return queryOne<User>(
+    `SELECT * FROM users WHERE email = $1 OR platform_email = $1 LIMIT 1`,
+    [email],
+  );
 }
 
 /**

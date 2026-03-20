@@ -82,6 +82,20 @@ export const verifyToken = async (
       decoded.role = appMeta.role ?? meta.role ?? decoded.role ?? "user";
       decoded.is_admin = appMeta.is_admin ?? meta.is_admin ?? false;
       decoded.is_superadmin = appMeta.is_superadmin ?? meta.is_superadmin ?? false;
+
+      // Resolve the real DB user_id via email — Supabase UUID ≠ DB user_id
+      // Without this, attendance records get stored with the Supabase UUID
+      // and can't be joined back to the users table
+      try {
+        const { getUserByEmail } = await import("../repositories/attendanceRepository.ts");
+        const dbUser = await getUserByEmail(decoded.email);
+        if (dbUser) {
+          decoded.user_id = dbUser.user_id;
+          decoded.id = dbUser.user_id;
+        }
+      } catch (dbErr) {
+        console.error("[AttendanceAuthMiddleware] DB user_id resolution failed:", dbErr);
+      }
     }
 
     // Ensure user_id and id are consistent (backward compatibility)

@@ -130,26 +130,18 @@ export async function getUserSitesWithCoordinates(
   userId: string,
   projectType?: string,
 ): Promise<SiteWithCoordinates[]> {
-  const params: any[] = [userId];
-  let projectFilter = "";
+  // Always enforce JouleCool filter; use provided projectType or default to 'JouleCool'
+  const effectiveProjectType = projectType || "JouleCool";
+  const params: any[] = [userId, effectiveProjectType];
 
-  if (projectType) {
-    projectFilter = ` AND s.project_type = $2`;
-    params.push(projectType);
-  }
-
-  // Fetch site details by joining site_user and sites on site_id
-  // UNION with the primary site_code directly assigned in the users table for users missing mappings in site_user
+  // Only return sites from site_user mappings matching the project type
   return query<SiteWithCoordinates>(
     `SELECT s.site_code, s.name, s.address, s.city, s.state, s.latitude, s.longitude, s.radius, s.project_type
      FROM sites s
      JOIN site_user su ON s.site_id = su.site_id
-     WHERE su.user_id = $1${projectFilter}
-     UNION
-     SELECT s.site_code, s.name, s.address, s.city, s.state, s.latitude, s.longitude, s.radius, s.project_type
-     FROM sites s
-     JOIN users u ON s.site_code = u.site_code
-     WHERE u.user_id = $1${projectFilter}`,
+     WHERE su.user_id = $1
+       AND s.is_active = true
+       AND s.project_type = $2`,
     params,
   );
 }
@@ -528,7 +520,7 @@ export async function deleteAttendanceLog(id: string): Promise<boolean> {
  */
 export async function getUserByEmail(email: string): Promise<{ user_id: string; email: string } | null> {
   return queryOne<{ user_id: string; email: string }>(
-    `SELECT user_id, email FROM users WHERE email = $1 LIMIT 1`,
+    `SELECT user_id, email FROM users WHERE email = $1 OR platform_email = $1 LIMIT 1`,
     [email],
   );
 }

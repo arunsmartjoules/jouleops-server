@@ -142,7 +142,8 @@ export async function getBySite(siteCode: string) {
 }
 
 /**
- * Get sites assigned to a specific user
+ * Get sites assigned to a specific user.
+ * Only returns sites from site_user mappings with project_type = 'JouleCool'.
  */
 export async function getByUser(userId: string) {
   const cacheKey = `site_users:user:${userId}`;
@@ -155,16 +156,10 @@ export async function getByUser(userId: string) {
           s.name as site_name, s.site_code, s.address, s.city, s.latitude, s.longitude, s.radius, s.project_type
         FROM site_user su
         JOIN sites s ON su.site_id = s.site_id
-        WHERE su.user_id = $1 AND s.is_active = true
-        UNION
-        SELECT
-          s.site_id, u.user_id, 'staff' as role_at_site, true as is_primary, u.created_at,
-          s.name as site_name, s.site_code, s.address, s.city, s.latitude, s.longitude, s.radius, s.project_type
-        FROM users u
-        JOIN sites s ON u.site_code = s.site_code
-        WHERE u.user_id = $1 AND s.is_active = true
-          AND NOT EXISTS (SELECT 1 FROM site_user su2 WHERE su2.user_id = u.user_id)
-        ORDER BY is_primary DESC, site_name
+        WHERE su.user_id = $1
+          AND s.is_active = true
+          AND s.project_type = 'JouleCool'
+        ORDER BY su.is_primary DESC, s.name
       `;
       return query(sql, [userId]);
     },
