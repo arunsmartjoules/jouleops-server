@@ -190,16 +190,7 @@ async function dispatchForUsers(
     const userTokens = tokensByUser.get(userId);
 
     if (!userTokens || userTokens.length === 0) {
-      // No device token registered — log as skipped
-      await writeNotificationLog({
-        trigger_key: triggerKey,
-        user_id: userId,
-        title,
-        body,
-        status: "skipped",
-        failure_reason: "no_device_token",
-        platform: "",
-      });
+      // No device token registered — skip silently (no log to avoid spam)
       continue;
     }
 
