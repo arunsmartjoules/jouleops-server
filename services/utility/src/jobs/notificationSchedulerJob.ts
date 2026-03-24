@@ -14,7 +14,7 @@
  * Requirements: 1.1, 2.1, 3.1, 4.1, 5.1, 5.2
  */
 
-import { logger, query, queryOne } from "@jouleops/shared";
+import { logger, query, queryOne, logActivity } from "@jouleops/shared";
 import cron from "node-cron";
 
 import { getAllTriggerConfigs } from "../repositories/triggerConfigRepository.ts";
@@ -108,8 +108,31 @@ async function writeNotificationLog(log: NotificationLogEntry): Promise<void> {
         log.platform ?? null,
       ],
     );
+
+    // Also log to general activity_logs
+    await logActivity({
+      user_id: log.user_id,
+      action:
+        log.status === "sent"
+          ? "PUSH_NOTIFICATION_SENT"
+          : log.status === "failed"
+            ? "PUSH_NOTIFICATION_FAILED"
+            : "PUSH_NOTIFICATION_SUPPRESSED",
+      module: "notifications",
+      description: `Auto-notification ${log.status}: ${log.title || log.trigger_key}`,
+      metadata: {
+        trigger_key: log.trigger_key,
+        title: log.title,
+        body: log.body,
+        status: log.status,
+        failure_reason: log.failure_reason,
+        platform: log.platform,
+      },
+    });
   } catch (err) {
-    logger.error("[NotificationScheduler] Failed to write notification log", { err });
+    logger.error("[NotificationScheduler] Failed to write notification log", {
+      err,
+    });
   }
 }
 
