@@ -367,7 +367,16 @@ export const sendWhatsAppMessage = async (req: AuthRequest, res: Response) => {
   try {
     const { site_code, message, ticket_no, template_key } = req.body;
 
+    console.log(`[WHATSAPP] Request received:`, { 
+      site_code, 
+      ticket_no, 
+      template_key,
+      hasMessage: !!message,
+      messageLength: message?.length 
+    });
+
     if (!site_code || !message) {
+      console.warn(`[WHATSAPP] Missing required fields:`, { site_code: !!site_code, message: !!message });
       return sendError(res, "site_code and message are required in the body");
     }
 
@@ -377,7 +386,12 @@ export const sendWhatsAppMessage = async (req: AuthRequest, res: Response) => {
     );
 
     if (!mapping || !mapping.api_token || !mapping.whatsapp_group_id) {
-      console.warn(`[WHATSAPP] Mapping not found for site: ${site_code}`, { mapping });
+      console.warn(`[WHATSAPP] Mapping not found for site: ${site_code}`, { 
+        hasMapping: !!mapping,
+        hasToken: !!mapping?.api_token,
+        hasGroupId: !!mapping?.whatsapp_group_id,
+        channelId: mapping?.channel_id
+      });
       return sendError(
         res,
         "No active WhatsApp mapping or channel found for this site",
@@ -386,7 +400,17 @@ export const sendWhatsAppMessage = async (req: AuthRequest, res: Response) => {
 
     // Debug logging for token retrieval (masked)
     const maskedToken = `${mapping.api_token.substring(0, 5)}...${mapping.api_token.slice(-3)}`;
-    console.log(`[WHATSAPP] Sending message for site ${site_code} using token ${maskedToken}`);
+    const tokenLength = mapping.api_token.length;
+    const looksEncrypted = mapping.api_token.includes(':');
+    
+    console.log(`[WHATSAPP] Token info:`, { 
+      site_code,
+      maskedToken, 
+      tokenLength,
+      looksEncrypted,
+      channelId: mapping.channel_id,
+      groupId: mapping.whatsapp_group_id
+    });
 
     // Call WHAPI directly
     const whapiResponse = await globalThis.fetch(
@@ -412,6 +436,12 @@ export const sendWhatsAppMessage = async (req: AuthRequest, res: Response) => {
     } catch {
       data = { error: "Non-JSON response from WHAPI" };
     }
+
+    console.log(`[WHATSAPP] WHAPI response:`, { 
+      status: whapiResponse.status,
+      ok: whapiResponse.ok,
+      data 
+    });
 
     // Log the message activity using the global logActivity
     await logActivity({

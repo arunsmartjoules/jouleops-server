@@ -57,6 +57,10 @@ export function decrypt(text: string): string {
     const parts = text.split(":");
     if (parts.length !== 2) {
       // If it doesn't have the colon, it's likely not encrypted
+      logger.warn("Decrypt: Text doesn't have expected format (iv:data)", { 
+        textLength: text.length,
+        preview: text.substring(0, 20)
+      });
       return text;
     }
 
@@ -64,6 +68,10 @@ export function decrypt(text: string): string {
     const encryptedText = parts[1];
 
     if (!ivStr || ivStr.length !== 32 || !encryptedText) {
+      logger.warn("Decrypt: Invalid IV or encrypted text", {
+        ivLength: ivStr?.length,
+        hasEncryptedText: !!encryptedText
+      });
       return text;
     }
 
@@ -74,10 +82,20 @@ export function decrypt(text: string): string {
     let decrypted = decipher.update(encryptedText, "hex", "utf8");
     decrypted += decipher.final("utf8");
 
+    logger.debug("Decrypt: Successfully decrypted", {
+      originalLength: text.length,
+      decryptedLength: decrypted.length
+    });
+
     return decrypted;
-  } catch (error) {
+  } catch (error: any) {
     // If decryption fails, it might be plain text that was incorrectly formatted or a key mismatch
-    logger.warn("Decryption failed, returning original text", { error });
+    logger.error("Decryption failed - possible key mismatch", { 
+      error: error.message,
+      textPreview: text.substring(0, 20),
+      hasEncryptionKey: !!process.env.ENCRYPTION_KEY,
+      hasJwtSecret: !!process.env.JWT_SECRET
+    });
     return text;
   }
 }
