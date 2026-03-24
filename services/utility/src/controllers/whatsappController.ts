@@ -376,11 +376,16 @@ export const sendWhatsAppMessage = async (req: AuthRequest, res: Response) => {
       await whatsappRepository.getActiveMappingWithToken(site_code);
 
     if (!mapping || !mapping.api_token || !mapping.whatsapp_group_id) {
+      console.warn(`[WHATSAPP] Mapping not found for site: ${site_code}`, { mapping });
       return sendError(
         res,
         "No active WhatsApp mapping or channel found for this site",
       );
     }
+
+    // Debug logging for token retrieval (masked)
+    const maskedToken = `${mapping.api_token.substring(0, 5)}...${mapping.api_token.slice(-3)}`;
+    console.log(`[WHATSAPP] Sending message for site ${site_code} using token ${maskedToken}`);
 
     // Call WHAPI directly
     const whapiResponse = await globalThis.fetch(
@@ -450,6 +455,104 @@ export const sendWhatsAppMessage = async (req: AuthRequest, res: Response) => {
   }
 };
 
+export const sendWhatsAppImage = async (req: AuthRequest, res: Response) => {
+  try {
+    const { site_code, image_url, caption, ticket_no, template_key } = req.body;
+
+    if (!site_code || !image_url) {
+      return sendError(res, "site_code and image_url are required");
+    }
+
+    // Resolve the dynamically mapped WHAPI channel token
+    const mapping =
+      await whatsappRepository.getActiveMappingWithToken(site_code);
+
+    if (!mapping || !mapping.api_token || !mapping.whatsapp_group_id) {
+      console.warn(`[WHATSAPP] Mapping not found for image send, site: ${site_code}`, { mapping });
+      return sendError(
+        res,
+        "No active WhatsApp mapping or channel found for this site",
+      );
+    }
+
+    // Debug logging for token retrieval (masked)
+    const maskedToken = `${mapping.api_token.substring(0, 5)}...${mapping.api_token.slice(-3)}`;
+    console.log(`[WHATSAPP] Sending image for site ${site_code} using token ${maskedToken}`);
+
+    // Fetch the image from URL as blob
+    const imageFetch = await globalThis.fetch(image_url);
+    if (!imageFetch.ok) {
+      return sendError(res, "Failed to fetch image from URL");
+    }
+    const blob = await imageFetch.blob();
+
+    const formData = new globalThis.FormData();
+    formData.append("to", mapping.whatsapp_group_id);
+    formData.append("caption", caption || "");
+    formData.append("media", blob, "image.jpg");
+
+    // Call WHAPI directly
+    const whapiResponse = await globalThis.fetch(
+      "https://gate.whapi.cloud/messages/image",
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${mapping.api_token}`,
+          // Content-Type is set automatically for FormData
+        },
+        body: formData,
+      },
+    );
+
+    let data: any;
+    try {
+      data = await whapiResponse.json();
+    } catch {
+      data = { error: "Non-JSON response from WHAPI" };
+    }
+
+    // Log activity
+    await logActivity({
+      user_id: "system",
+      action: "WA_IMAGE_SEND",
+      module: "WHATSAPP",
+      description: `WhatsApp image ${whapiResponse.ok ? "sent" : "failed"} to ${mapping.whatsapp_group_name || mapping.whatsapp_group_id}`,
+      metadata: {
+        ticket_no,
+        site_code,
+        template_key: template_key || "custom",
+        recipient: mapping.whatsapp_group_id,
+        image_url,
+        status: whapiResponse.ok ? "sent" : "failed",
+        error_message: whapiResponse.ok ? undefined : JSON.stringify(data),
+      },
+    });
+
+    if (!whapiResponse.ok) {
+      console.error("WHAPI Error:", data);
+
+      const errorData = data as any;
+      const isChannelNotFound = errorData.error === "Channel not found" || errorData.error?.code === 401;
+      
+      if (isChannelNotFound) {
+        console.warn(`[WHATSAPP] Deactivating channel ${mapping.channel_id} due to WHAPI error: ${JSON.stringify(errorData.error)}`);
+        await whatsappRepository.updateChannel(mapping.channel_id, {
+          is_active: false,
+        });
+      }
+
+      return sendError(res, "Failed to send WhatsApp image");
+    }
+
+    return sendSuccess(res, data, {
+      message: "WhatsApp image sent successfully",
+    });
+  } catch (error: any) {
+    console.error("sendWhatsAppImage Error:", error);
+    return sendServerError(res, error);
+  }
+};
+
 export default {
   getAllChannels,
   createChannel,
@@ -466,4 +569,5 @@ export default {
   updateTemplate,
   deleteTemplate,
   sendWhatsAppMessage,
+  sendWhatsAppImage,
 };

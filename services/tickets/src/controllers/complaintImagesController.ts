@@ -88,6 +88,24 @@ class ComplaintImagesController {
         })();
       }
 
+      // Trigger WhatsApp notification for images (Fire and Forget)
+      if (image_url) {
+        (async () => {
+          try {
+            const ticket = await complaintsRepository.getComplaint(ticketId);
+            if (ticket) {
+              await whatsappService.sendActivityImage(
+                ticket.site_code,
+                ticket.ticket_no,
+                image_url,
+              );
+            }
+          } catch (err) {
+            console.error("WhatsApp image activity trigger failed:", err);
+          }
+        })();
+      }
+
       return sendCreated(res, newItem, "Line item added successfully");
     } catch (error: any) {
       console.error("Error adding line item:", error);

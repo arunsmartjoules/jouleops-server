@@ -20,6 +20,7 @@ router.get("/mappings", verifyAnyAuth, whatsappController.getAllMappings);
 router.post("/mappings", verifyAnyAuth, whatsappController.createMapping);
 router.put("/mappings/:id", verifyAnyAuth, whatsappController.updateMapping);
 router.delete("/mappings/:id", verifyAnyAuth, whatsappController.deleteMapping);
+
 router.post(
   "/mappings/bulk-delete",
   verifyAnyAuth,
@@ -43,5 +44,6 @@ router.delete(
 
 // Sending routes
 router.post("/send", verifyAnyAuth, whatsappController.sendWhatsAppMessage);
+router.post("/send-image", verifyAnyAuth, whatsappController.sendWhatsAppImage);
 
 export default router;
