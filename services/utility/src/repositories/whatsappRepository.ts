@@ -350,9 +350,10 @@ export async function getActiveMappingWithToken(site_code: string): Promise<{
   whatsapp_group_id: string;
   whatsapp_group_name: string;
   api_token: string;
+  channel_id: string;
 } | null> {
   const sql = `
-    SELECT wm.whatsapp_group_id, wm.whatsapp_group_name, c.api_token
+    SELECT wm.whatsapp_group_id, wm.whatsapp_group_name, c.api_token, c.id as channel_id
     FROM whatsapp_group_mappings wm
     JOIN whatsapp_channels c ON wm.channel_id = c.id
     WHERE wm.site_code = $1 AND wm.is_active = true AND c.is_active = true
@@ -362,6 +363,7 @@ export async function getActiveMappingWithToken(site_code: string): Promise<{
     whatsapp_group_id: string;
     whatsapp_group_name: string;
     api_token: string;
+    channel_id: string;
   }>(sql, [site_code]);
 
   if (result && result.api_token) {

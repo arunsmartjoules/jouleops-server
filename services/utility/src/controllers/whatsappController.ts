@@ -426,6 +426,18 @@ export const sendWhatsAppMessage = async (req: AuthRequest, res: Response) => {
 
     if (!whapiResponse.ok) {
       console.error("WHAPI Error:", data);
+
+      // If the channel is not found on WHAPI platform, mark it as inactive in our DB
+      const errorData = data as any;
+      const isChannelNotFound = errorData.error === "Channel not found" || errorData.error?.code === 401;
+      
+      if (isChannelNotFound) {
+        console.warn(`[WHATSAPP] Deactivating channel ${mapping.channel_id} due to WHAPI error: ${JSON.stringify(errorData.error)}`);
+        await whatsappRepository.updateChannel(mapping.channel_id, {
+          is_active: false,
+        });
+      }
+
       return sendError(res, "Failed to send WhatsApp message");
     }
 
