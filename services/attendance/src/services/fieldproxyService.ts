@@ -84,6 +84,7 @@ export async function forwardPunchInToFieldproxy(log: any): Promise<any> {
     sheetId: "punch_records",
     sheetName: "punch_records",
     tableData: {
+      punch_id: log.id,
       user_id: log.user_id,
       shift_id: log.shift_id || null,
       site_id: log.site_code || null,
