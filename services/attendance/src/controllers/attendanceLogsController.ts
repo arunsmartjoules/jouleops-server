@@ -15,6 +15,10 @@ import {
   sendForbidden,
   sendServerError,
 } from "@jouleops/shared";
+import {
+  forwardPunchInToFieldproxy,
+  updateCheckOutInFieldproxy,
+} from "../services/fieldproxyService.ts";
 
 interface AuthRequest extends Request {
   user?: {
@@ -61,6 +65,12 @@ const isAuthorized = async (user: AuthRequest["user"], userId: string): Promise<
 export const create = async (req: Request, res: Response) => {
   try {
     const log = await attendanceRepository.checkIn(req.body);
+    
+    // Forward to Fieldproxy — fire and forget
+    forwardPunchInToFieldproxy(log).catch((err) => {
+      console.error("Fieldproxy punch_in sync failed:", err);
+    });
+
     return sendCreated(res, log);
   } catch (error: any) {
     console.error("Create attendance log error:", error);
@@ -133,6 +143,11 @@ export const checkIn = async (req: AuthRequest, res: Response) => {
       shift_id,
     });
 
+    // Forward to Fieldproxy — fire and forget
+    forwardPunchInToFieldproxy(log).catch((err) => {
+      console.error("Fieldproxy punch_in sync failed:", err);
+    });
+
     return sendCreated(res, log, "Checked in successfully");
   } catch (error: any) {
     console.error("Check in error:", error);
@@ -179,6 +194,11 @@ export const checkOut = async (req: AuthRequest, res: Response) => {
       longitude: longitude ? parseFloat(longitude) : undefined,
       address,
       remarks,
+    });
+
+    // Forward to Fieldproxy — fire and forget
+    updateCheckOutInFieldproxy(log).catch((err) => {
+      console.error("Fieldproxy punch_out sync failed:", err);
     });
 
     return res.json({
@@ -428,6 +448,14 @@ export const update = async (req: Request, res: Response) => {
     }
 
     const log = await attendanceRepository.updateAttendanceLog(id, req.body);
+    
+    // Sync with Fieldproxy — fire and forget
+    if (log.check_out_time) {
+      updateCheckOutInFieldproxy(log).catch((err) => console.error("Fieldproxy update sync failed:", err));
+    } else {
+      forwardPunchInToFieldproxy(log).catch((err) => console.error("Fieldproxy update sync failed:", err));
+    }
+
     return sendSuccess(res, log);
   } catch (error: any) {
     console.error("Update attendance log error:", error);
