@@ -10,7 +10,7 @@ const IV_LENGTH = 16;
  * If ENCRYPTION_KEY is not provided, we derive one from JWT_SECRET as a fallback.
  */
 function getEncryptionKey(): Buffer {
-  const key = process.env.ENCRYPTION_KEY || process.env.JWT_SECRET;
+  const key = (process.env.ENCRYPTION_KEY || process.env.JWT_SECRET || "").trim();
 
   if (!key) {
     if (process.env.NODE_ENV === "production") {

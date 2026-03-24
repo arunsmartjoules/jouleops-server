@@ -372,8 +372,9 @@ export const sendWhatsAppMessage = async (req: AuthRequest, res: Response) => {
     }
 
     // Resolve the dynamically mapped WHAPI channel token
-    const mapping =
-      await whatsappRepository.getActiveMappingWithToken(site_code);
+    const mapping = await whatsappRepository.getActiveMappingWithToken(
+      site_code.trim(),
+    );
 
     if (!mapping || !mapping.api_token || !mapping.whatsapp_group_id) {
       console.warn(`[WHATSAPP] Mapping not found for site: ${site_code}`, { mapping });
@@ -395,7 +396,7 @@ export const sendWhatsAppMessage = async (req: AuthRequest, res: Response) => {
         headers: {
           Accept: "application/json",
           "Content-Type": "application/json",
-          Authorization: `Bearer ${mapping.api_token}`,
+          Authorization: `Bearer ${mapping.api_token.trim()}`,
         },
         body: JSON.stringify({
           typing_time: 0,
@@ -464,8 +465,9 @@ export const sendWhatsAppImage = async (req: AuthRequest, res: Response) => {
     }
 
     // Resolve the dynamically mapped WHAPI channel token
-    const mapping =
-      await whatsappRepository.getActiveMappingWithToken(site_code);
+    const mapping = await whatsappRepository.getActiveMappingWithToken(
+      site_code.trim(),
+    );
 
     if (!mapping || !mapping.api_token || !mapping.whatsapp_group_id) {
       console.warn(`[WHATSAPP] Mapping not found for image send, site: ${site_code}`, { mapping });
@@ -497,7 +499,7 @@ export const sendWhatsAppImage = async (req: AuthRequest, res: Response) => {
       {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${mapping.api_token}`,
+          Authorization: `Bearer ${mapping.api_token.trim()}`,
           // Content-Type is set automatically for FormData
         },
         body: formData,
