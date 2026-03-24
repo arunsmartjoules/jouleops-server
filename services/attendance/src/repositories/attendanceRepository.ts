@@ -26,6 +26,7 @@ export interface AttendanceLog {
   shift_id?: string;
   status: string;
   remarks?: string;
+  fieldproxy_punch_id?: number;
   created_at?: Date;
   updated_at?: Date;
 }

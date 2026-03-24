@@ -69,13 +69,15 @@ export const create = async (req: Request, res: Response) => {
     
     // Forward to Fieldproxy — fire and forget
     forwardPunchInToFieldproxy(log)
-      .then((fpResponse) => {
+      .then(({ response: fpResponse, punch_id }) => {
+        // Save punch_id back to our DB for checkout reference
+        attendanceRepository.updateAttendanceLog(log.id, { fieldproxy_punch_id: punch_id }).catch(() => {});
         logActivity({
           user_id: log.user_id,
           action: "FORWARD_TO_FIELDPROXY",
           module: "attendance",
-          description: `Attendance punch_in for ${log.user_id} forwarded to Fieldproxy successfully`,
-          metadata: { attendance_id: log.id, user_id: log.user_id, fieldproxy_response: fpResponse },
+          description: `Attendance punch_in for ${log.user_id} forwarded to Fieldproxy (punch_id: ${punch_id})`,
+          metadata: { attendance_id: log.id, user_id: log.user_id, punch_id, fieldproxy_response: fpResponse },
         }).catch(() => {});
       })
       .catch((err) => {
@@ -163,13 +165,15 @@ export const checkIn = async (req: AuthRequest, res: Response) => {
 
     // Forward to Fieldproxy — fire and forget
     forwardPunchInToFieldproxy(log)
-      .then((fpResponse) => {
+      .then(({ response: fpResponse, punch_id }) => {
+        // Save punch_id back to our DB for checkout reference
+        attendanceRepository.updateAttendanceLog(log.id, { fieldproxy_punch_id: punch_id }).catch(() => {});
         logActivity({
           user_id: log.user_id,
           action: "FORWARD_TO_FIELDPROXY",
           module: "attendance",
-          description: `Attendance punch_in for ${log.user_id} forwarded to Fieldproxy successfully`,
-          metadata: { attendance_id: log.id, user_id: log.user_id, fieldproxy_response: fpResponse },
+          description: `Attendance punch_in for ${log.user_id} forwarded to Fieldproxy (punch_id: ${punch_id})`,
+          metadata: { attendance_id: log.id, user_id: log.user_id, punch_id, fieldproxy_response: fpResponse },
         }).catch(() => {});
       })
       .catch((err) => {

@@ -61,8 +61,34 @@ export interface PunchRecordPayload {
   updatedAt?: string | null;
 }
 
+/**
+ * Fetches the latest punch records to determine the next sequential punch_id
+ */
+async function getNextPunchId(token: string): Promise<number> {
+  const url = `${FIELDPROXY_BASE}/getFilteredSheetData?sheet_id=punch_records&page=1&per_page=10`;
+  const res = await fetch(url, {
+    method: "GET",
+    headers: { "x-api-key": token },
+  });
+
+  const responseBody = (await res.json().catch(() => ({}))) as any;
+  const data = Array.isArray(responseBody)
+    ? responseBody[0]?.data
+    : responseBody.data;
+
+  if (Array.isArray(data) && data.length > 0) {
+    const maxId = Math.max(...data.map((row: any) => parseInt(row.punch_id, 10) || 0));
+    return maxId + 1;
+  }
+
+  return 1; // fallback if no records exist
+}
+
 export async function forwardPunchInToFieldproxy(log: any): Promise<any> {
   const token = await getAccessToken();
+
+  // Get next sequential punch_id
+  const nextPunchId = await getNextPunchId(token);
 
   const punchInTime = new Date(log.check_in_time).toISOString();
   let punchOutTime = null;
@@ -94,7 +120,7 @@ export async function forwardPunchInToFieldproxy(log: any): Promise<any> {
     sheetId: "punch_records",
     sheetName: "punch_records",
     tableData: {
-      punch_id: log.id,
+      punch_id: nextPunchId,
       user_id: log.user_id,
       shift_id: shiftId,
       site_id: log.site_code || "WFH",
@@ -127,7 +153,7 @@ export async function forwardPunchInToFieldproxy(log: any): Promise<any> {
     );
   }
 
-  return responseData;
+  return { response: responseData, punch_id: nextPunchId };
 }
 
 /**
@@ -172,18 +198,36 @@ async function getRowIdByUserAndPunchIn(
 }
 
 /**
- * Updates a punch_record in Fieldproxy when user checks out
+ * Updates a punch_record in Fieldproxy when user checks out.
+ * If fieldproxy_punch_id is available, uses it for precise lookup.
  */
 export async function updateCheckOutInFieldproxy(
   log: any,
 ): Promise<{ lookup: any; update?: any; error?: string }> {
   const token = await getAccessToken();
 
-  const punchInTime = new Date(log.check_in_time).toISOString();
+  let rowId: string | null = null;
+  let lookupResponse: any = null;
 
-  // 1. Get rowId
-  const { id: rowId, response: lookupResponse } =
-    await getRowIdByUserAndPunchIn(log.user_id, punchInTime, token);
+  // 1. Try to find row using stored fieldproxy_punch_id (precise)
+  if (log.fieldproxy_punch_id) {
+    const whereClause = `punch_id='${log.fieldproxy_punch_id}'`;
+    const url = `${FIELDPROXY_BASE}/getFilteredSheetData?sheet_id=punch_records&where_clause=${encodeURIComponent(whereClause)}`;
+    const res = await fetch(url, { method: "GET", headers: { "x-api-key": token } });
+    lookupResponse = (await res.json().catch(() => ({}))) as any;
+    const data = Array.isArray(lookupResponse) ? lookupResponse[0]?.data : lookupResponse.data;
+    if (Array.isArray(data) && data.length > 0) {
+      rowId = String(data[0].id);
+    }
+  }
+
+  // 2. Fallback: search by user_id
+  if (!rowId) {
+    const punchInTime = new Date(log.check_in_time).toISOString();
+    const result = await getRowIdByUserAndPunchIn(log.user_id, punchInTime, token);
+    rowId = result.id;
+    lookupResponse = result.response;
+  }
 
   if (!rowId) {
     console.warn(
