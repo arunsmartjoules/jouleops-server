@@ -80,21 +80,31 @@ export async function forwardPunchInToFieldproxy(log: any): Promise<any> {
       ? [String(log.check_out_longitude), String(log.check_out_latitude)]
       : null;
 
+  // Determine shift based on IST hour if not provided
+  let shiftId = log.shift_id;
+  if (!shiftId) {
+    const istHour = new Date(log.check_in_time).toLocaleString("en-US", { timeZone: "Asia/Kolkata", hour: "numeric", hour12: false });
+    const hour = parseInt(istHour, 10);
+    if (hour >= 6 && hour < 14) shiftId = "I";
+    else if (hour >= 14 && hour < 22) shiftId = "II";
+    else shiftId = "III";
+  }
+
   const body = {
     sheetId: "punch_records",
     sheetName: "punch_records",
     tableData: {
       punch_id: log.id,
       user_id: log.user_id,
-      shift_id: log.shift_id || null,
-      site_id: log.site_code || null,
+      shift_id: shiftId,
+      site_id: log.site_code || "WFH",
       punch_in: punchInTime,
-      punch_out: punchOutTime,
-      location: log.check_in_address || null,
+      punch_out: punchOutTime || "",
+      location: log.check_in_address || "",
       punchinlocation: punchinlocation,
       punchoutlocation: punchoutlocation,
       punch_intimestamp: punchInTime,
-      punch_outtimestamp: punchOutTime,
+      punch_outtimestamp: punchOutTime || "",
       createdAt: punchInTime,
       updatedAt: punchInTime,
     },
