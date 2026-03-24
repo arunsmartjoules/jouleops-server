@@ -77,7 +77,9 @@ async function getNextPunchId(token: string): Promise<number> {
     : responseBody.data;
 
   if (Array.isArray(data) && data.length > 0) {
-    const maxId = Math.max(...data.map((row: any) => parseInt(row.punch_id, 10) || 0));
+    const maxId = Math.max(
+      ...data.map((row: any) => parseInt(row.punch_id, 10) || 0),
+    );
     return maxId + 1;
   }
 
@@ -100,7 +102,7 @@ export async function forwardPunchInToFieldproxy(log: any): Promise<any> {
     log.check_in_longitude && log.check_in_latitude
       ? [String(log.check_in_longitude), String(log.check_in_latitude)]
       : null;
-      
+
   const punchoutlocation =
     log.check_out_longitude && log.check_out_latitude
       ? [String(log.check_out_longitude), String(log.check_out_latitude)]
@@ -109,7 +111,11 @@ export async function forwardPunchInToFieldproxy(log: any): Promise<any> {
   // Determine shift based on IST hour if not provided
   let shiftId = log.shift_id;
   if (!shiftId) {
-    const istHour = new Date(log.check_in_time).toLocaleString("en-US", { timeZone: "Asia/Kolkata", hour: "numeric", hour12: false });
+    const istHour = new Date(log.check_in_time).toLocaleString("en-US", {
+      timeZone: "Asia/Kolkata",
+      hour: "numeric",
+      hour12: false,
+    });
     const hour = parseInt(istHour, 10);
     if (hour >= 6 && hour < 14) shiftId = "I";
     else if (hour >= 14 && hour < 22) shiftId = "II";
@@ -213,9 +219,14 @@ export async function updateCheckOutInFieldproxy(
   if (log.fieldproxy_punch_id) {
     const whereClause = `punch_id='${log.fieldproxy_punch_id}'`;
     const url = `${FIELDPROXY_BASE}/getFilteredSheetData?sheet_id=punch_records&where_clause=${encodeURIComponent(whereClause)}`;
-    const res = await fetch(url, { method: "GET", headers: { "x-api-key": token } });
+    const res = await fetch(url, {
+      method: "GET",
+      headers: { "x-api-key": token },
+    });
     lookupResponse = (await res.json().catch(() => ({}))) as any;
-    const data = Array.isArray(lookupResponse) ? lookupResponse[0]?.data : lookupResponse.data;
+    const data = Array.isArray(lookupResponse)
+      ? lookupResponse[0]?.data
+      : lookupResponse.data;
     if (Array.isArray(data) && data.length > 0) {
       rowId = String(data[0].id);
     }
@@ -224,7 +235,11 @@ export async function updateCheckOutInFieldproxy(
   // 2. Fallback: search by user_id
   if (!rowId) {
     const punchInTime = new Date(log.check_in_time).toISOString();
-    const result = await getRowIdByUserAndPunchIn(log.user_id, punchInTime, token);
+    const result = await getRowIdByUserAndPunchIn(
+      log.user_id,
+      punchInTime,
+      token,
+    );
     rowId = result.id;
     lookupResponse = result.response;
   }
@@ -236,7 +251,7 @@ export async function updateCheckOutInFieldproxy(
     return { lookup: lookupResponse, error: "Row not found in Fieldproxy" };
   }
 
-  // 2. Prepare payload
+  // 3. Prepare payload
   const punchOutTime = log.check_out_time
     ? new Date(log.check_out_time).toISOString()
     : new Date().toISOString();
@@ -245,9 +260,21 @@ export async function updateCheckOutInFieldproxy(
       ? [String(log.check_out_longitude), String(log.check_out_latitude)]
       : null;
 
+  // Re-calculate shift_id or default to "I" if missing
+  const nowIST = new Date(new Date().getTime() + 5.5 * 60 * 60 * 1000);
+  const hour = nowIST.getUTCHours();
+  let shiftId = "I";
+  if (hour >= 14 && hour < 22) shiftId = "II";
+  else if (hour >= 22 || hour < 6) shiftId = "III";
+
   const tableData: Record<string, any> = {
+    user_id: log.user_id,
+    shift_id: log.shift_id || shiftId,
+    site_id: log.site_code || "WFH",
+    punch_id: log.fieldproxy_punch_id || undefined,
     punch_out: punchOutTime,
     punch_outtimestamp: punchOutTime,
+    location: log.check_out_address || log.address || "",
     punchoutlocation: punchoutlocation,
     updatedAt: punchOutTime,
   };
@@ -257,6 +284,8 @@ export async function updateCheckOutInFieldproxy(
     sheetId: "punch_records",
     tableData,
   };
+
+  console.log(`[FIELDPROXY] Updating row ${rowId} for user ${log.user_id}`);
 
   const res = await fetch(`${FIELDPROXY_BASE}/updateRows`, {
     method: "POST",
