@@ -23,6 +23,8 @@ interface AuthRequest extends Request {
     email?: string;
     role?: string;
     is_superadmin?: boolean;
+    /** Original Supabase UUID preserved after DB user_id resolution */
+    supabase_id?: string;
   };
 }
 
@@ -40,16 +42,18 @@ const getUserId = (user: AuthRequest["user"]) => {
 
 /**
  * Check if the requesting user is authorized to access the given userId's data.
- * Allows access if: admin, userId matches JWT user_id, or userId matches a user
- * whose email matches the JWT email (handles Supabase UUID vs DB user_id mismatch).
+ * Allows access if: admin, userId matches JWT user_id/id, userId matches the
+ * original Supabase UUID (supabase_id), or userId maps to the same DB user via email.
  */
 const isAuthorized = async (user: AuthRequest["user"], userId: string): Promise<boolean> => {
   if (isAdmin(user)) return true;
   if (userId === getUserId(user)) return true;
+  // Check against original Supabase UUID (before DB user_id resolution)
+  if (user?.supabase_id && userId === user.supabase_id) return true;
   // Fallback: look up DB user_id by email
   if (user?.email) {
     const dbUser = await attendanceRepository.getUserByEmail(user.email).catch(() => null);
-    if (dbUser && dbUser.user_id === userId) return true;
+    if (dbUser && (dbUser.user_id === userId || dbUser.user_id === getUserId(user))) return true;
   }
   return false;
 };

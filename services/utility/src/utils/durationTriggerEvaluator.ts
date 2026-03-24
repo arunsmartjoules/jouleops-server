@@ -20,6 +20,8 @@ export interface Complaint {
   status: string;
   /** Timestamp when the complaint entered its current status */
   status_changed_at: Date | string;
+  /** User assigned to this complaint */
+  assigned_to?: string | null;
   [key: string]: any;
 }
 

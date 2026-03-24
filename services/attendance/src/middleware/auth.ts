@@ -23,6 +23,8 @@ export interface AuthRequest extends Request {
     is_admin?: boolean;
     is_superadmin?: boolean;
     jti?: string;
+    /** Original Supabase UUID (sub claim), preserved after DB user_id resolution */
+    supabase_id?: string;
   };
 }
 
@@ -90,6 +92,8 @@ export const verifyToken = async (
         const { getUserByEmail } = await import("../repositories/attendanceRepository.ts");
         const dbUser = await getUserByEmail(decoded.email);
         if (dbUser) {
+          // Preserve the original Supabase UUID before overwriting with DB user_id
+          decoded.supabase_id = decoded.user_id;
           decoded.user_id = dbUser.user_id;
           decoded.id = dbUser.user_id;
         }

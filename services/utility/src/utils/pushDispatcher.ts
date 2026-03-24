@@ -29,6 +29,7 @@ export interface NotificationLogEntry {
   status: "sent" | "failed" | "skipped" | "suppressed";
   failure_reason?: string;
   platform: string;
+  complaint_id?: string;
 }
 
 export interface DispatchResult {

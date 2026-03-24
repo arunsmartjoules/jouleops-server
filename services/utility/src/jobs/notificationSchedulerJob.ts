@@ -59,10 +59,10 @@ async function fetchTodayAttendance(): Promise<
   );
 }
 
-/** Fetch complaints currently in a given status */
+/** Fetch complaints currently in a given status, including assigned_to */
 async function fetchComplaintsByStatus(status: string): Promise<Complaint[]> {
   return query<Complaint>(
-    `SELECT complaint_id, status, status_changed_at
+    `SELECT id AS complaint_id, status, updated_at AS status_changed_at, assigned_to
      FROM complaints
      WHERE status = $1`,
     [status],
@@ -271,15 +271,9 @@ async function runSchedulerTick(): Promise<void> {
         utcNow,
       );
 
-      // Dispatch per complaint — each complaint may have a different assigned user
+      // Dispatch per complaint — assigned_to is already fetched with the complaint
       for (const complaint of eligibleComplaints) {
-        // Fetch the assigned user for this complaint
-        const assignedUser = await queryOne<{ assigned_to: string | null }>(
-          `SELECT assigned_to FROM complaints WHERE complaint_id = $1`,
-          [complaint.complaint_id],
-        );
-
-        if (!assignedUser?.assigned_to) continue;
+        if (!complaint.assigned_to) continue;
 
         const context: Record<string, string> = {
           complaint_id: complaint.complaint_id,
@@ -288,7 +282,7 @@ async function runSchedulerTick(): Promise<void> {
 
         await dispatchForUsers(
           triggerKey,
-          [assignedUser.assigned_to],
+          [complaint.assigned_to],
           excludedUserIds,
           templates,
           context,
