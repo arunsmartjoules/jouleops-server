@@ -14,6 +14,7 @@ import {
   sendNotFound,
   sendForbidden,
   sendServerError,
+  logActivity,
 } from "@jouleops/shared";
 import {
   forwardPunchInToFieldproxy,
@@ -67,9 +68,26 @@ export const create = async (req: Request, res: Response) => {
     const log = await attendanceRepository.checkIn(req.body);
     
     // Forward to Fieldproxy — fire and forget
-    forwardPunchInToFieldproxy(log).catch((err) => {
-      console.error("Fieldproxy punch_in sync failed:", err);
-    });
+    forwardPunchInToFieldproxy(log)
+      .then((fpResponse) => {
+        logActivity({
+          user_id: log.user_id,
+          action: "FORWARD_TO_FIELDPROXY",
+          module: "attendance",
+          description: `Attendance punch_in for ${log.user_id} forwarded to Fieldproxy successfully`,
+          metadata: { attendance_id: log.id, user_id: log.user_id, fieldproxy_response: fpResponse },
+        }).catch(() => {});
+      })
+      .catch((err) => {
+        console.error("Fieldproxy punch_in sync failed:", err);
+        logActivity({
+          user_id: log.user_id,
+          action: "FORWARD_TO_FIELDPROXY_FAILED",
+          module: "attendance",
+          description: `Failed to forward attendance for ${log.user_id} to Fieldproxy`,
+          metadata: { attendance_id: log.id, error: err.message },
+        }).catch(() => {});
+      });
 
     return sendCreated(res, log);
   } catch (error: any) {
@@ -144,9 +162,26 @@ export const checkIn = async (req: AuthRequest, res: Response) => {
     });
 
     // Forward to Fieldproxy — fire and forget
-    forwardPunchInToFieldproxy(log).catch((err) => {
-      console.error("Fieldproxy punch_in sync failed:", err);
-    });
+    forwardPunchInToFieldproxy(log)
+      .then((fpResponse) => {
+        logActivity({
+          user_id: log.user_id,
+          action: "FORWARD_TO_FIELDPROXY",
+          module: "attendance",
+          description: `Attendance punch_in for ${log.user_id} forwarded to Fieldproxy successfully`,
+          metadata: { attendance_id: log.id, user_id: log.user_id, fieldproxy_response: fpResponse },
+        }).catch(() => {});
+      })
+      .catch((err) => {
+        console.error("Fieldproxy punch_in sync failed:", err);
+        logActivity({
+          user_id: log.user_id,
+          action: "FORWARD_TO_FIELDPROXY_FAILED",
+          module: "attendance",
+          description: `Failed to forward attendance for ${log.user_id} to Fieldproxy`,
+          metadata: { attendance_id: log.id, error: err.message },
+        }).catch(() => {});
+      });
 
     return sendCreated(res, log, "Checked in successfully");
   } catch (error: any) {
@@ -197,9 +232,44 @@ export const checkOut = async (req: AuthRequest, res: Response) => {
     });
 
     // Forward to Fieldproxy — fire and forget
-    updateCheckOutInFieldproxy(log).catch((err) => {
-      console.error("Fieldproxy punch_out sync failed:", err);
-    });
+    updateCheckOutInFieldproxy(log)
+      .then((syncResult) => {
+        logActivity({
+          user_id: log.user_id,
+          action: "LOOKUP_FIELDPROXY",
+          module: "attendance",
+          description: `Fieldproxy lookup for attendance checkout ${log.user_id}`,
+          metadata: { attendance_id: log.id, user_id: log.user_id, fieldproxy_response: syncResult.lookup },
+        }).catch(() => {});
+
+        if (syncResult.update) {
+          logActivity({
+            user_id: log.user_id,
+            action: "UPDATE_FIELDPROXY",
+            module: "attendance",
+            description: `Attendance checkout for ${log.user_id} updated in Fieldproxy successfully`,
+            metadata: { attendance_id: log.id, user_id: log.user_id, fieldproxy_response: syncResult.update },
+          }).catch(() => {});
+        } else if (syncResult.error) {
+          logActivity({
+            user_id: log.user_id,
+            action: "UPDATE_FIELDPROXY_FAILED",
+            module: "attendance",
+            description: `Fieldproxy update for attendance checkout ${log.user_id} skipped: ${syncResult.error}`,
+            metadata: { attendance_id: log.id, error: syncResult.error, lookup_response: syncResult.lookup },
+          }).catch(() => {});
+        }
+      })
+      .catch((err) => {
+        console.error("Fieldproxy punch_out sync failed:", err);
+        logActivity({
+          user_id: log.user_id,
+          action: "UPDATE_FIELDPROXY_FAILED",
+          module: "attendance",
+          description: `Failed to update attendance checkout for ${log.user_id} in Fieldproxy`,
+          metadata: { attendance_id: log.id, error: err.message },
+        }).catch(() => {});
+      });
 
     return res.json({
       success: true,
@@ -451,9 +521,65 @@ export const update = async (req: Request, res: Response) => {
     
     // Sync with Fieldproxy — fire and forget
     if (log.check_out_time) {
-      updateCheckOutInFieldproxy(log).catch((err) => console.error("Fieldproxy update sync failed:", err));
+      updateCheckOutInFieldproxy(log)
+        .then((syncResult) => {
+          logActivity({
+            user_id: log.user_id,
+            action: "LOOKUP_FIELDPROXY",
+            module: "attendance",
+            description: `Fieldproxy lookup for attendance checkout ${log.user_id}`,
+            metadata: { attendance_id: log.id, user_id: log.user_id, fieldproxy_response: syncResult.lookup },
+          }).catch(() => {});
+
+          if (syncResult.update) {
+            logActivity({
+              user_id: log.user_id,
+              action: "UPDATE_FIELDPROXY",
+              module: "attendance",
+              description: `Attendance checkout for ${log.user_id} updated in Fieldproxy successfully`,
+              metadata: { attendance_id: log.id, user_id: log.user_id, fieldproxy_response: syncResult.update },
+            }).catch(() => {});
+          } else if (syncResult.error) {
+            logActivity({
+              user_id: log.user_id,
+              action: "UPDATE_FIELDPROXY_FAILED",
+              module: "attendance",
+              description: `Fieldproxy update for attendance checkout ${log.user_id} skipped: ${syncResult.error}`,
+              metadata: { attendance_id: log.id, error: syncResult.error, lookup_response: syncResult.lookup },
+            }).catch(() => {});
+          }
+        })
+        .catch((err) => {
+          console.error("Fieldproxy update sync failed:", err);
+          logActivity({
+            user_id: log.user_id,
+            action: "UPDATE_FIELDPROXY_FAILED",
+            module: "attendance",
+            description: `Failed to update attendance checkout for ${log.user_id} in Fieldproxy`,
+            metadata: { attendance_id: log.id, error: err.message },
+          }).catch(() => {});
+        });
     } else {
-      forwardPunchInToFieldproxy(log).catch((err) => console.error("Fieldproxy update sync failed:", err));
+      forwardPunchInToFieldproxy(log)
+        .then((fpResponse) => {
+          logActivity({
+            user_id: log.user_id,
+            action: "FORWARD_TO_FIELDPROXY",
+            module: "attendance",
+            description: `Attendance punch_in for ${log.user_id} forwarded to Fieldproxy successfully`,
+            metadata: { attendance_id: log.id, user_id: log.user_id, fieldproxy_response: fpResponse },
+          }).catch(() => {});
+        })
+        .catch((err) => {
+          console.error("Fieldproxy update sync failed:", err);
+          logActivity({
+            user_id: log.user_id,
+            action: "FORWARD_TO_FIELDPROXY_FAILED",
+            module: "attendance",
+            description: `Failed to forward attendance for ${log.user_id} to Fieldproxy`,
+            metadata: { attendance_id: log.id, error: err.message },
+          }).catch(() => {});
+        });
     }
 
     return sendSuccess(res, log);
