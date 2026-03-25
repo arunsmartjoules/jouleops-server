@@ -293,5 +293,7 @@ export async function updateCheckOutInFieldproxy(
     );
   }
 
+  console.log(`[FIELDPROXY] Update successful for row ${rowId}`, updateResponse);
+
   return { lookup: lookupResponse, update: updateResponse };
 }
