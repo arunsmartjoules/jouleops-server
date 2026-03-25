@@ -163,15 +163,14 @@ export async function forwardPunchInToFieldproxy(log: any): Promise<any> {
 }
 
 /**
- * Gets the Fieldproxy internal row_id by searching for the exact punch in time
+ * Gets the Fieldproxy internal row_id by searching for the fieldproxy_punch_id
  */
-async function getRowIdByUserAndPunchIn(
-  userId: string,
-  punchInTimeISO: string,
+async function getRowIdByPunchId(
+  fieldproxyPunchId: number,
   token: string,
 ): Promise<{ id: string | null; response: any }> {
-  // Try to find the user's latest record or matching record
-  const whereClause = `user_id='${userId}'`;
+  // Search by punch_id to get the Fieldproxy internal row id
+  const whereClause = `punch_id='${fieldproxyPunchId}'`;
   const url = `${FIELDPROXY_BASE}/getFilteredSheetData?sheet_id=punch_records&where_clause=${encodeURIComponent(whereClause)}`;
 
   const res = await fetch(url, {
@@ -192,12 +191,7 @@ async function getRowIdByUserAndPunchIn(
     : responseBody.data;
 
   if (Array.isArray(data) && data.length > 0) {
-    // Attempt to match exact punch_in timestamp, or just grab the most recent one if exact match fails
-    const matchingRow =
-      data.find((row) => row.punch_in === punchInTimeISO) ||
-      data.find((row) => !row.punch_out) ||
-      data[0];
-    return { id: String(matchingRow.id), response: responseBody };
+    return { id: String(data[0].id), response: responseBody };
   }
 
   return { id: null, response: responseBody };
@@ -215,34 +209,21 @@ export async function updateCheckOutInFieldproxy(
   let rowId: string | null = null;
   let lookupResponse: any = null;
 
-  // 1. Try to find row using stored fieldproxy_punch_id (precise)
-  if (log.fieldproxy_punch_id) {
-    const whereClause = `punch_id='${log.fieldproxy_punch_id}'`;
-    const url = `${FIELDPROXY_BASE}/getFilteredSheetData?sheet_id=punch_records&where_clause=${encodeURIComponent(whereClause)}`;
-    const res = await fetch(url, {
-      method: "GET",
-      headers: { "x-api-key": token },
-    });
-    lookupResponse = (await res.json().catch(() => ({}))) as any;
-    const data = Array.isArray(lookupResponse)
-      ? lookupResponse[0]?.data
-      : lookupResponse.data;
-    if (Array.isArray(data) && data.length > 0) {
-      rowId = String(data[0].id);
-    }
+  // Use stored fieldproxy_punch_id to find the row
+  if (!log.fieldproxy_punch_id) {
+    console.error(
+      `[FIELDPROXY] Missing fieldproxy_punch_id for attendance ${log.id}, user ${log.user_id}. Cannot update punch_out.`,
+    );
+    return { 
+      lookup: null, 
+      error: "Missing fieldproxy_punch_id - record was not synced during punch_in" 
+    };
   }
 
-  // 2. Fallback: search by user_id
-  if (!rowId) {
-    const punchInTime = new Date(log.check_in_time).toISOString();
-    const result = await getRowIdByUserAndPunchIn(
-      log.user_id,
-      punchInTime,
-      token,
-    );
-    rowId = result.id;
-    lookupResponse = result.response;
-  }
+  console.log(`[FIELDPROXY] Looking up by punch_id: ${log.fieldproxy_punch_id}`);
+  const result = await getRowIdByPunchId(log.fieldproxy_punch_id, token);
+  rowId = result.id;
+  lookupResponse = result.response;
 
   if (!rowId) {
     console.warn(
@@ -261,12 +242,17 @@ export async function updateCheckOutInFieldproxy(
       : null;
 
   // For UPDATE, only send the fields that are changing (punch_out related fields)
+  // Follow the same pattern as tickets service - only include fields with values
+  // Note: Don't include system fields like updatedAt that Fieldproxy might auto-manage
   const tableData: Record<string, any> = {
     punch_out: punchOutTime,
     punch_outtimestamp: punchOutTime,
-    punchoutlocation: punchoutlocation,
-    updatedAt: punchOutTime,
   };
+
+  // Only include punchoutlocation if it has valid coordinates
+  if (punchoutlocation) {
+    tableData.punchoutlocation = punchoutlocation;
+  }
 
   // Only include location if there's a check_out_address
   if (log.check_out_address) {
@@ -279,7 +265,10 @@ export async function updateCheckOutInFieldproxy(
     tableData,
   };
 
-  console.log(`[FIELDPROXY] Updating row ${rowId} for user ${log.user_id}`);
+  console.log(`[FIELDPROXY] Updating row ${rowId} for user ${log.user_id}`, {
+    rowId,
+    tableData,
+  });
 
   const res = await fetch(`${FIELDPROXY_BASE}/updateRows`, {
     method: "POST",
@@ -293,6 +282,12 @@ export async function updateCheckOutInFieldproxy(
   const updateResponse = (await res.json().catch(() => ({}))) as any;
 
   if (!res.ok) {
+    console.error(`[FIELDPROXY] Update failed:`, {
+      status: res.status,
+      statusText: res.statusText,
+      requestBody: body,
+      response: updateResponse,
+    });
     throw new Error(
       `Fieldproxy updateRows failed for punch_out: ${res.status} ${res.statusText} — ${JSON.stringify(updateResponse)}`,
     );
