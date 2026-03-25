@@ -12,6 +12,13 @@ export const sendActivityMessage = async (
   message: string,
 ) => {
   try {
+    console.log(`[WHATSAPP_SERVICE] Sending activity message:`, {
+      siteCode,
+      ticketNo,
+      messageLength: message.length,
+      utilityUrl: UTILITY_SERVICE_URL
+    });
+
     const response = await fetch(`${UTILITY_SERVICE_URL}/api/whatsapp/send`, {
       method: "POST",
       headers: {
@@ -26,18 +33,29 @@ export const sendActivityMessage = async (
       }),
     });
 
+    console.log(`[WHATSAPP_SERVICE] Response status:`, response.status);
+
     if (!response.ok) {
       const error = await response.json().catch(() => ({}));
       console.error("Failed to send internal WhatsApp notification:", {
         status: response.status,
         error,
+        siteCode,
+        ticketNo
       });
       return { success: false, error };
     }
 
-    return { success: true };
+    const result = await response.json();
+    console.log(`[WHATSAPP_SERVICE] Success:`, { siteCode, ticketNo });
+    return { success: true, data: result };
   } catch (err: any) {
-    console.error("Error calling internal WhatsApp service:", err.message);
+    console.error("Error calling internal WhatsApp service:", {
+      error: err.message,
+      siteCode,
+      ticketNo,
+      stack: err.stack
+    });
     return { success: false, error: err.message };
   }
 };
@@ -48,6 +66,13 @@ export const sendActivityImage = async (
   imageUrl: string,
 ) => {
   try {
+    console.log(`[WHATSAPP_SERVICE] Sending activity image:`, {
+      siteCode,
+      ticketNo,
+      imageUrl,
+      utilityUrl: UTILITY_SERVICE_URL
+    });
+
     const response = await fetch(`${UTILITY_SERVICE_URL}/api/whatsapp/send-image`, {
       method: "POST",
       headers: {
@@ -63,18 +88,29 @@ export const sendActivityImage = async (
       }),
     });
 
+    console.log(`[WHATSAPP_SERVICE] Image response status:`, response.status);
+
     if (!response.ok) {
       const error = await response.json().catch(() => ({}));
       console.error("Failed to send internal WhatsApp image notification:", {
         status: response.status,
         error,
+        siteCode,
+        ticketNo
       });
       return { success: false, error };
     }
 
-    return { success: true };
+    const result = await response.json();
+    console.log(`[WHATSAPP_SERVICE] Image success:`, { siteCode, ticketNo });
+    return { success: true, data: result };
   } catch (err: any) {
-    console.error("Error calling internal WhatsApp image service:", err.message);
+    console.error("Error calling internal WhatsApp image service:", {
+      error: err.message,
+      siteCode,
+      ticketNo,
+      stack: err.stack
+    });
     return { success: false, error: err.message };
   }
 };

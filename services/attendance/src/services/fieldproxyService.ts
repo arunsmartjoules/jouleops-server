@@ -251,7 +251,7 @@ export async function updateCheckOutInFieldproxy(
     return { lookup: lookupResponse, error: "Row not found in Fieldproxy" };
   }
 
-  // 3. Prepare payload
+  // 3. Prepare payload - only include fields that are being updated
   const punchOutTime = log.check_out_time
     ? new Date(log.check_out_time).toISOString()
     : new Date().toISOString();
@@ -260,24 +260,18 @@ export async function updateCheckOutInFieldproxy(
       ? [String(log.check_out_longitude), String(log.check_out_latitude)]
       : null;
 
-  // Re-calculate shift_id or default to "I" if missing
-  const nowIST = new Date(new Date().getTime() + 5.5 * 60 * 60 * 1000);
-  const hour = nowIST.getUTCHours();
-  let shiftId = "I";
-  if (hour >= 14 && hour < 22) shiftId = "II";
-  else if (hour >= 22 || hour < 6) shiftId = "III";
-
+  // For UPDATE, only send the fields that are changing (punch_out related fields)
   const tableData: Record<string, any> = {
-    user_id: log.user_id,
-    shift_id: log.shift_id || shiftId,
-    site_id: log.site_code || "WFH",
-    punch_id: log.fieldproxy_punch_id || undefined,
     punch_out: punchOutTime,
     punch_outtimestamp: punchOutTime,
-    location: log.check_out_address || log.address || "",
     punchoutlocation: punchoutlocation,
     updatedAt: punchOutTime,
   };
+
+  // Only include location if there's a check_out_address
+  if (log.check_out_address) {
+    tableData.location = log.check_out_address;
+  }
 
   const body = {
     rowId,

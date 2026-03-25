@@ -224,16 +224,21 @@ export async function getAttendanceById(
 
 /**
  * Get today's attendance for a user
+ * Returns the latest attendance record for today (checked out or not)
  */
 export async function getTodayAttendance(
   userId: string,
 ): Promise<AttendanceLog | null> {
   const today = getISTDate();
 
+  // Get the most recent attendance for today
+  // Prioritize unchecked-out records first, then most recent
   return queryOne<AttendanceLog>(
     `SELECT * FROM attendance_logs
      WHERE user_id = $1 AND date = $2
-     ORDER BY check_in_time DESC
+     ORDER BY 
+       CASE WHEN check_out_time IS NULL THEN 0 ELSE 1 END,
+       check_in_time DESC
      LIMIT 1`,
     [userId, today],
   );

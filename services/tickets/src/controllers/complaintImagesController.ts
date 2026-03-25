@@ -56,6 +56,14 @@ class ComplaintImagesController {
       const ticketId = req.params.id || (req as any).params.ticketId;
       const { image_url, video_url, message_text, message_id } = req.body;
 
+      console.log(`[LINE_ITEM] Adding line item:`, {
+        ticketId,
+        hasImage: !!image_url,
+        hasVideo: !!video_url,
+        hasMessage: !!message_text,
+        messageId: message_id
+      });
+
       if (!ticketId) {
         return sendError(res, "ticketId parameter is required", {
           status: 400,
@@ -70,38 +78,67 @@ class ComplaintImagesController {
         message_id,
       });
 
+      console.log(`[LINE_ITEM] Line item created:`, { 
+        ticketId, 
+        hasMessage: !!newItem.message_text,
+        hasImage: !!newItem.image_url,
+        willSendWhatsApp: !!message_text || !!image_url
+      });
+
       // Trigger WhatsApp notification for text messages (Fire and Forget)
       if (message_text) {
+        console.log(`[LINE_ITEM] Triggering WhatsApp for message:`, { ticketId });
         (async () => {
           try {
             const ticket = await complaintsRepository.getComplaint(ticketId);
             if (ticket) {
+              console.log(`[LINE_ITEM] Found ticket, sending WhatsApp:`, {
+                ticketNo: ticket.ticket_no,
+                siteCode: ticket.site_code
+              });
               await whatsappService.sendActivityMessage(
                 ticket.site_code,
                 ticket.ticket_no,
                 message_text,
               );
+            } else {
+              console.warn(`[LINE_ITEM] Ticket not found for WhatsApp:`, { ticketId });
             }
-          } catch (err) {
-            console.error("WhatsApp activity trigger failed:", err);
+          } catch (err: any) {
+            console.error("WhatsApp activity trigger failed:", {
+              error: err.message,
+              ticketId,
+              stack: err.stack
+            });
           }
         })();
       }
 
       // Trigger WhatsApp notification for images (Fire and Forget)
       if (image_url) {
+        console.log(`[LINE_ITEM] Triggering WhatsApp for image:`, { ticketId });
         (async () => {
           try {
             const ticket = await complaintsRepository.getComplaint(ticketId);
             if (ticket) {
+              console.log(`[LINE_ITEM] Found ticket, sending WhatsApp image:`, {
+                ticketNo: ticket.ticket_no,
+                siteCode: ticket.site_code
+              });
               await whatsappService.sendActivityImage(
                 ticket.site_code,
                 ticket.ticket_no,
                 image_url,
               );
+            } else {
+              console.warn(`[LINE_ITEM] Ticket not found for WhatsApp image:`, { ticketId });
             }
-          } catch (err) {
-            console.error("WhatsApp image activity trigger failed:", err);
+          } catch (err: any) {
+            console.error("WhatsApp image activity trigger failed:", {
+              error: err.message,
+              ticketId,
+              stack: err.stack
+            });
           }
         })();
       }

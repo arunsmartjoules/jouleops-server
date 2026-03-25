@@ -112,13 +112,15 @@ export const checkIn = async (req: AuthRequest, res: Response) => {
       return sendError(res, "user_id and site_code are required");
     }
 
-    // Check if already checked in today
+    // Check if there's an active (not checked out) attendance for today
     const existing = await attendanceRepository.getTodayAttendance(user_id);
-    if (existing) {
+    if (existing && !existing.check_out_time) {
+      // User has an active punch-in without checkout
       return res.status(400).json({
         success: false,
-        error: "Already checked in today",
+        error: "Please check out from your current session before checking in again",
         data: existing,
+        requiresCheckout: true,
       });
     }
 
