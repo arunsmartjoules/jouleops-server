@@ -8,7 +8,7 @@ bucket_definitions:
     data:
       - SELECT id, category, description FROM complaint_category
       - SELECT id, task_name, log_name, sequence_number, log_id, dlr, dbr, nlt, nmt, created_at, updated_at FROM log_master
-      - SELECT id, title, asset_type, frequency, created_at FROM pm_checklist_master
+      - SELECT checklist_id, title, asset_type, frequency, created_at FROM pm_checklist_master
       - SELECT id, checklist_id, task_name, field_type, sequence_no, image_mandatory, remarks_mandatory FROM pm_checklist
 
   # ─── Per-user site assignments ──────────────────────────────────────────────
