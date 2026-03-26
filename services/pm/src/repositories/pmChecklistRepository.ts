@@ -91,10 +91,10 @@ export async function createPMChecklist(
 export async function getPMChecklistById(
   checklistId: string,
   fields?: string[],
-): Promise<PMChecklist | null> {
+): Promise<PMChecklist[]> {
   const selectFields = fields && fields.length > 0 ? fields.join(", ") : "*";
-  return queryOne<PMChecklist>(
-    `SELECT ${selectFields} FROM pm_checklist WHERE checklist_id = $1`,
+  return query<PMChecklist>(
+    `SELECT ${selectFields} FROM pm_checklist WHERE checklist_id = $1 ORDER BY sequence_no ASC`,
     [checklistId],
   );
 }

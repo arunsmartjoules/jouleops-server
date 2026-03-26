@@ -37,7 +37,7 @@ export const getById = async (req: Request, res: Response) => {
       checklistId,
       fieldArray,
     );
-    if (!checklist) {
+    if (!checklist || checklist.length === 0) {
       return sendNotFound(res, "PM checklist");
     }
     return sendSuccess(res, checklist);
