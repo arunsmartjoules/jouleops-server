@@ -19,12 +19,12 @@ router.post(
   (req: AuthRequest, res: Response) => {
     const secret = process.env.JWT_SECRET;
     if (!secret) {
-      return sendError(res, "JWT_SECRET is not configured", 500);
+      return sendError(res, "JWT_SECRET is not configured", { status: 500 });
     }
 
     const userId = req.user?.user_id;
     if (!userId) {
-      return sendError(res, "User ID not found in token", 401);
+      return sendError(res, "User ID not found in token", {status: 401 });
     }
 
     const powerSyncToken = jwt.sign(
@@ -38,8 +38,12 @@ router.post(
       { expiresIn: "1h" },
     );
 
+    // PowerSync URL for mobile clients
+    // Use POWERSYNC_PUBLIC_URL for external access, fallback to POWERSYNC_URL for internal
     const powersyncUrl =
-      process.env.POWERSYNC_URL || "http://localhost:8080";
+      process.env.POWERSYNC_PUBLIC_URL || 
+      process.env.POWERSYNC_URL || 
+      "http://localhost:8080";
 
     return sendSuccess(res, {
       token: powerSyncToken,
