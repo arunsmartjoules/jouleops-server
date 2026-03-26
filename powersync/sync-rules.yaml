@@ -76,6 +76,14 @@ bucket_definitions:
         FROM assets
         WHERE site_code = bucket.site_code
 
+      # Attendance logs per site
+      - SELECT id, user_id, site_code, date, check_in_time, check_out_time,
+               check_in_latitude, check_in_longitude, check_out_latitude, check_out_longitude,
+               check_in_address, check_out_address, shift_id, status, remarks,
+               fieldproxy_punch_id, created_at, updated_at
+        FROM attendance_logs
+        WHERE site_code = bucket.site_code
+
   # ─── PM responses (keyed to user's PM instances) ───────────────────────────
   pm_responses[]:
     parameters: >
