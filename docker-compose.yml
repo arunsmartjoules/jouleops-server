@@ -117,6 +117,29 @@ services:
     environment:
       - PORT=3424
 
+  # PowerSync Sync Engine (Self-Hosted)
+  powersync:
+    image: journeyapps/powersync-service:latest
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./powersync/config.yaml:/config/config.yaml:ro
+      - ./powersync/sync-rules.yaml:/config/sync-rules.yaml:ro
+    environment:
+      - DATABASE_URL=${DATABASE_URL}
+      - POWERSYNC_JWT_KEY_BASE64=${POWERSYNC_JWT_KEY_BASE64}
+      - POWERSYNC_MONGO_URI=mongodb://mongo:27017/powersync
+    depends_on:
+      - mongo
+
+  # MongoDB for PowerSync internal state
+  mongo:
+    image: mongo:7
+    restart: unless-stopped
+    volumes:
+      - powersync_mongo:/data/db
+
   # Caddy (Automatic HTTPS)
   caddy:
     image: caddy:alpine
@@ -134,3 +157,4 @@ services:
 volumes:
   caddy_data:
   caddy_config:
+  powersync_mongo:

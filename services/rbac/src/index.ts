@@ -26,6 +26,7 @@ import sitesRoutes from "./routes/sites.ts";
 import assetsRoutes from "./routes/assets.ts";
 import logsRoutes from "./routes/logs.ts";
 import usersRoutes from "./routes/users.ts";
+import powersyncRoutes from "./routes/powersync.ts";
 
 const PORT = process.env.RBAC_PORT || 3425;
 
@@ -62,6 +63,7 @@ app.use("/api/sites", sitesRoutes);
 app.use("/api/assets", assetsRoutes);
 app.use("/api/logs", logsRoutes);
 app.use("/api/users", usersRoutes);
+app.use("/api/auth", powersyncRoutes);
 
 // 404 Handler
 app.use((req: Request, _res: Response, next: NextFunction) => {

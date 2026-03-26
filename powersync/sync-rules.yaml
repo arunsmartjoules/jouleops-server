@@ -1,0 +1,91 @@
+# PowerSync Sync Rules
+# Defines how PostgreSQL data is partitioned into sync buckets for mobile clients.
+# token_parameters.user_id is extracted from the JWT issued by /api/auth/powersync-token
+
+bucket_definitions:
+  # ─── Global reference data (synced to ALL authenticated users) ──────────────
+  global_reference:
+    data:
+      - SELECT id, category, description FROM complaint_category
+      - SELECT id, task_name, log_name, sequence_number, log_id, dlr, dbr, nlt, nmt, created_at, updated_at FROM log_master
+      - SELECT id, title, asset_type, frequency, created_at FROM pm_checklist_master
+      - SELECT id, checklist_id, task_name, field_type, sequence_no, image_mandatory, remarks_mandatory FROM pm_checklist
+
+  # ─── Per-user site assignments ──────────────────────────────────────────────
+  user_sites:
+    parameters: SELECT id AS site_user_id FROM site_user WHERE user_id = token_parameters.user_id
+    data:
+      - SELECT su.id, su.user_id, su.site_id, s.site_code, s.name AS site_name
+        FROM site_user su
+        JOIN sites s ON s.id = su.site_id
+        WHERE su.id = bucket.site_user_id
+
+  # ─── Per-site operational data ──────────────────────────────────────────────
+  # Each user gets one bucket per assigned site. PowerSync resolves the
+  # parameters query to produce one bucket per row (site_code).
+  site_data[]:
+    parameters: >
+      SELECT s.site_code
+      FROM site_user su
+      JOIN sites s ON s.id = su.site_id
+      WHERE su.user_id = token_parameters.user_id
+    data:
+      # Complaints / Tickets
+      - SELECT id, site_code, ticket_number, complaint AS title, description,
+               status, priority, category, asset_name AS area, assigned_to,
+               created_by, due_date, closed_at, created_at, updated_at
+        FROM complaints
+        WHERE site_code = bucket.site_code
+
+      # Site logs (temp/RH, water, chemical)
+      - SELECT id, site_code, executor_id, log_name, task_name,
+               temperature, rh, tds, ph, hardness, chemical_dosing,
+               remarks, entry_time, end_time, signature, assigned_to,
+               attachment, status, created_at, updated_at
+        FROM site_logs
+        WHERE site_code = bucket.site_code
+
+      # Chiller equipment readings
+      - SELECT id, log_id, site_code, chiller_id, equipment_id, asset_name, asset_type,
+               executor_id, date_shift, assigned_to, reading_time, start_datetime, end_datetime,
+               condenser_inlet_temp, condenser_outlet_temp,
+               evaporator_inlet_temp, evaporator_outlet_temp,
+               compressor_suction_temp, motor_temperature,
+               saturated_condenser_temp, saturated_suction_temp,
+               set_point_celsius, discharge_pressure, main_suction_pressure,
+               oil_pressure, oil_pressure_difference,
+               condenser_inlet_pressure, condenser_outlet_pressure,
+               evaporator_inlet_pressure, evaporator_outlet_pressure,
+               compressor_load_percentage, inline_btu_meter,
+               remarks, sla_status, reviewed_by, signature_text, attachments,
+               status, created_at, updated_at
+        FROM chiller_readings
+        WHERE site_code = bucket.site_code
+
+      # PM instances
+      - SELECT id, site_code, title, asset_id, asset_type, location, frequency,
+               status, progress, assigned_to_name, start_due_date,
+               maintenance_id, client_sign, before_image, after_image,
+               created_at, updated_at
+        FROM pm_instances
+        WHERE site_code = bucket.site_code
+
+      # Assets (areas) per site
+      - SELECT id, site_code, asset_name, asset_type, location, description,
+               created_at, updated_at
+        FROM assets
+        WHERE site_code = bucket.site_code
+
+  # ─── PM responses (keyed to user's PM instances) ───────────────────────────
+  pm_responses[]:
+    parameters: >
+      SELECT pi.id AS instance_id
+      FROM pm_instances pi
+      JOIN sites s ON s.site_code = pi.site_code
+      JOIN site_user su ON su.site_id = s.id
+      WHERE su.user_id = token_parameters.user_id
+    data:
+      - SELECT id, instance_id, checklist_item_id, response_value, readings,
+               remarks, image_url, created_at, updated_at
+        FROM pm_response
+        WHERE instance_id = bucket.instance_id
