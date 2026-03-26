@@ -62,6 +62,19 @@ export interface PunchRecordPayload {
 }
 
 /**
+ * Formats a date to YYYY-MM-DD HH:mm format for Fieldproxy
+ */
+function formatDateForFieldproxy(date: Date | string): string {
+  const d = new Date(date);
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  const hours = String(d.getHours()).padStart(2, '0');
+  const minutes = String(d.getMinutes()).padStart(2, '0');
+  return `${year}-${month}-${day} ${hours}:${minutes}`;
+}
+
+/**
  * Fetches the latest punch records to determine the next sequential punch_id
  */
 async function getNextPunchId(token: string): Promise<number> {
@@ -92,10 +105,10 @@ export async function forwardPunchInToFieldproxy(log: any): Promise<any> {
   // Get next sequential punch_id
   const nextPunchId = await getNextPunchId(token);
 
-  const punchInTime = new Date(log.check_in_time).toISOString();
+  const punchInTime = formatDateForFieldproxy(log.check_in_time);
   let punchOutTime = null;
   if (log.check_out_time) {
-    punchOutTime = new Date(log.check_out_time).toISOString();
+    punchOutTime = formatDateForFieldproxy(log.check_out_time);
   }
 
   const punchinlocation =
@@ -234,8 +247,8 @@ export async function updateCheckOutInFieldproxy(
 
   // 3. Prepare payload - only include fields that are being updated
   const punchOutTime = log.check_out_time
-    ? new Date(log.check_out_time).toISOString()
-    : new Date().toISOString();
+    ? formatDateForFieldproxy(log.check_out_time)
+    : formatDateForFieldproxy(new Date());
   const punchoutlocation =
     log.check_out_longitude && log.check_out_latitude
       ? [String(log.check_out_longitude), String(log.check_out_latitude)]
