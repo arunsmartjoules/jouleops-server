@@ -6,6 +6,7 @@ bucket_definitions:
       - SELECT id, task_name, log_name, sequence_number, log_id, dlr, dbr, nlt, nmt, created_at, updated_at FROM log_master
       - SELECT checklist_id AS id, title, asset_type, frequency, created_at FROM pm_checklist_master
       - SELECT id, checklist_id, task_name, field_type, sequence_no, image_mandatory, remarks_mandatory FROM pm_checklist
+      - SELECT id, site_code, name AS site_name FROM sites
 
   # Per-user site assignments
   user_sites:
@@ -14,17 +15,11 @@ bucket_definitions:
     data:
       - SELECT id, user_id, site_id FROM site_user WHERE id = bucket.bucket_id
 
-  # Sites lookup
-  sites_data:
-    parameters:
-      - SELECT id AS bucket_id FROM site_user WHERE user_id = token_parameters.user_id
-    data:
-      - SELECT s.id, s.site_code, s.name AS site_name FROM sites s WHERE s.id = (SELECT site_id FROM site_user WHERE id = bucket.bucket_id)
-
-  # Per-site operational data
+  # Per-site data — use site_code as bucket parameter from site_user joined via sites
+  # Parameters must be single table — we store site_code on site_user for this
   site_data:
     parameters:
-      - SELECT s.site_code AS bucket_id FROM site_user su JOIN sites s ON s.id = su.site_id WHERE su.user_id = token_parameters.user_id
+      - SELECT site_code AS bucket_id FROM sites WHERE id IN (SELECT site_id FROM site_user WHERE user_id = token_parameters.user_id)
     data:
       - SELECT id, site_code, ticket_number, complaint AS title, description, status, priority, category, asset_name AS area, assigned_to, created_by, due_date, closed_at, created_at, updated_at FROM complaints WHERE site_code = bucket.bucket_id
       - SELECT id, site_code, executor_id, log_name, task_name, temperature, rh, tds, ph, hardness, chemical_dosing, remarks, entry_time, end_time, signature, assigned_to, attachment, status, created_at, updated_at FROM site_logs WHERE site_code = bucket.bucket_id
@@ -36,6 +31,6 @@ bucket_definitions:
   # PM responses
   pm_responses:
     parameters:
-      - SELECT pi.id AS bucket_id FROM pm_instances pi JOIN sites s ON s.site_code = pi.site_code JOIN site_user su ON su.site_id = s.id WHERE su.user_id = token_parameters.user_id
+      - SELECT id AS bucket_id FROM pm_instances WHERE site_code IN (SELECT site_code FROM sites WHERE id IN (SELECT site_id FROM site_user WHERE user_id = token_parameters.user_id))
     data:
       - SELECT id, instance_id, checklist_item_id, response_value, readings, remarks, image_url, created_at, updated_at FROM pm_response WHERE instance_id = bucket.bucket_id
