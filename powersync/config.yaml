@@ -1,41 +1,29 @@
 # PowerSync Self-Hosted Configuration
 # Docs: https://docs.powersync.com/self-hosting/configuration
 
-# Replication connection to source PostgreSQL database
 replication:
-  # Connection to the Postgres source database
   connections:
     - type: postgresql
-      uri: !env DATABASE_URL
-      # Slot name for logical replication (auto-created if missing)
+      uri: !env PS_DATABASE_URL
       slot_name: powersync_slot
-      # Publication created in Postgres for this sync
       publication: powersync_pub
 
-# Client (mobile app) authentication
 client_auth:
-  # JWKS or shared-secret based JWT verification
   jwks:
-    # Use symmetric HS256 with the same JWT_SECRET the backend uses
     keys:
       - kty: oct
         alg: HS256
-        # The key value is base64url-encoded JWT_SECRET
-        k: !env POWERSYNC_JWT_KEY_BASE64
+        k: !env PS_JWT_KEY_BASE64
 
-# Storage for PowerSync's internal state (op log, checkpoints)
 storage:
   type: mongodb
-  uri: !env POWERSYNC_MONGO_URI
+  uri: !env PS_MONGO_URI
 
-# API settings
 api:
   port: 8080
 
-# Sync rules file (data partitioning)
 sync_rules:
   path: /app/sync-rules.yaml
 
-# Telemetry (optional)
 telemetry:
   disable_telemetry: true

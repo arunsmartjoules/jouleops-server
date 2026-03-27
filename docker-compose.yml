@@ -121,14 +121,15 @@ services:
   powersync:
     image: journeyapps/powersync-service:latest
     restart: unless-stopped
-    env_file: .env.local
     ports:
       - "8080:8080"
     volumes:
       - ./powersync/config.yaml:/app/powersync.yaml:ro
       - ./powersync/sync-rules.yaml:/app/sync-rules.yaml:ro
     environment:
-      - POWERSYNC_MONGO_URI=mongodb://mongo:27017/powersync
+      - PS_DATABASE_URL=${DATABASE_URL}
+      - PS_JWT_KEY_BASE64=${POWERSYNC_JWT_KEY_BASE64}
+      - PS_MONGO_URI=mongodb://mongo:27017/powersync
     depends_on:
       - mongo
 
