@@ -5,3 +5,7 @@
 3.110.174.185.sslip.io {
     reverse_proxy gateway:3420
 }
+
+powersync.3.110.174.185.sslip.io {
+    reverse_proxy powersync:8080
+}
