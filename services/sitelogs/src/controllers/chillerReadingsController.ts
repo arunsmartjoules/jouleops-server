@@ -6,6 +6,10 @@
  */
 
 import chillerReadingsRepository from "../repositories/chillerReadingsRepository.ts";
+import {
+  createChillerReadingInFieldproxy,
+  updateChillerReadingInFieldproxy,
+} from "../services/fieldproxyService.ts";
 import type { Request, Response } from "express";
 import {
   sendSuccess,
@@ -20,8 +24,7 @@ export const create = asyncHandler(async (req: Request, res: Response) => {
   const reading = await chillerReadingsRepository.createChillerReading(
     req.body,
   );
-  
-  // Log the activity
+
   logActivity({
     user_id: (req as any).user?.user_id || (req as any).user?.id,
     action: "CREATE_CHILLER_READING",
@@ -29,6 +32,60 @@ export const create = asyncHandler(async (req: Request, res: Response) => {
     description: `Created chiller reading ${reading.id} for chiller ${reading.chiller_id}`,
     metadata: { readingId: reading.id, chillerId: reading.chiller_id, siteCode: reading.site_code },
   });
+
+  // Sync to Fieldproxy — fire and forget (CREATE)
+  createChillerReadingInFieldproxy({
+    log_id: reading.log_id,
+    site_id: reading.site_code,
+    chiller_id: reading.chiller_id,
+    date_shift: reading.date_shift,
+    executor_id: reading.executor_id,
+    reading_time: reading.reading_time,
+    condenser_inlet_temp: reading.condenser_inlet_temp,
+    condenser_outlet_temp: reading.condenser_outlet_temp,
+    evaporator_inlet_temp: reading.evaporator_inlet_temp,
+    evaporator_outlet_temp: reading.evaporator_outlet_temp,
+    compressor_suction_temp: reading.compressor_suction_temp,
+    motor_temperature: reading.motor_temperature,
+    saturated_condenser_temp: reading.saturated_condenser_temp,
+    saturated_suction_temp: reading.saturated_suction_temp,
+    discharge_pressure: reading.discharge_pressure,
+    main_suction_pressure: reading.main_suction_pressure,
+    oil_pressure: reading.oil_pressure,
+    oil_pressure_difference: reading.oil_pressure_difference,
+    compressor_load_percentage: reading.compressor_load_percentage ?? reading.compressor_load_percent,
+    inline_btu_meter: reading.inline_btu_meter,
+    set_point_celsius: reading.set_point_celsius ?? reading.set_point,
+    condenser_inlet_pressure: reading.condenser_inlet_pressure,
+    condenser_outlet_pressure: reading.condenser_outlet_pressure,
+    evaporator_inlet_pressure: reading.evaporator_inlet_pressure,
+    evaporator_outlet_pressure: reading.evaporator_outlet_pressure,
+    remarks: reading.remarks,
+    sla_status: reading.sla_status,
+    signature_text: reading.signature_text,
+    attachments: reading.attachments,
+    startdatetime: reading.startdatetime ?? reading.start_datetime,
+    enddatetime: reading.enddatetime,
+  })
+    .then((fp) => {
+      logActivity({
+        user_id: (req as any).user?.user_id || (req as any).user?.id,
+        action: "SYNC_TO_FIELDPROXY",
+        module: "CHILLER_READING",
+        description: `Created chiller reading ${reading.id} in Fieldproxy`,
+        metadata: { readingId: reading.id, fieldproxy: fp },
+      }).catch(() => {});
+    })
+    .catch((err) => {
+      console.error("[FIELDPROXY] chiller reading create sync failed:", err);
+      logActivity({
+        user_id: (req as any).user?.user_id || (req as any).user?.id,
+        action: "SYNC_TO_FIELDPROXY_FAILED",
+        module: "CHILLER_READING",
+        description: `Failed to create chiller reading ${reading.id} in Fieldproxy`,
+        metadata: { readingId: reading.id, error: err.message },
+      }).catch(() => {});
+    });
 
   return sendCreated(res, reading);
 });
@@ -152,7 +209,6 @@ export const update = asyncHandler(async (req: Request, res: Response) => {
     req.body,
   );
 
-  // Log the activity
   logActivity({
     user_id: (req as any).user?.user_id || (req as any).user?.id,
     action: "UPDATE_CHILLER_READING",
@@ -160,6 +216,62 @@ export const update = asyncHandler(async (req: Request, res: Response) => {
     description: `Updated chiller reading ${id} for chiller ${reading.chiller_id}`,
     metadata: { readingId: id, chillerId: reading.chiller_id, siteCode: reading.site_code },
   });
+
+  // Sync to Fieldproxy — fire and forget (UPDATE, lookup by log_id)
+  if (reading.log_id) {
+    updateChillerReadingInFieldproxy({
+      log_id: reading.log_id,
+      site_id: reading.site_code,
+      chiller_id: reading.chiller_id,
+      date_shift: reading.date_shift,
+      executor_id: reading.executor_id,
+      reading_time: reading.reading_time,
+      condenser_inlet_temp: reading.condenser_inlet_temp,
+      condenser_outlet_temp: reading.condenser_outlet_temp,
+      evaporator_inlet_temp: reading.evaporator_inlet_temp,
+      evaporator_outlet_temp: reading.evaporator_outlet_temp,
+      compressor_suction_temp: reading.compressor_suction_temp,
+      motor_temperature: reading.motor_temperature,
+      saturated_condenser_temp: reading.saturated_condenser_temp,
+      saturated_suction_temp: reading.saturated_suction_temp,
+      discharge_pressure: reading.discharge_pressure,
+      main_suction_pressure: reading.main_suction_pressure,
+      oil_pressure: reading.oil_pressure,
+      oil_pressure_difference: reading.oil_pressure_difference,
+      compressor_load_percentage: reading.compressor_load_percentage ?? reading.compressor_load_percent,
+      inline_btu_meter: reading.inline_btu_meter,
+      set_point_celsius: reading.set_point_celsius ?? reading.set_point,
+      condenser_inlet_pressure: reading.condenser_inlet_pressure,
+      condenser_outlet_pressure: reading.condenser_outlet_pressure,
+      evaporator_inlet_pressure: reading.evaporator_inlet_pressure,
+      evaporator_outlet_pressure: reading.evaporator_outlet_pressure,
+      remarks: reading.remarks,
+      sla_status: reading.sla_status,
+      signature_text: reading.signature_text,
+      attachments: reading.attachments,
+      startdatetime: reading.startdatetime ?? reading.start_datetime,
+      enddatetime: reading.enddatetime,
+    })
+      .then((fp) => {
+        logActivity({
+          user_id: (req as any).user?.user_id || (req as any).user?.id,
+          action: "SYNC_TO_FIELDPROXY",
+          module: "CHILLER_READING",
+          description: `Updated chiller reading ${id} in Fieldproxy`,
+          metadata: { readingId: id, log_id: reading.log_id, fieldproxy: fp },
+        }).catch(() => {});
+      })
+      .catch((err) => {
+        console.error("[FIELDPROXY] chiller reading update sync failed:", err);
+        logActivity({
+          user_id: (req as any).user?.user_id || (req as any).user?.id,
+          action: "SYNC_TO_FIELDPROXY_FAILED",
+          module: "CHILLER_READING",
+          description: `Failed to update chiller reading ${id} in Fieldproxy`,
+          metadata: { readingId: id, error: err.message },
+        }).catch(() => {});
+      });
+  }
 
   return sendSuccess(res, reading);
 });

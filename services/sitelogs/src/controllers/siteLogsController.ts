@@ -6,6 +6,7 @@
  */
 
 import siteLogsRepository from "../repositories/siteLogsRepository.ts";
+import { updateSiteLogInFieldproxy } from "../services/fieldproxyService.ts";
 import type { Request, Response } from "express";
 import {
   sendSuccess,
@@ -18,7 +19,6 @@ import {
 export const create = asyncHandler(async (req: Request, res: Response) => {
   const result = await siteLogsRepository.createLog(req.body);
 
-  // Log the activity
   logActivity({
     user_id: (req as any).user?.user_id,
     action: "CREATE_LOG",
@@ -26,6 +26,47 @@ export const create = asyncHandler(async (req: Request, res: Response) => {
     description: `Created site log ${result.id} of type ${result.log_name}`,
     metadata: { logId: result.id, logName: result.log_name, siteCode: result.site_code },
   });
+
+  // Sync to Fieldproxy — fire and forget (records already exist there, just update)
+  if (result.log_id) {
+    updateSiteLogInFieldproxy({
+      log_id: result.log_id,
+      log_name: result.log_name,
+      temperature: result.temperature,
+      rh: result.rh,
+      tds: result.tds,
+      ph: result.ph,
+      hardness: result.hardness,
+      chemical_dosing: result.chemical_dosing,
+      main_remarks: result.main_remarks,
+      remarks: result.remarks,
+      signature: result.signature,
+      attachment: result.attachment,
+      entry_time: result.entry_time,
+      end_time: result.end_time,
+      executor_id: result.executor_id,
+      status: result.status,
+    })
+      .then((fp) => {
+        logActivity({
+          user_id: (req as any).user?.user_id,
+          action: "SYNC_TO_FIELDPROXY",
+          module: "SITE_LOG",
+          description: `Synced site log ${result.id} (log_id: ${result.log_id}) to Fieldproxy`,
+          metadata: { logId: result.id, log_id: result.log_id, fieldproxy: fp },
+        }).catch(() => {});
+      })
+      .catch((err) => {
+        console.error("[FIELDPROXY] site log sync failed:", err);
+        logActivity({
+          user_id: (req as any).user?.user_id,
+          action: "SYNC_TO_FIELDPROXY_FAILED",
+          module: "SITE_LOG",
+          description: `Failed to sync site log ${result.id} to Fieldproxy`,
+          metadata: { logId: result.id, error: err.message },
+        }).catch(() => {});
+      });
+  }
 
   return sendCreated(res, result);
 });
@@ -112,7 +153,6 @@ export const update = asyncHandler(async (req: Request, res: Response) => {
   }
   const result = await siteLogsRepository.updateLog(id, req.body);
 
-  // Log the activity
   logActivity({
     user_id: (req as any).user?.user_id,
     action: "UPDATE_LOG",
@@ -120,6 +160,47 @@ export const update = asyncHandler(async (req: Request, res: Response) => {
     description: `Updated site log ${id} of type ${result.log_name}`,
     metadata: { logId: id, logName: result.log_name, siteCode: result.site_code },
   });
+
+  // Sync to Fieldproxy — fire and forget
+  if (result.log_id) {
+    updateSiteLogInFieldproxy({
+      log_id: result.log_id,
+      log_name: result.log_name,
+      temperature: result.temperature,
+      rh: result.rh,
+      tds: result.tds,
+      ph: result.ph,
+      hardness: result.hardness,
+      chemical_dosing: result.chemical_dosing,
+      main_remarks: result.main_remarks,
+      remarks: result.remarks,
+      signature: result.signature,
+      attachment: result.attachment,
+      entry_time: result.entry_time,
+      end_time: result.end_time,
+      executor_id: result.executor_id,
+      status: result.status,
+    })
+      .then((fp) => {
+        logActivity({
+          user_id: (req as any).user?.user_id,
+          action: "SYNC_TO_FIELDPROXY",
+          module: "SITE_LOG",
+          description: `Synced updated site log ${id} (log_id: ${result.log_id}) to Fieldproxy`,
+          metadata: { logId: id, log_id: result.log_id, fieldproxy: fp },
+        }).catch(() => {});
+      })
+      .catch((err) => {
+        console.error("[FIELDPROXY] site log update sync failed:", err);
+        logActivity({
+          user_id: (req as any).user?.user_id,
+          action: "SYNC_TO_FIELDPROXY_FAILED",
+          module: "SITE_LOG",
+          description: `Failed to sync updated site log ${id} to Fieldproxy`,
+          metadata: { logId: id, error: err.message },
+        }).catch(() => {});
+      });
+  }
 
   return sendSuccess(res, result);
 });
