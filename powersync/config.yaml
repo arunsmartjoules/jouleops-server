@@ -34,7 +34,7 @@ api:
 
 # Sync rules file (data partitioning)
 sync_rules:
-  path: /config/sync-rules.yaml
+  path: /app/sync-rules.yaml
 
 # Telemetry (optional)
 telemetry:
