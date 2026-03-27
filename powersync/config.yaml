@@ -26,4 +26,4 @@ sync_rules:
   path: /app/sync-rules.yaml
 
 telemetry:
-  disable_telemetry: true
+  disable_telemetry_sharing: true
