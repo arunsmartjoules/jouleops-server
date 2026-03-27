@@ -369,11 +369,11 @@ router.get("/preferences", verifyAnyAuth, async (req: any, res) => {
 router.put("/preferences", verifyAnyAuth, async (req: any, res) => {
   try {
     const userId = req.user.user_id;
-    const { attendance_notifications_enabled } = req.body;
+    const { attendance_notifications_enabled, ticket_notifications_enabled } = req.body;
 
     const preferences = await notificationSettingsService.updateUserPreferences(
       userId,
-      { attendance_notifications_enabled },
+      { attendance_notifications_enabled, ticket_notifications_enabled },
     );
 
     res.json({

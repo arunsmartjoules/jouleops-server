@@ -8,7 +8,7 @@ import { query, queryOne } from "@jouleops/shared";
 
 export interface TriggerConfig {
   id: string;
-  trigger_key: "punch_in" | "punch_out" | "complaint_open" | "complaint_inprogress";
+  trigger_key: "punch_in" | "punch_out" | "complaint_open" | "complaint_inprogress" | "ticket_created";
   is_enabled: boolean;
   threshold_value: number;
   repeat_frequency_minutes: number | null;

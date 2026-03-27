@@ -10,6 +10,7 @@ import {
   forwardComplaintToFieldproxy,
   updateComplaintInFieldproxy,
 } from "../services/fieldproxyService.ts";
+import { sendTicketCreatedNotifications } from "../services/notificationService.ts";
 import type { Request, Response } from "express";
 import {
   sendSuccess,
@@ -44,6 +45,9 @@ export const create = async (req: AuthRequest, res: Response) => {
     };
 
     const complaint = await complaintsRepository.createComplaint(finalData);
+
+    // Send push notifications to site users — fire and forget
+    sendTicketCreatedNotifications(complaint).catch(() => {});
 
     // Forward to Fieldproxy — fire and forget, do not block the response
     forwardComplaintToFieldproxy(complaint)

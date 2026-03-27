@@ -52,6 +52,8 @@ export interface Complaint {
   end_datetime?: Date;
   responded_at?: Date;
   resolved_at?: Date;
+  before_temp?: number | null;
+  after_temp?: number | null;
   flag_incident: boolean;
   assigned_to?: string;
   escalation_source?: string;
@@ -101,6 +103,8 @@ export interface UpdateComplaintInput {
   end_datetime?: Date;
   reason?: string;
   support_users?: string;
+  before_temp?: number | null;
+  after_temp?: number | null;
 }
 
 export interface GetComplaintsOptions {

@@ -115,27 +115,40 @@ export const getUserPreferences = async (userId) => {
     return {
       user_id: userId,
       attendance_notifications_enabled: true,
+      ticket_notifications_enabled: true,
     };
   }
 
-  return data;
+  return {
+    ...data,
+    ticket_notifications_enabled: data.ticket_notifications_enabled ?? true,
+  };
 };
 
 /**
  * Update user notification preferences
  */
 export const updateUserPreferences = async (userId, preferences) => {
-  const { attendance_notifications_enabled } = preferences;
+  const {
+    attendance_notifications_enabled,
+    ticket_notifications_enabled,
+  } = preferences;
+
   const result = await queryOne(
     `
-        INSERT INTO user_notification_preferences (user_id, attendance_notifications_enabled, updated_at)
-        VALUES ($1, $2, NOW())
+        INSERT INTO user_notification_preferences (user_id, attendance_notifications_enabled, ticket_notifications_enabled, updated_at)
+        VALUES ($1, $2, $3, NOW())
         ON CONFLICT (user_id) DO UPDATE SET
-        attendance_notifications_enabled = EXCLUDED.attendance_notifications_enabled,
+        attendance_notifications_enabled = COALESCE(EXCLUDED.attendance_notifications_enabled, user_notification_preferences.attendance_notifications_enabled),
+        ticket_notifications_enabled = COALESCE(EXCLUDED.ticket_notifications_enabled, user_notification_preferences.ticket_notifications_enabled),
         updated_at = NOW()
         RETURNING *
     `,
-    [userId, attendance_notifications_enabled ?? true],
+    [
+      userId,
+      attendance_notifications_enabled ?? true,
+      ticket_notifications_enabled ?? true,
+    ],
   );
   return result;
 };

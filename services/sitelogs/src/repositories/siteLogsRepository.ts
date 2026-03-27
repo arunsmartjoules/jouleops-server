@@ -104,9 +104,28 @@ export interface GetSiteLogsOptions {
 // ============================================================================
 
 /**
+ * Sanitize scheduled_date: accept ISO timestamps or YYYY-MM-DD strings,
+ * always store as YYYY-MM-DD (matching the DATE column type).
+ */
+function sanitizeScheduledDate(value: string | null | undefined): string | null {
+  if (!value) return null;
+  // Already YYYY-MM-DD
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
+  // ISO timestamp — take the date part only
+  const d = new Date(value);
+  if (!isNaN(d.getTime())) {
+    return d.toISOString().slice(0, 10);
+  }
+  return value;
+}
+
+/**
  * Create a site log
  */
 export async function createLog(data: CreateSiteLogInput): Promise<SiteLog> {
+  if (data.scheduled_date !== undefined) {
+    data = { ...data, scheduled_date: sanitizeScheduledDate(data.scheduled_date) ?? undefined };
+  }
   const columns = Object.keys(data).filter(
     (k) => data[k as keyof CreateSiteLogInput] !== undefined,
   );
@@ -285,6 +304,9 @@ export async function updateLog(
   id: string,
   updateData: UpdateSiteLogInput,
 ): Promise<SiteLog> {
+  if (updateData.scheduled_date !== undefined) {
+    updateData = { ...updateData, scheduled_date: sanitizeScheduledDate(updateData.scheduled_date) ?? undefined };
+  }
   const entries = Object.entries(updateData).filter(
     ([key, value]) => value !== undefined && !['id', 'created_at', 'updated_at'].includes(key),
   );
