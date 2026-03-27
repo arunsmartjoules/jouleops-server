@@ -15,11 +15,10 @@ bucket_definitions:
     data:
       - SELECT id, user_id, site_id FROM site_user WHERE id = bucket.bucket_id
 
-  # Per-site data — use site_code as bucket parameter from site_user joined via sites
-  # Parameters must be single table — we store site_code on site_user for this
+  # Per-site data — uses powersync_user_sites view (site_user joined with sites)
   site_data:
     parameters:
-      - SELECT site_code AS bucket_id FROM sites WHERE id IN (SELECT site_id FROM site_user WHERE user_id = token_parameters.user_id)
+      - SELECT site_code AS bucket_id FROM powersync_user_sites WHERE user_id = token_parameters.user_id
     data:
       - SELECT id, site_code, ticket_number, complaint AS title, description, status, priority, category, asset_name AS area, assigned_to, created_by, due_date, closed_at, created_at, updated_at FROM complaints WHERE site_code = bucket.bucket_id
       - SELECT id, site_code, executor_id, log_name, task_name, temperature, rh, tds, ph, hardness, chemical_dosing, remarks, entry_time, end_time, signature, assigned_to, attachment, status, created_at, updated_at FROM site_logs WHERE site_code = bucket.bucket_id
@@ -28,9 +27,9 @@ bucket_definitions:
       - SELECT id, site_code, asset_name, asset_type, location, description, created_at, updated_at FROM assets WHERE site_code = bucket.bucket_id
       - SELECT id, user_id, site_code, date, check_in_time, check_out_time, check_in_latitude, check_in_longitude, check_out_latitude, check_out_longitude, check_in_address, check_out_address, shift_id, status, remarks, created_at, updated_at FROM attendance_logs WHERE site_code = bucket.bucket_id
 
-  # PM responses
+  # PM responses — uses powersync_user_pm_instances view
   pm_responses:
     parameters:
-      - SELECT id AS bucket_id FROM pm_instances WHERE site_code IN (SELECT site_code FROM sites WHERE id IN (SELECT site_id FROM site_user WHERE user_id = token_parameters.user_id))
+      - SELECT id AS bucket_id FROM powersync_user_pm_instances WHERE user_id = token_parameters.user_id
     data:
       - SELECT id, instance_id, checklist_item_id, response_value, readings, remarks, image_url, created_at, updated_at FROM pm_response WHERE instance_id = bucket.bucket_id
