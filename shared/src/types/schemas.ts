@@ -169,6 +169,8 @@ export const createComplaintSchema = z.object({
   end_datetime: z.string().datetime().optional().nullable(),
   responded_at: z.string().datetime().optional().nullable(),
   resolved_at: z.string().datetime().optional().nullable(),
+  before_temp: z.number().optional().nullable(),
+  after_temp: z.number().optional().nullable(),
   flag_incident: z.boolean().optional().default(false),
   assigned_to: z.string().optional().nullable(),
   escalation_source: z.string().optional().nullable(),

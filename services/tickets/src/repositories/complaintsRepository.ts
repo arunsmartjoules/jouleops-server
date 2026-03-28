@@ -311,13 +311,17 @@ export async function getComplaintsBySite(
     filters.push({ fieldId: "category", operator: "=", value: category });
   }
   if (fromDate) {
-    filters.push({ fieldId: "created_at", operator: ">=", value: fromDate });
+    let normalizedFromDate = fromDate;
+    if (typeof fromDate === "string" && /^\d{4}-\d{2}-\d{2}$/.test(fromDate)) {
+      normalizedFromDate = `${fromDate} 00:00:00`;
+    }
+    filters.push({ fieldId: "created_at", operator: ">=", value: normalizedFromDate });
   }
   if (toDate) {
     let normalizedToDate = toDate;
     // If toDate is a simple date string (YYYY-MM-DD), append end of day time
     if (typeof toDate === "string" && /^\d{4}-\d{2}-\d{2}$/.test(toDate)) {
-      normalizedToDate = `${toDate} 23:59:59.999`;
+      normalizedToDate = `${toDate} 23:59:59`;
     }
     filters.push({
       fieldId: "created_at",
@@ -408,14 +412,7 @@ export async function getComplaintsBySite(
     FROM complaints c
     LEFT JOIN sites s ON c.site_code = s.site_code
     ${whereClause}
-    ORDER BY 
-      CASE 
-        WHEN c.priority = 'Very High' THEN 1
-        WHEN c.priority = 'High' THEN 2
-        WHEN c.priority = 'Medium' THEN 3
-        ELSE 4
-      END ASC,
-      c.created_at DESC
+    ${orderClause}
     ${limitClause}
   `;
 
@@ -475,11 +472,7 @@ export async function updateComplaint(
 
   // Automated Timestamps
   if (updateData.status === "Inprogress") {
-    // Only set responded_at if it's currently null.
-    // We check current state directly.
-    if (!current.responded_at) {
-      updateData.responded_at = new Date();
-    }
+    updateData.responded_at = new Date();
   } else if (updateData.status === "Resolved") {
     updateData.resolved_at = new Date();
   }

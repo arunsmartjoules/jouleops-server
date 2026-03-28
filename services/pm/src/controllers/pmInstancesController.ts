@@ -14,7 +14,114 @@ import {
   sendNotFound,
   sendServerError,
   logActivity,
+  queryOne,
 } from "@jouleops/shared";
+import {
+  updatePMInstanceInFieldproxy,
+  updateTaskManagementInFieldproxy,
+  type PMFieldproxyPayload,
+} from "../services/fieldproxyService.ts";
+
+// ─── Helper: get employee_code from user_id ─────────────────────────────────
+async function getEmployeeCode(userId?: string): Promise<string | null> {
+  if (!userId) return null;
+  const row = await queryOne<{ employee_code: string }>(
+    `SELECT employee_code FROM users WHERE id = $1`,
+    [userId],
+  );
+  return row?.employee_code ?? null;
+}
+
+// ─── Helper: fire-and-forget Fieldproxy sync for PM ─────────────────────────
+/**
+ * Syncs PM data to both pm_instance and task_management sheets in Fieldproxy.
+ * All results (success + error) are logged to activity_logs.
+ */
+async function syncToFieldproxy(
+  instance: any,
+  pmPayload: PMFieldproxyPayload,
+  taskPayload?: { time_log_start?: string; time_log_end?: string; assigned_to?: string },
+): Promise<void> {
+  // 1. Sync pm_instance sheet
+  updatePMInstanceInFieldproxy(pmPayload)
+    .then((result) => {
+      logActivity({
+        action: "LOOKUP_FIELDPROXY_PM_INSTANCE",
+        module: "PM",
+        description: `Fieldproxy lookup for PM instance ${pmPayload.instance_id}`,
+        metadata: { instance_id: pmPayload.instance_id, fieldproxy_response: result.lookup },
+      }).catch(() => {});
+
+      if (result.update) {
+        logActivity({
+          action: "UPDATE_FIELDPROXY_PM_INSTANCE",
+          module: "PM",
+          description: `PM instance ${pmPayload.instance_id} updated in Fieldproxy pm_instance successfully`,
+          metadata: { instance_id: pmPayload.instance_id, fieldproxy_response: result.update },
+        }).catch(() => {});
+      } else if (result.error) {
+        logActivity({
+          action: "UPDATE_FIELDPROXY_PM_INSTANCE_FAILED",
+          module: "PM",
+          description: `Fieldproxy pm_instance update for ${pmPayload.instance_id} skipped: ${result.error}`,
+          metadata: { instance_id: pmPayload.instance_id, error: result.error, lookup_response: result.lookup },
+        }).catch(() => {});
+      }
+    })
+    .catch((err: Error) => {
+      console.error("[FIELDPROXY_PM] pm_instance update failed:", err);
+      logActivity({
+        action: "UPDATE_FIELDPROXY_PM_INSTANCE_FAILED",
+        module: "PM",
+        description: `Failed to update PM instance ${pmPayload.instance_id} in Fieldproxy pm_instance: ${err.message}`,
+        metadata: { instance_id: pmPayload.instance_id, error: err.message },
+      }).catch(() => {});
+    });
+
+  // 2. Sync task_management sheet
+  const taskData = {
+    instance_id: pmPayload.instance_id,
+    task_status: pmPayload.status,
+    time_log_start: pmPayload.start_datetime || taskPayload?.time_log_start,
+    time_log_end: pmPayload.end_datetime || taskPayload?.time_log_end,
+    assigned_to: pmPayload.assigned_to || taskPayload?.assigned_to,
+  };
+
+  updateTaskManagementInFieldproxy(taskData)
+    .then((result) => {
+      logActivity({
+        action: "LOOKUP_FIELDPROXY_TASK_MANAGEMENT",
+        module: "PM",
+        description: `Fieldproxy lookup for task_management (source_reference_id=${pmPayload.instance_id})`,
+        metadata: { instance_id: pmPayload.instance_id, fieldproxy_response: result.lookup },
+      }).catch(() => {});
+
+      if (result.update) {
+        logActivity({
+          action: "UPDATE_FIELDPROXY_TASK_MANAGEMENT",
+          module: "PM",
+          description: `Task management for PM ${pmPayload.instance_id} updated in Fieldproxy successfully`,
+          metadata: { instance_id: pmPayload.instance_id, fieldproxy_response: result.update },
+        }).catch(() => {});
+      } else if (result.error) {
+        logActivity({
+          action: "UPDATE_FIELDPROXY_TASK_MANAGEMENT_FAILED",
+          module: "PM",
+          description: `Fieldproxy task_management update for ${pmPayload.instance_id} skipped: ${result.error}`,
+          metadata: { instance_id: pmPayload.instance_id, error: result.error, lookup_response: result.lookup },
+        }).catch(() => {});
+      }
+    })
+    .catch((err: Error) => {
+      console.error("[FIELDPROXY_PM] task_management update failed:", err);
+      logActivity({
+        action: "UPDATE_FIELDPROXY_TASK_MANAGEMENT_FAILED",
+        module: "PM",
+        description: `Failed to update task_management for PM ${pmPayload.instance_id} in Fieldproxy: ${err.message}`,
+        metadata: { instance_id: pmPayload.instance_id, error: err.message },
+      }).catch(() => {});
+    });
+}
 
 const VALID_STATUSES = [
   "Open",
@@ -185,7 +292,7 @@ export const getOverdue = async (req: Request, res: Response) => {
   }
 };
 
-export const update = async (req: Request, res: Response) => {
+export const update = async (req: AuthRequest, res: Response) => {
   try {
     const { instanceId } = req.params;
     if (!instanceId) {
@@ -200,6 +307,30 @@ export const update = async (req: Request, res: Response) => {
       instanceId,
       req.body,
     );
+
+    // Sync with Fieldproxy — fire and forget
+    const employeeCode = await getEmployeeCode(req.user?.user_id);
+    const fpPayload: PMFieldproxyPayload = {
+      instance_id: existing.instance_id,
+      status: req.body.status || existing.status,
+      progress: req.body.progress || existing.progress,
+      before_image: req.body.before_image,
+      after_image: req.body.after_image,
+      sjpl_sign: req.body.client_sign,
+      start_datetime: instance?.start_datetime?.toISOString?.() || undefined,
+      end_datetime: instance?.end_datetime?.toISOString?.() || undefined,
+      assigned_to: employeeCode || undefined,
+    };
+    syncToFieldproxy(instance, fpPayload).catch(() => {});
+
+    logActivity({
+      user_id: req.user?.user_id,
+      action: "UPDATE_PM_INSTANCE",
+      module: "PM",
+      description: `PM instance ${instanceId} updated`,
+      metadata: { instanceId, updated_fields: Object.keys(req.body) },
+    }).catch(() => {});
+
     return sendSuccess(res, instance);
   } catch (error: any) {
     console.error("Update PM instance error:", error);
@@ -227,7 +358,7 @@ export const updateStatus = async (req: AuthRequest, res: Response) => {
     }
 
     // Use updatePMInstanceStatus for status + timestamps
-    const instance = await pmInstancesRepository.updatePMInstanceStatus(
+    let instance = await pmInstancesRepository.updatePMInstanceStatus(
       instanceId,
       status,
       req.user?.user_id,
@@ -243,11 +374,10 @@ export const updateStatus = async (req: AuthRequest, res: Response) => {
       if (before_image) completionUpdates.before_image = before_image;
       if (after_image) completionUpdates.after_image = after_image;
 
-      const updated = await pmInstancesRepository.updatePMInstance(
+      instance = await pmInstancesRepository.updatePMInstance(
         instanceId,
         completionUpdates,
       );
-      return sendSuccess(res, updated);
     }
 
     // Log the activity
@@ -257,7 +387,26 @@ export const updateStatus = async (req: AuthRequest, res: Response) => {
       module: "PM",
       description: `Updated PM instance ${instanceId} status to ${status}`,
       metadata: { instanceId, status, siteCode: instance?.site_code },
-    });
+    }).catch(() => {});
+
+    // Sync with Fieldproxy — fire and forget (both pm_instance + task_management)
+    const employeeCode = await getEmployeeCode(req.user?.user_id);
+    const fpPayload: PMFieldproxyPayload = {
+      instance_id: existing.instance_id,
+      status,
+      progress: instance?.progress || existing.progress,
+      before_image: before_image || instance?.before_image,
+      after_image: after_image || instance?.after_image,
+      sjpl_sign: client_sign || instance?.client_sign,
+      start_datetime: status === "In Progress" || status === "In-progress"
+        ? new Date().toISOString()
+        : instance?.start_datetime?.toISOString?.() || undefined,
+      end_datetime: status === "Completed"
+        ? new Date().toISOString()
+        : instance?.end_datetime?.toISOString?.() || undefined,
+      assigned_to: employeeCode || undefined,
+    };
+    syncToFieldproxy(instance, fpPayload).catch(() => {});
 
     return sendSuccess(res, instance);
   } catch (error: any) {
@@ -266,7 +415,7 @@ export const updateStatus = async (req: AuthRequest, res: Response) => {
   }
 };
 
-export const updateProgress = async (req: Request, res: Response) => {
+export const updateProgress = async (req: AuthRequest, res: Response) => {
   try {
     const { instanceId } = req.params;
     if (!instanceId) {
@@ -284,12 +433,21 @@ export const updateProgress = async (req: Request, res: Response) => {
 
     // Log the activity
     logActivity({
-      user_id: (req as any).user?.user_id,
+      user_id: req.user?.user_id,
       action: "UPDATE_PROGRESS",
       module: "PM",
       description: `Updated PM instance ${instanceId} progress to ${progress}`,
       metadata: { instanceId, progress, siteCode: instance?.site_code },
-    });
+    }).catch(() => {});
+
+    // Sync progress to Fieldproxy pm_instance — fire and forget
+    const employeeCode = await getEmployeeCode(req.user?.user_id);
+    const fpPayload: PMFieldproxyPayload = {
+      instance_id: instance?.instance_id || instanceId,
+      progress: String(progress),
+      assigned_to: employeeCode || undefined,
+    };
+    syncToFieldproxy(instance, fpPayload).catch(() => {});
 
     return sendSuccess(res, instance);
   } catch (error: any) {

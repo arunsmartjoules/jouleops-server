@@ -23,14 +23,15 @@ export interface QuerierConfig {
 }
 
 /**
- * Detects if a value is a date string (ISO or YYYY-MM-DD)
+ * Detects if a value is a date or timestamp string (ISO or YYYY-MM-DD)
  */
 function isDateValue(val: any): boolean {
   if (typeof val !== "string") return false;
-  // Match YYYY-MM-DD or ISO 8601
+  // Match YYYY-MM-DD, ISO 8601, or YYYY-MM-DD HH:mm:ss
   return (
     /^\d{4}-\d{2}-\d{2}$/.test(val) ||
-    /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/.test(val)
+    /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/.test(val) ||
+    /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}/.test(val)
   );
 }
 
@@ -105,38 +106,22 @@ export function buildQuery(options: QueryOptions, config: QuerierConfig = {}) {
         break;
       case "gt":
       case ">":
-        if (useDateCast) {
-          whereParts.push(`${field}::date > $${paramIdx++}::date`);
-        } else {
-          whereParts.push(`${field} > $${paramIdx++}`);
-        }
+        whereParts.push(`${field} > $${paramIdx++}`);
         values.push(rule.value);
         break;
       case "lt":
       case "<":
-        if (useDateCast) {
-          whereParts.push(`${field}::date < $${paramIdx++}::date`);
-        } else {
-          whereParts.push(`${field} < $${paramIdx++}`);
-        }
+        whereParts.push(`${field} < $${paramIdx++}`);
         values.push(rule.value);
         break;
       case "gte":
       case ">=":
-        if (useDateCast) {
-          whereParts.push(`${field}::date >= $${paramIdx++}::date`);
-        } else {
-          whereParts.push(`${field} >= $${paramIdx++}`);
-        }
+        whereParts.push(`${field} >= $${paramIdx++}`);
         values.push(rule.value);
         break;
       case "lte":
       case "<=":
-        if (useDateCast) {
-          whereParts.push(`${field}::date <= $${paramIdx++}::date`);
-        } else {
-          whereParts.push(`${field} <= $${paramIdx++}`);
-        }
+        whereParts.push(`${field} <= $${paramIdx++}`);
         values.push(rule.value);
         break;
       case "between":

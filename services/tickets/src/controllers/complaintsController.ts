@@ -25,6 +25,24 @@ import {
 
 const VALID_STATUSES = ["Open", "Inprogress", "Resolved", "Cancelled"];
 
+const toIsoString = (value?: Date | string | null) => {
+  if (!value) return undefined;
+  return value instanceof Date ? value.toISOString() : new Date(value).toISOString();
+};
+
+const buildFieldproxyUpdatePayload = (complaint: any) => ({
+  status: complaint.status,
+  area_asset: complaint.area_asset,
+  location: complaint.location,
+  category: complaint.category,
+  internal_remarks: complaint.internal_remarks,
+  assigned_to: complaint.assigned_to,
+  responded_at: toIsoString(complaint.responded_at),
+  resolved_at: toIsoString(complaint.resolved_at),
+  before_temp: complaint.before_temp ?? undefined,
+  after_temp: complaint.after_temp ?? undefined,
+});
+
 export const create = async (req: AuthRequest, res: Response) => {
   try {
     const { site_code, sender_id, created_user } = req.body;
@@ -304,11 +322,19 @@ export const update = async (req: AuthRequest, res: Response) => {
       metadata: {
         ticket_no: existing.ticket_no,
         updated_fields: Object.keys(req.body),
+        status: complaint.status,
+        before_temp: complaint.before_temp ?? null,
+        after_temp: complaint.after_temp ?? null,
+        responded_at: complaint.responded_at ?? null,
+        resolved_at: complaint.resolved_at ?? null,
       },
     }).catch(() => {});
 
     // Sync with Fieldproxy — fire and forget
-    updateComplaintInFieldproxy(existing.ticket_no, req.body)
+    updateComplaintInFieldproxy(
+      existing.ticket_no,
+      buildFieldproxyUpdatePayload(complaint),
+    )
       .then((syncResult) => {
         // Log Lookup
         logActivity({
@@ -329,6 +355,11 @@ export const update = async (req: AuthRequest, res: Response) => {
             description: `Complaint ${existing.ticket_no} updated in Fieldproxy successfully`,
             metadata: {
               ticket_no: existing.ticket_no,
+              status: complaint.status,
+              before_temp: complaint.before_temp ?? null,
+              after_temp: complaint.after_temp ?? null,
+              responded_at: complaint.responded_at ?? null,
+              resolved_at: complaint.resolved_at ?? null,
               fieldproxy_response: syncResult.update,
             },
           }).catch(() => {});
@@ -439,11 +470,18 @@ export const updateStatus = async (req: AuthRequest, res: Response) => {
         old_status: existing.status,
         new_status: status,
         remarks: remarks || null,
+        before_temp: complaint.before_temp ?? null,
+        after_temp: complaint.after_temp ?? null,
+        responded_at: complaint.responded_at ?? null,
+        resolved_at: complaint.resolved_at ?? null,
       },
     }).catch(() => {});
 
     // Sync with Fieldproxy — fire and forget
-    updateComplaintInFieldproxy(existing.ticket_no, { status })
+    updateComplaintInFieldproxy(
+      existing.ticket_no,
+      buildFieldproxyUpdatePayload(complaint),
+    )
       .then((syncResult) => {
         // Log Lookup
         logActivity({
@@ -464,7 +502,11 @@ export const updateStatus = async (req: AuthRequest, res: Response) => {
             description: `Complaint ${existing.ticket_no} status updated to ${status} in Fieldproxy successfully`,
             metadata: {
               ticket_no: existing.ticket_no,
-              status,
+              status: complaint.status,
+              before_temp: complaint.before_temp ?? null,
+              after_temp: complaint.after_temp ?? null,
+              responded_at: complaint.responded_at ?? null,
+              resolved_at: complaint.resolved_at ?? null,
               fieldproxy_response: syncResult.update,
             },
           }).catch(() => {});

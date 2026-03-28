@@ -58,6 +58,8 @@ export interface ComplaintForwardPayload {
   internal_remarks?: string;
   responded_at?: string;
   resolved_at?: string;
+  before_temp?: number | null;
+  after_temp?: number | null;
   assigned_to?: string;
 }
 
@@ -173,6 +175,8 @@ export async function updateComplaintInFieldproxy(
   if (complaint.internal_remarks) tableData.internal_remarks  = complaint.internal_remarks;
   if (complaint.responded_at)     tableData.responded_at      = complaint.responded_at;
   if (complaint.resolved_at)      tableData.resolved_at       = complaint.resolved_at;
+  if (complaint.before_temp !== undefined) tableData.before_temp = complaint.before_temp;
+  if (complaint.after_temp !== undefined)  tableData.after_temp = complaint.after_temp;
   if (complaint.assigned_to)      tableData.assigned_to       = complaint.assigned_to;
 
   if (Object.keys(tableData).length === 0) {
