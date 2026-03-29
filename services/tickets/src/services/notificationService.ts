@@ -37,7 +37,24 @@ export async function sendTicketCreatedNotifications(ticket: Ticket): Promise<vo
       `SELECT is_enabled FROM notification_trigger_configs WHERE trigger_key = $1`,
       [TRIGGER_KEY],
     );
-    if (!trigger?.is_enabled) return;
+    if (!trigger) {
+      logActivity({
+        action: "SKIP_TICKET_NOTIFICATION",
+        module: "notifications",
+        description: `Notification trigger config missing for '${TRIGGER_KEY}'`,
+        metadata: { ticket_no: ticket.ticket_no, site_code: ticket.site_code },
+      }).catch(() => {});
+      return;
+    }
+    if (!trigger.is_enabled) {
+      logActivity({
+        action: "SKIP_TICKET_NOTIFICATION",
+        module: "notifications",
+        description: `Notification trigger '${TRIGGER_KEY}' is disabled in config`,
+        metadata: { ticket_no: ticket.ticket_no, site_code: ticket.site_code },
+      }).catch(() => {});
+      return;
+    }
 
     // 2. Get active template for this trigger
     const template = await queryOne<{ title_template: string; body_template: string }>(
@@ -46,7 +63,15 @@ export async function sendTicketCreatedNotifications(ticket: Ticket): Promise<vo
        ORDER BY created_at DESC LIMIT 1`,
       [TRIGGER_KEY],
     );
-    if (!template) return;
+    if (!template) {
+      logActivity({
+        action: "SKIP_TICKET_NOTIFICATION",
+        module: "notifications",
+        description: `No active notification template found for trigger '${TRIGGER_KEY}'`,
+        metadata: { ticket_no: ticket.ticket_no, site_code: ticket.site_code },
+      }).catch(() => {});
+      return;
+    }
 
     // 3. Get all users assigned to this site
     const siteUsers = await query<{ user_id: string }>(
@@ -56,7 +81,15 @@ export async function sendTicketCreatedNotifications(ticket: Ticket): Promise<vo
        WHERE s.site_code = $1`,
       [ticket.site_code],
     );
-    if (!siteUsers.length) return;
+    if (!siteUsers.length) {
+      logActivity({
+        action: "SKIP_TICKET_NOTIFICATION",
+        module: "notifications",
+        description: `No users mapped to site '${ticket.site_code}' in site_user table`,
+        metadata: { ticket_no: ticket.ticket_no, site_code: ticket.site_code },
+      }).catch(() => {});
+      return;
+    }
 
     const userIds = siteUsers.map((u) => u.user_id);
 
@@ -78,7 +111,19 @@ export async function sendTicketCreatedNotifications(ticket: Ticket): Promise<vo
     const eligibleUserIds = userIds.filter(
       (id) => !excludedSet.has(id) && !disabledSet.has(id),
     );
-    if (!eligibleUserIds.length) return;
+    if (!eligibleUserIds.length) {
+      logActivity({
+        action: "SKIP_TICKET_NOTIFICATION",
+        module: "notifications",
+        description: `All site users are excluded or have disabled ticket notification preferences`,
+        metadata: { 
+          ticket_no: ticket.ticket_no, 
+          site_code: ticket.site_code,
+          total_site_users: siteUsers.length 
+        },
+      }).catch(() => {});
+      return;
+    }
 
     // 6. Get push tokens for eligible users
     const tokenRows = await query<{ user_id: string; push_token: string }>(
@@ -86,7 +131,19 @@ export async function sendTicketCreatedNotifications(ticket: Ticket): Promise<vo
        WHERE user_id = ANY($1) AND enabled = true`,
       [eligibleUserIds],
     );
-    if (!tokenRows.length) return;
+    if (!tokenRows.length) {
+      logActivity({
+        action: "SKIP_TICKET_NOTIFICATION",
+        module: "notifications",
+        description: `No enabled push tokens found for ${eligibleUserIds.length} eligible site user(s)`,
+        metadata: { 
+          ticket_no: ticket.ticket_no, 
+          site_code: ticket.site_code,
+          eligible_users_count: eligibleUserIds.length 
+        },
+      }).catch(() => {});
+      return;
+    }
 
     // 7. Render template
     const vars: Record<string, string> = {
@@ -105,7 +162,19 @@ export async function sendTicketCreatedNotifications(ticket: Ticket): Promise<vo
       .map((r) => r.push_token)
       .filter((t) => t?.startsWith("ExponentPushToken[") || t?.startsWith("ExpoPushToken["));
 
-    if (!tokens.length) return;
+    if (!tokens.length) {
+      logActivity({
+        action: "SKIP_TICKET_NOTIFICATION",
+        module: "notifications",
+        description: `None of the tokens found for site users are valid Expo push tokens`,
+        metadata: { 
+          ticket_no: ticket.ticket_no, 
+          site_code: ticket.site_code,
+          token_rows_count: tokenRows.length 
+        },
+      }).catch(() => {});
+      return;
+    }
 
     const BATCH = 100;
     const sendErrors: string[] = [];

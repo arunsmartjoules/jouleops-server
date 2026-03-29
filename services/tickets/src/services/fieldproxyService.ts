@@ -169,17 +169,17 @@ export async function updateComplaintInFieldproxy(
 
   // 2. Prepare payload — map our fields to Fieldproxy tableData keys
   const tableData: Record<string, any> = {};
-  if (complaint.title)            tableData.title             = complaint.title;
-  if (complaint.status)           tableData.status            = complaint.status;
-  if (complaint.location)         tableData.location          = complaint.location;
-  if (complaint.area_asset)       tableData.area_asset        = complaint.area_asset;
-  if (complaint.category)         tableData.category          = complaint.category;
-  if (complaint.internal_remarks) tableData.internal_remarks  = complaint.internal_remarks;
-  if (complaint.responded_at)     tableData.responded_at      = complaint.responded_at;
-  if (complaint.resolved_at)      tableData.resolved_at       = complaint.resolved_at;
-  if (complaint.before_temp !== undefined) tableData.before_temp = complaint.before_temp;
-  if (complaint.after_temp !== undefined)  tableData.after_temp = complaint.after_temp;
-  if (complaint.assigned_to)      tableData.assigned_to       = complaint.assigned_to;
+  if (complaint.title !== undefined)            tableData.title             = complaint.title;
+  if (complaint.status !== undefined)           tableData.status            = complaint.status;
+  if (complaint.location !== undefined)         tableData.location          = complaint.location;
+  if (complaint.area_asset !== undefined)       tableData.area_asset        = complaint.area_asset;
+  if (complaint.category !== undefined)         tableData.category          = complaint.category;
+  if (complaint.internal_remarks !== undefined) tableData.internal_remarks  = complaint.internal_remarks;
+  if (complaint.responded_at !== undefined)     tableData.responded_at      = complaint.responded_at;
+  if (complaint.resolved_at !== undefined)      tableData.resolved_at       = complaint.resolved_at;
+  if (complaint.before_temp !== undefined)      tableData.before_temp       = complaint.before_temp;
+  if (complaint.after_temp !== undefined)       tableData.after_temp        = complaint.after_temp;
+  if (complaint.assigned_to !== undefined)      tableData.assigned_to       = complaint.assigned_to;
 
   if (Object.keys(tableData).length === 0) {
     return { lookup: lookupResponse, error: "No fields to update" };

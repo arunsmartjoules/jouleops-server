@@ -31,6 +31,7 @@ const toIsoString = (value?: Date | string | null) => {
 };
 
 const buildFieldproxyUpdatePayload = (complaint: any) => ({
+  title: complaint.title,
   status: complaint.status,
   area_asset: complaint.area_asset,
   location: complaint.location,
@@ -77,6 +78,14 @@ export const create = async (req: AuthRequest, res: Response) => {
     };
 
     const complaint = await complaintsRepository.createComplaint(finalData);
+
+    // Trace: Local persistence success
+    logActivity({
+      action: "TICKET_CREATION_TRACE",
+      module: "complaints",
+      description: `Persisted complaint ${complaint.ticket_no} to local database`,
+      metadata: { ticket_no: complaint.ticket_no, site_code: complaint.site_code },
+    }).catch(() => {});
 
     // Send push notifications to site users — fire and forget
     sendTicketCreatedNotifications(complaint).catch(() => {});
