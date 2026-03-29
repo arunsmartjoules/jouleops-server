@@ -75,6 +75,8 @@ export async function forwardComplaintToFieldproxy(
       site_id: complaint.site_code ?? null,
       title: complaint.title ?? null,
       location: complaint.location ?? null,
+      area_asset: complaint.area_asset ?? null,
+      category: complaint.category ?? null,
       status: complaint.status ?? null,
       sender_id: complaint.sender_id ?? null,
       message_id: complaint.message_id ?? null,
@@ -170,7 +172,7 @@ export async function updateComplaintInFieldproxy(
   if (complaint.title)            tableData.title             = complaint.title;
   if (complaint.status)           tableData.status            = complaint.status;
   if (complaint.location)         tableData.location          = complaint.location;
-  if (complaint.area_asset)       tableData.location          = complaint.area_asset; // area_asset maps to location
+  if (complaint.area_asset)       tableData.area_asset        = complaint.area_asset;
   if (complaint.category)         tableData.category          = complaint.category;
   if (complaint.internal_remarks) tableData.internal_remarks  = complaint.internal_remarks;
   if (complaint.responded_at)     tableData.responded_at      = complaint.responded_at;

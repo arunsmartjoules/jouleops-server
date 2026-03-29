@@ -43,6 +43,20 @@ const buildFieldproxyUpdatePayload = (complaint: any) => ({
   after_temp: complaint.after_temp ?? undefined,
 });
 
+const buildFieldproxyForwardPayload = (complaint: any) => ({
+  site_code: complaint.site_code,
+  title: complaint.title,
+  location: complaint.location,
+  area_asset: complaint.area_asset,
+  category: complaint.category,
+  status: complaint.status,
+  sender_id: complaint.sender_id,
+  message_id: complaint.message_id,
+  group_id: complaint.group_id,
+  ticket_no: complaint.ticket_no,
+  created_user: complaint.created_user,
+});
+
 export const create = async (req: AuthRequest, res: Response) => {
   try {
     const { site_code, sender_id, created_user } = req.body;
@@ -68,7 +82,7 @@ export const create = async (req: AuthRequest, res: Response) => {
     sendTicketCreatedNotifications(complaint).catch(() => {});
 
     // Forward to Fieldproxy — fire and forget, do not block the response
-    forwardComplaintToFieldproxy(complaint)
+    forwardComplaintToFieldproxy(buildFieldproxyForwardPayload(complaint))
       .then((fpResponse) => {
         logActivity({
           action: "FORWARD_TO_FIELDPROXY",
