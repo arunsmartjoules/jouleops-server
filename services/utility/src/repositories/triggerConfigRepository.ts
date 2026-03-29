@@ -21,6 +21,9 @@ const TIME_TRIGGER_KEYS = ["punch_in", "punch_out"] as const;
 /** Trigger keys that use elapsed duration (duration-based) */
 const DURATION_TRIGGER_KEYS = ["complaint_open", "complaint_inprogress"] as const;
 
+/** Trigger keys that are event-based (no threshold/frequency) */
+const EVENT_TRIGGER_KEYS = ["ticket_created"] as const;
+
 export interface UpdateTriggerConfigInput {
   threshold_value?: number;
   repeat_frequency_minutes?: number;
@@ -64,11 +67,21 @@ export function validateTriggerConfigUpdate(
           message: "threshold_value for duration triggers must be a positive integer",
         });
       }
+    } else if (EVENT_TRIGGER_KEYS.includes(trigger_key as any)) {
+      // Event triggers: threshold is typically ignored or 0
+      if (!Number.isInteger(input.threshold_value)) {
+        errors.push({
+          field: "threshold_value",
+          message: "threshold_value must be an integer",
+        });
+      }
     }
   }
 
   if (input.repeat_frequency_minutes !== undefined) {
-    if (
+    if (EVENT_TRIGGER_KEYS.includes(trigger_key as any)) {
+       // repeat_frequency is usually null/ignored for event triggers
+    } else if (
       !Number.isInteger(input.repeat_frequency_minutes) ||
       input.repeat_frequency_minutes <= 0
     ) {

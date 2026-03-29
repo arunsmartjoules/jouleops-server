@@ -74,14 +74,14 @@ export async function sendTicketCreatedNotifications(ticket: Ticket): Promise<vo
     }
 
     // 3. Get all users assigned to this site
-    const siteUsers = await query<{ user_id: string }>(
-      `SELECT su.user_id
+    const siteRows = await query<{ user_id: string; site_name: string }>(
+      `SELECT su.user_id, s.name as site_name
        FROM site_user su
        JOIN sites s ON su.site_id = s.site_id
        WHERE s.site_code = $1`,
       [ticket.site_code],
     );
-    if (!siteUsers.length) {
+    if (!siteRows.length) {
       logActivity({
         action: "SKIP_TICKET_NOTIFICATION",
         module: "notifications",
@@ -91,7 +91,8 @@ export async function sendTicketCreatedNotifications(ticket: Ticket): Promise<vo
       return;
     }
 
-    const userIds = siteUsers.map((u) => u.user_id);
+    const userIds = siteRows.map((u) => u.user_id);
+    const siteName = siteRows[0]?.site_name;
 
     // 4. Filter out globally excluded users
     const excluded = await query<{ user_id: string }>(
@@ -119,7 +120,7 @@ export async function sendTicketCreatedNotifications(ticket: Ticket): Promise<vo
         metadata: { 
           ticket_no: ticket.ticket_no, 
           site_code: ticket.site_code,
-          total_site_users: siteUsers.length 
+          total_site_users: siteRows.length 
         },
       }).catch(() => {});
       return;
@@ -149,7 +150,7 @@ export async function sendTicketCreatedNotifications(ticket: Ticket): Promise<vo
     const vars: Record<string, string> = {
       ticket_no: ticket.ticket_no ?? "",
       complaint_title: ticket.title ?? ticket.ticket_no ?? "",
-      site_name: ticket.site_code ?? "",
+      site_name: siteName ?? ticket.site_code ?? "",
       category: ticket.category ?? "",
       priority: ticket.priority ?? "",
       status: "Open",
