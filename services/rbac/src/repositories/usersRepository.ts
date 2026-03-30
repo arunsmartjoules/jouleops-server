@@ -81,6 +81,25 @@ export interface GetUsersOptions {
 }
 
 // ============================================================================
+// Helpers
+// ============================================================================
+
+/**
+ * Sanitizes input data by converting empty strings to null.
+ * This prevents "invalid input syntax for type date: """ errors
+ * for optional fields.
+ */
+function sanitizeInput<T extends object>(data: T): T {
+  const sanitized = { ...data };
+  for (const key in sanitized) {
+    if ((sanitized as any)[key] === "") {
+      (sanitized as any)[key] = null;
+    }
+  }
+  return sanitized;
+}
+
+// ============================================================================
 // Repository Functions
 // ============================================================================
 
@@ -88,8 +107,9 @@ export interface GetUsersOptions {
  * Create a new user
  */
 export async function createUser(data: CreateUserInput): Promise<User> {
-  const columns = Object.keys(data);
-  const values = Object.values(data);
+  const sanitizedData = sanitizeInput(data);
+  const columns = Object.keys(sanitizedData);
+  const values = Object.values(sanitizedData);
   const placeholders = columns.map((_, i) => `$${i + 1}`);
 
   const sql = `
@@ -261,7 +281,8 @@ export async function updateUser(
   userId: string,
   updateData: UpdateUserInput,
 ): Promise<User> {
-  const entries = Object.entries(updateData).filter(
+  const sanitizedData = sanitizeInput(updateData);
+  const entries = Object.entries(sanitizedData).filter(
     ([, value]) => value !== undefined,
   );
 
@@ -317,7 +338,8 @@ export async function bulkUpdateUsers(
     return [];
   }
 
-  const entries = Object.entries(updateData).filter(
+  const sanitizedData = sanitizeInput(updateData);
+  const entries = Object.entries(sanitizedData).filter(
     ([, value]) => value !== undefined,
   );
 
@@ -401,8 +423,9 @@ export async function bulkUpsertUsers(users: CreateUserInput[]): Promise<{ count
   const values: any[] = [];
   
   users.forEach((user, i) => {
+    const sanitizedUser = sanitizeInput(user);
     const rowPlaceholders = allColumns.map((col, j) => {
-      values.push((user as any)[col]);
+      values.push((sanitizedUser as any)[col]);
       return `$${i * allColumns.length + j + 1}`;
     });
     placeholders.push(`(${rowPlaceholders.join(", ")})`);
