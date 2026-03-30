@@ -273,14 +273,7 @@ export const getProfileByEmail = asyncHandler(
       return sendError(res, "Email is required");
     }
 
-    // Only allow @smartjoules.in domain for security
-    if (!email.endsWith("@smartjoules.in")) {
-      return res.status(403).json({
-        success: false,
-        error: "Access restricted to @smartjoules.in domain only.",
-      });
-    }
-
+    // Fetch user profile by email
     const user = await usersRepository.getUserByEmail(email);
 
     if (!user) {
@@ -702,14 +695,6 @@ export const googleLogin = asyncHandler(async (req: Request, res: Response) => {
 
     const email = payload.email!;
     const name = (payload.name || email.split("@")[0]) as string;
-
-    // Strict Domain Enforcement
-    if (!email.endsWith("@smartjoules.in")) {
-      return res.status(403).json({
-        success: false,
-        error: "Access restricted to @smartjoules.in domain only.",
-      });
-    }
 
     // Find or create user
     let userRecord = await usersRepository.getUserByEmail(email);
