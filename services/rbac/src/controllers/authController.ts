@@ -22,6 +22,7 @@ import {
   sendNotFound,
   asyncHandler,
 } from "@jouleops/shared";
+import { supabase } from "../services/supabase.service.ts";
 
 interface AuthRequest extends Request {
   user?: {
@@ -596,27 +597,25 @@ export const sendPasswordResetCode = asyncHandler(
       return sendError(res, "Email is required");
     }
 
-    const user = await usersRepository.getUserByEmail(email);
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: "jouleops://reset-password",
+    });
 
-    if (!user) {
-      // For security, don't reveal if email exists
-      return sendSuccess(res, null, {
-        message: "If the email exists, a reset code has been sent",
-      });
+    if (error) {
+      return sendError(res, error.message);
     }
 
-    const emailService = await import("../services/email.service.ts");
-    const code = emailService.generateVerificationCode();
-    emailService.storeVerificationCode(
-      email,
-      code,
-      "password-reset",
-      user.user_id,
-    );
-    await emailService.sendVerificationEmail(email, code, "password-reset");
+    // Log the reset request
+    await logActivity({
+      action: "PASSWORD_RESET_REQUESTED",
+      module: "AUTH",
+      description: `Password reset requested via Supabase for ${email}`,
+      ip_address: req.ip,
+      device_info: req.headers["user-agent"] as string,
+    }).catch(() => {});
 
     return sendSuccess(res, null, {
-      message: "If the email exists, a reset code has been sent",
+      message: "If the email exists, a reset link has been sent",
     });
   },
 );
