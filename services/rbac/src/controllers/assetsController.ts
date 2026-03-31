@@ -93,7 +93,7 @@ export const getAll = async (req: Request, res: Response) => {
     } = req.query;
     const result = await assetsRepository.getAssetsBySite("all", {
       page: parseInt(page as string) || 1,
-      limit: parseInt(limit as string) || 50,
+      limit: parseInt(limit as string) || 1000,
       id: id as string | undefined,
       asset_id: asset_id as string | undefined,
       asset_name: asset_name as string | undefined,
@@ -138,7 +138,7 @@ export const getBySite = async (req: Request, res: Response) => {
     } = req.query;
     const result = await assetsRepository.getAssetsBySite(siteCode, {
       page: parseInt(page as string) || 1,
-      limit: parseInt(limit as string) || 50,
+      limit: parseInt(limit as string) || 1000,
       id: id as string | undefined,
       asset_id: asset_id as string | undefined,
       asset_name: asset_name as string | undefined,
