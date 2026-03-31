@@ -25,22 +25,48 @@ export interface CreatePMResponseInput {
 }
 
 /**
- * Create a PM response
+ * Create or Upsert a PM response
  */
 export async function create(data: CreatePMResponseInput): Promise<PMResponse> {
-  const columns = Object.keys(data);
-  const values = Object.values(data);
-  const placeholders = columns.map((_, i) => `$${i + 1}`);
+  const { instance_id, checklist_id, ...updateData } = data;
 
-  const response = await queryOne<PMResponse>(
-    `INSERT INTO pm_response (${columns.join(", ")})
-     VALUES (${placeholders.join(", ")})
-     RETURNING *`,
-    values,
+  // Check for existing response to perform upsert manually
+  const existing = await queryOne<PMResponse>(
+    `SELECT id FROM pm_response WHERE instance_id = $1 AND checklist_id = $2`,
+    [instance_id, checklist_id],
   );
 
+  let response: PMResponse | null;
+
+  if (existing) {
+    const entries = Object.entries(updateData).filter(
+      ([, value]) => value !== undefined,
+    );
+    if (entries.length > 0) {
+      const setClauses = entries.map(([key], i) => `${key} = $${i + 1}`);
+      const values = entries.map(([, value]) => value);
+      response = await queryOne<PMResponse>(
+        `UPDATE pm_response SET ${setClauses.join(", ")} WHERE id = $${entries.length + 1} RETURNING *`,
+        [...values, existing.id],
+      );
+    } else {
+      response = await getById(existing.id);
+    }
+  } else {
+    const columns = Object.keys(data);
+    const values = Object.values(data);
+    const placeholders = columns.map((_, i) => `$${i + 1}`);
+
+    response = await queryOne<PMResponse>(
+      `INSERT INTO pm_response (${columns.join(", ")})
+       VALUES (${placeholders.join(", ")})
+       RETURNING *`,
+      values,
+    );
+  }
+
   if (!response) {
-    throw new Error("Failed to create PM response");
+    throw new Error("Failed to upsert PM response");
   }
 
   await updateInstanceProgress(response.instance_id);

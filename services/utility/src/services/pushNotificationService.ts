@@ -3,6 +3,7 @@ import {
   getUserTokens,
   getUsersTokens,
   getAllActiveTokens,
+  removeToken,
 } from "./pushTokenService.ts";
 
 interface NotificationData {
@@ -44,7 +45,13 @@ export const sendPushNotification = async (
 ): Promise<PushResponse> => {
   if (!tokens || tokens.length === 0) {
     console.log("No tokens provided for push notification");
-    return { success: false, totalSent: 0, totalSuccess: 0, batchResults: [], error: "No tokens provided" };
+    return {
+      success: false,
+      totalSent: 0,
+      totalSuccess: 0,
+      batchResults: [],
+      error: "No tokens provided",
+    };
   }
 
   // Filter valid Expo push tokens
@@ -56,7 +63,13 @@ export const sendPushNotification = async (
 
   if (validTokens.length === 0) {
     console.log("No valid Expo push tokens found");
-    return { success: false, totalSent: 0, totalSuccess: 0, batchResults: [], error: "No valid tokens" };
+    return {
+      success: false,
+      totalSent: 0,
+      totalSuccess: 0,
+      batchResults: [],
+      error: "No valid tokens",
+    };
   }
 
   const BATCH_SIZE = 100;
@@ -98,25 +111,11 @@ export const sendPushNotification = async (
         continue;
       }
 
-      // Check for errors in individual ticket responses
-      if (result.data && Array.isArray(result.data)) {
-        result.data.forEach((item: any, index: number) => {
-          if (item.status === "ok") {
-            totalSuccess++;
-          } else if (
-            item.details &&
-            item.details.error === "DeviceNotRegistered"
-          ) {
-            const invalidToken = chunk[index];
-            console.log(`Cleaning up invalid token: ${invalidToken}`);
-          }
-        });
-      }
-
       batchResults.push({
         success: true,
         data: result,
         tokensCount: chunk.length,
+        tokens: chunk,
       });
     } catch (error: any) {
       console.error("Failed to send push notification batch:", error);
@@ -128,14 +127,36 @@ export const sendPushNotification = async (
     }
   }
 
-  const allSuccess = batchResults.every((r) => r.success);
-  console.log(
-    `Push notification summary: ${totalSuccess}/${validTokens.length} successful`,
-  );
+  // Calculate total success and handle token cleanup
+  for (const batch of batchResults) {
+    if (batch.success && batch.data?.data && Array.isArray(batch.data.data)) {
+      batch.data.data.forEach((item: any, index: number) => {
+        if (item.status === "ok") {
+          totalSuccess++;
+        } else if (
+          item.status === "error" &&
+          item.details?.error === "DeviceNotRegistered"
+        ) {
+          const invalidToken = batch.tokens?.[index];
+          if (invalidToken) {
+            console.log(`Cleaning up invalid token: ${invalidToken}`);
+            removeToken(invalidToken).catch((err) =>
+              console.error(
+                `Failed to remove invalid token ${invalidToken}:`,
+                err,
+              ),
+            );
+          }
+        }
+      });
+    }
+  }
+
+  const allSuccess = totalSuccess === validTokens.length;
 
   return {
     success: allSuccess,
-    totalSent: validTokens.length,
+    totalSent: tokens.length,
     totalSuccess,
     batchResults,
   };
@@ -153,7 +174,13 @@ export const sendNotificationToUser = async (
   const tokenRecords = await getUserTokens(userId);
 
   if (!tokenRecords || tokenRecords.length === 0) {
-    return { success: false, totalSent: 0, totalSuccess: 0, batchResults: [], error: "No tokens found for user" };
+    return {
+      success: false,
+      totalSent: 0,
+      totalSuccess: 0,
+      batchResults: [],
+      error: "No tokens found for user",
+    };
   }
 
   const tokens = tokenRecords.map((record: any) => record.push_token);
@@ -192,7 +219,13 @@ export const sendNotificationToUsers = async (
   const tokenRecords = await getUsersTokens(userIds);
 
   if (!tokenRecords || tokenRecords.length === 0) {
-    return { success: false, totalSent: 0, totalSuccess: 0, batchResults: [], error: "No tokens found for users" };
+    return {
+      success: false,
+      totalSent: 0,
+      totalSuccess: 0,
+      batchResults: [],
+      error: "No tokens found for users",
+    };
   }
 
   const tokens = tokenRecords.map((record: any) => record.push_token);
@@ -232,7 +265,13 @@ export const sendNotificationToAll = async (
   const tokenRecords = await getAllActiveTokens();
 
   if (!tokenRecords || tokenRecords.length === 0) {
-    return { success: false, totalSent: 0, totalSuccess: 0, batchResults: [], error: "No tokens found" };
+    return {
+      success: false,
+      totalSent: 0,
+      totalSuccess: 0,
+      batchResults: [],
+      error: "No tokens found",
+    };
   }
 
   const tokens = tokenRecords.map((record: any) => record.push_token);
@@ -291,7 +330,9 @@ export const logNotification = async (
     await logActivity({
       user_id: userId,
       action:
-        status === "sent" ? "PUSH_NOTIFICATION_SENT" : "PUSH_NOTIFICATION_FAILED",
+        status === "sent"
+          ? "PUSH_NOTIFICATION_SENT"
+          : "PUSH_NOTIFICATION_FAILED",
       module: "notifications",
       description: `Push notification ${status}: ${title}`,
       metadata: {
@@ -373,4 +414,3 @@ export default {
   logNotification,
   getNotificationLogs,
 };
-

@@ -197,7 +197,20 @@ export async function sendTicketCreatedNotifications(ticket: Ticket): Promise<vo
           headers: { Accept: "application/json", "Content-Type": "application/json" },
           body: JSON.stringify(messages),
         });
-        if (!resp.ok) {
+
+        if (resp.ok) {
+          const result = (await resp.json()) as any;
+          if (result.data && Array.isArray(result.data)) {
+            for (let j = 0; j < result.data.length; j++) {
+              const item = result.data[j];
+              if (item.status === "error" && item.details?.error === "DeviceNotRegistered") {
+                const invalidToken = chunk[j];
+                console.log(`Cleaning up invalid token from ticket service: ${invalidToken}`);
+                await query("DELETE FROM push_tokens WHERE push_token = $1", [invalidToken]).catch(() => {});
+              }
+            }
+          }
+        } else {
           const errText = await resp.text();
           sendErrors.push(errText);
         }
