@@ -82,6 +82,11 @@ export interface GetUsersOptions {
   search?: string;
   sort?: string;
   filters?: string;
+  email?: string;
+  user_id?: string;
+  name?: string;
+  platform_email?: string;
+  employee_code?: string;
 }
 
 // ============================================================================
@@ -228,7 +233,42 @@ export async function getAllUsers(options: GetUsersOptions = {}): Promise<{
     totalPages: number;
   };
 }> {
-  const { search, filters, ...rest } = options;
+  const { search, filters: initialFilters, ...rest } = options;
+
+  let filters: any[] = [];
+  if (initialFilters) {
+    try {
+      filters =
+        typeof initialFilters === "string"
+          ? JSON.parse(initialFilters)
+          : initialFilters;
+    } catch (e) {
+      console.error("[USERS_REPOSITORY] Failed to parse filters:", e);
+    }
+  }
+
+  // Convert explicit query params to filters if not already present
+  const filterParams = [
+    "email",
+    "user_id",
+    "name",
+    "platform_email",
+    "employee_code",
+    "role",
+    "is_active",
+  ];
+  for (const param of filterParams) {
+    if ((rest as any)[param] !== undefined && (rest as any)[param] !== null) {
+      const exists = filters.some((f) => f.fieldId === param);
+      if (!exists) {
+        filters.push({
+          fieldId: param,
+          operator: "equals",
+          value: (rest as any)[param],
+        });
+      }
+    }
+  }
 
   const { whereClause, orderClause, limitClause, values } = buildQuery(
     { ...rest, search, filters },
@@ -246,6 +286,11 @@ export async function getAllUsers(options: GetUsersOptions = {}): Promise<{
         "site_code",
         "department",
         "work_location_type",
+        "email",
+        "user_id",
+        "name",
+        "platform_email",
+        "employee_code",
       ],
       defaultSort: "name",
       defaultSortOrder: "asc",

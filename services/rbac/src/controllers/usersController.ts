@@ -120,7 +120,20 @@ export const getBySite = async (req: Request, res: Response) => {
 
 export const getAll = async (req: Request, res: Response) => {
   try {
-    const { page, limit, role, is_active, search, sort, filters } = req.query;
+    const {
+      page,
+      limit,
+      role,
+      is_active,
+      search,
+      sort,
+      filters,
+      email,
+      user_id,
+      name,
+      platform_email,
+      employee_code,
+    } = req.query;
     const result = await usersRepository.getAllUsers({
       page: parseInt(page as string) || 1,
       limit: parseInt(limit as string) || 50,
@@ -130,6 +143,11 @@ export const getAll = async (req: Request, res: Response) => {
       search: search as string | undefined,
       sort: sort as string | undefined,
       filters: filters as string | undefined,
+      email: email as string | undefined,
+      user_id: user_id as string | undefined,
+      name: name as string | undefined,
+      platform_email: platform_email as string | undefined,
+      employee_code: employee_code as string | undefined,
     });
     return sendSuccess(res, result.data, { pagination: result.pagination });
   } catch (error: any) {

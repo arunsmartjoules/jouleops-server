@@ -1,7 +1,7 @@
 /**
  * PM Response Repository
  *
- * Data access layer for pm_response table (UUID version).
+ * Data access layer for pm_checklist_responses table (UUID version).
  */
 
 import { query, queryOne } from "@jouleops/shared";
@@ -11,8 +11,11 @@ export interface PMResponse {
   instance_id: string; // UUID
   checklist_id: string; // UUID
   response_value?: string;
+  readings?: string; // New field from pm_checklist_responses
   remarks?: string;
   image_url?: string;
+  completed_by?: string;
+  completed_at?: Date;
   created_at?: Date;
 }
 
@@ -20,8 +23,10 @@ export interface CreatePMResponseInput {
   instance_id: string;
   checklist_id: string;
   response_value?: string;
+  readings?: string;
   remarks?: string;
   image_url?: string;
+  completed_by?: string;
 }
 
 /**
@@ -32,7 +37,7 @@ export async function create(data: CreatePMResponseInput): Promise<PMResponse> {
 
   // Check for existing response to perform upsert manually
   const existing = await queryOne<PMResponse>(
-    `SELECT id FROM pm_response WHERE instance_id = $1 AND checklist_id = $2`,
+    `SELECT id FROM pm_checklist_responses WHERE instance_id = $1 AND checklist_id = $2`,
     [instance_id, checklist_id],
   );
 
@@ -46,7 +51,7 @@ export async function create(data: CreatePMResponseInput): Promise<PMResponse> {
       const setClauses = entries.map(([key], i) => `${key} = $${i + 1}`);
       const values = entries.map(([, value]) => value);
       response = await queryOne<PMResponse>(
-        `UPDATE pm_response SET ${setClauses.join(", ")} WHERE id = $${entries.length + 1} RETURNING *`,
+        `UPDATE pm_checklist_responses SET ${setClauses.join(", ")} WHERE id = $${entries.length + 1} RETURNING *`,
         [...values, existing.id],
       );
     } else {
@@ -58,7 +63,7 @@ export async function create(data: CreatePMResponseInput): Promise<PMResponse> {
     const placeholders = columns.map((_, i) => `$${i + 1}`);
 
     response = await queryOne<PMResponse>(
-      `INSERT INTO pm_response (${columns.join(", ")})
+      `INSERT INTO pm_checklist_responses (${columns.join(", ")})
        VALUES (${placeholders.join(", ")})
        RETURNING *`,
       values,
@@ -83,7 +88,7 @@ export async function getById(
 ): Promise<PMResponse | null> {
   const selectFields = fields && fields.length > 0 ? fields.join(", ") : "*";
   return queryOne<PMResponse>(
-    `SELECT ${selectFields} FROM pm_response WHERE id = $1`,
+    `SELECT ${selectFields} FROM pm_checklist_responses WHERE id = $1`,
     [id],
   );
 }
@@ -101,7 +106,7 @@ export async function getByInstance(
       : "pr.*, pc.task_name, pc.sequence_no";
   return query<PMResponse>(
     `SELECT ${selectFields} 
-     FROM pm_response pr
+     FROM pm_checklist_responses pr
      LEFT JOIN pm_checklist pc ON pr.checklist_id = pc.id
      WHERE pr.instance_id = $1 
      ORDER BY pc.sequence_no ASC NULLS LAST, pr.created_at ASC`,
@@ -125,7 +130,7 @@ export async function update(
   const values = entries.map(([, value]) => value);
 
   const response = await queryOne<PMResponse>(
-    `UPDATE pm_response
+    `UPDATE pm_checklist_responses
      SET ${setClauses.join(", ")}
      WHERE id = $${entries.length + 1}
      RETURNING *`,
@@ -146,7 +151,7 @@ export async function update(
  */
 export async function remove(id: string): Promise<boolean> {
   const result = await queryOne<{ id: string }>(
-    `DELETE FROM pm_response WHERE id = $1 RETURNING id`,
+    `DELETE FROM pm_checklist_responses WHERE id = $1 RETURNING id`,
     [id],
   );
   return result !== null;
@@ -158,7 +163,7 @@ export async function remove(id: string): Promise<boolean> {
 async function updateInstanceProgress(instanceId: string): Promise<void> {
   const stats = await queryOne<{ answered: string; total: string }>(
     `SELECT 
-      (SELECT COUNT(DISTINCT checklist_id) FROM pm_response WHERE instance_id = $1) as answered,
+      (SELECT COUNT(DISTINCT checklist_id) FROM pm_checklist_responses WHERE instance_id = $1) as answered,
       (SELECT COUNT(*) FROM pm_checklist pc
        JOIN pm_instances pi ON pc.checklist_id = pi.maintenance_id
        WHERE pi.instance_id = $1) as total`,
