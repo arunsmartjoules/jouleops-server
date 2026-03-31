@@ -61,7 +61,7 @@ export const verifyToken = async (
       // 1. Try Firebase verification first (Primary)
       decoded = await firebaseAdmin.auth().verifyIdToken(token);
       isFirebaseToken = true;
-      
+
       // Normalize Firebase claims
       decoded.user_id = decoded.uid;
       decoded.id = decoded.uid;
@@ -81,7 +81,11 @@ export const verifyToken = async (
     }
 
     // Check blacklist for legacy tokens
-    if (!isFirebaseToken && decoded.jti && (await isTokenBlacklisted(decoded.jti))) {
+    if (
+      !isFirebaseToken &&
+      decoded.jti &&
+      (await isTokenBlacklisted(decoded.jti))
+    ) {
       return res.status(401).json({
         success: false,
         error: "Token revoked",
@@ -92,21 +96,26 @@ export const verifyToken = async (
     if (decoded.email) {
       try {
         let dbUser = await usersRepository.getUserByEmail(decoded.email);
-        
+
         // Auto-provision user if not found (Firebase is the source of truth)
         if (!dbUser && isFirebaseToken) {
           try {
             const newUser = {
-              user_id: crypto.randomUUID(), 
+              user_id: crypto.randomUUID(),
               email: decoded.email,
               name: decoded.name || decoded.email.split("@")[0],
               role: "staff",
               is_active: true,
             };
             dbUser = await usersRepository.createUser(newUser);
-            console.log(`[AuthMiddleware] Auto-provisioned user: ${decoded.email}`);
+            console.log(
+              `[AuthMiddleware] Auto-provisioned user: ${decoded.email}`,
+            );
           } catch (createErr) {
-            console.error("[AuthMiddleware] Auto-provisioning failed:", createErr);
+            console.error(
+              "[AuthMiddleware] Auto-provisioning failed:",
+              createErr,
+            );
           }
         }
 
@@ -259,6 +268,14 @@ export const verifyApiKey = async (
       name: "Internal Service Key",
       scopes: ["*"], // Full access for internal key
     };
+    // Also attach a "System User" so requireRole works
+    req.user = {
+      user_id: "system-internal-key",
+      role: "superadmin",
+      email: "system@internal.jouleops",
+      is_superadmin: true,
+      is_admin: true,
+    };
     return next();
   }
 
@@ -278,6 +295,15 @@ export const verifyApiKey = async (
       id: key.id,
       name: key.name,
       scopes: key.scopes,
+    };
+
+    // Also attach a system-level user so requireRole works (using the API key context)
+    req.user = {
+      user_id: `api-key-${key.id}`,
+      role: "admin", // Dynamic API keys are treated as admin for now
+      email: `${key.name.toLowerCase().replace(/\s+/g, "_")}@api-key.system`,
+      is_admin: true,
+      is_superadmin: false,
     };
 
     next();
