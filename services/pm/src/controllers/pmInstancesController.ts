@@ -7,6 +7,7 @@
 
 import pmInstancesRepository from "../repositories/pmInstancesRepository.ts";
 import type { Request, Response } from "express";
+import type { AuthRequest } from "../middleware/auth.ts";
 import {
   sendSuccess,
   sendCreated,
@@ -131,12 +132,6 @@ const VALID_STATUSES = [
   "Completed",
   "Cancelled",
 ];
-
-interface AuthRequest extends Request {
-  user?: {
-    user_id: string;
-  };
-}
 
 export const create = async (req: Request, res: Response) => {
   try {
@@ -335,7 +330,12 @@ export const update = async (req: AuthRequest, res: Response) => {
       action: "UPDATE_PM_INSTANCE",
       module: "PM",
       description: `PM instance ${instanceId} updated`,
-      metadata: { instanceId, updated_fields: Object.keys(req.body) },
+      metadata: {
+        instanceId,
+        updated_fields: Object.keys(req.body),
+        user_name: req.user?.name,
+        employee_code: req.user?.employee_code,
+      },
     }).catch(() => {});
 
     return sendSuccess(res, instance);
@@ -393,7 +393,13 @@ export const updateStatus = async (req: AuthRequest, res: Response) => {
       action: "UPDATE_STATUS",
       module: "PM",
       description: `Updated PM instance ${instanceId} status to ${status}`,
-      metadata: { instanceId, status, siteCode: instance?.site_code },
+      metadata: {
+        instanceId,
+        status,
+        siteCode: instance?.site_code,
+        user_name: req.user?.name,
+        employee_code: req.user?.employee_code,
+      },
     }).catch(() => {});
 
     // Sync with Fieldproxy — fire and forget (both pm_instance + task_management)
@@ -444,7 +450,13 @@ export const updateProgress = async (req: AuthRequest, res: Response) => {
       action: "UPDATE_PROGRESS",
       module: "PM",
       description: `Updated PM instance ${instanceId} progress to ${progress}`,
-      metadata: { instanceId, progress, siteCode: instance?.site_code },
+      metadata: {
+        instanceId,
+        progress,
+        siteCode: instance?.site_code,
+        user_name: req.user?.name,
+        employee_code: req.user?.employee_code,
+      },
     }).catch(() => {});
 
     // Sync progress to Fieldproxy pm_instance — fire and forget

@@ -9,6 +9,8 @@ export interface AuthRequest extends Request {
     id?: string;
     role: string;
     email: string;
+    name?: string;
+    employee_code?: string;
     is_admin?: boolean;
     is_superadmin?: boolean;
     jti?: string;
@@ -78,8 +80,14 @@ export const verifyToken = async (
     if (decoded.email) {
       try {
         const { queryOne } = await import("@jouleops/shared");
-        const dbUser = await queryOne<{ user_id: string; role: string; is_superadmin: boolean }>(
-          `SELECT user_id, role, is_superadmin FROM users WHERE email = $1 OR platform_email = $1 LIMIT 1`,
+        const dbUser = await queryOne<{
+          user_id: string;
+          role: string;
+          is_superadmin: boolean;
+          name: string;
+          employee_code: string;
+        }>(
+          `SELECT user_id, role, is_superadmin, name, employee_code FROM users WHERE email = $1 OR platform_email = $1 LIMIT 1`,
           [decoded.email],
         );
         if (dbUser) {
@@ -87,6 +95,8 @@ export const verifyToken = async (
           decoded.id = dbUser.user_id;
           decoded.role = dbUser.role || decoded.role || "user";
           decoded.is_superadmin = dbUser.is_superadmin || false;
+          decoded.name = dbUser.name;
+          decoded.employee_code = dbUser.employee_code;
         }
       } catch (dbErr) {
         console.error("[PMAuthMiddleware] DB user_id resolution failed:", dbErr);
