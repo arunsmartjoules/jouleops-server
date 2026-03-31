@@ -22,7 +22,7 @@ const buildKey = (prefix: string, id: string) => `${prefix}${id}`;
 
 export interface Asset {
   asset_id: string;
-  site_id: string;
+  site_code: string;
   asset_name: string;
   category?: string;
   asset_type?: string;
@@ -56,7 +56,7 @@ export interface Asset {
 export interface CreateAssetInput extends Partial<
   Omit<Asset, "id" | "created_at" | "updated_at">
 > {
-  site_id: string;
+  site_code: string;
   asset_name: string;
 }
 
@@ -206,7 +206,7 @@ export async function getAssetsBySite(
   let paramIndex = 1;
 
   if (siteId !== "all") {
-    conditions.push(`site_id = $${paramIndex}`);
+    conditions.push(`site_code = $${paramIndex}`);
     params.push(siteId);
     paramIndex++;
   }
@@ -230,7 +230,7 @@ export async function getAssetsBySite(
   }
 
   if (site_id_query) {
-    conditions.push(`site_id = $${paramIndex}`);
+    conditions.push(`site_code = $${paramIndex}`);
     params.push(site_id_query);
     paramIndex++;
   }
@@ -319,7 +319,7 @@ export async function getAssetsByType(
 ): Promise<Asset[]> {
   return query<Asset>(
     `SELECT * FROM assets
-     WHERE site_id = $1 AND asset_type = $2 AND status = 'Active'
+     WHERE site_code = $1 AND asset_type = $2 AND status = 'Active'
      ORDER BY asset_name ASC`,
     [siteId, assetType],
   );
@@ -334,7 +334,7 @@ export async function getAssetsByLocation(
 ): Promise<Asset[]> {
   return query<Asset>(
     `SELECT * FROM assets
-     WHERE site_id = $1 AND location ILIKE $2
+     WHERE site_code = $1 AND location ILIKE $2
      ORDER BY asset_name ASC`,
     [siteId, `%${location}%`],
   );
@@ -349,7 +349,7 @@ export async function searchAssets(
 ): Promise<Asset[]> {
   return query<Asset>(
     `SELECT * FROM assets
-     WHERE site_id = $1
+     WHERE site_code = $1
        AND (asset_name ILIKE $2 OR asset_id ILIKE $2 OR location ILIKE $2)
      ORDER BY asset_name ASC
      LIMIT 20`,
@@ -363,7 +363,7 @@ export async function searchAssets(
 export async function getAssetsUnderWarranty(siteId: string): Promise<Asset[]> {
   return query<Asset>(
     `SELECT * FROM assets
-     WHERE site_id = $1 AND warranty_end_date >= CURRENT_DATE
+     WHERE site_code = $1 AND warranty_end_date >= CURRENT_DATE
      ORDER BY warranty_end_date ASC`,
     [siteId],
   );
@@ -378,7 +378,7 @@ export async function getAssetsWarrantyExpiring(
 ): Promise<Asset[]> {
   return query<Asset>(
     `SELECT * FROM assets
-     WHERE site_id = $1
+     WHERE site_code = $1
        AND warranty_end_date >= CURRENT_DATE
        AND warranty_end_date <= CURRENT_DATE + $2::integer
      ORDER BY warranty_end_date ASC`,
@@ -463,7 +463,7 @@ export async function deleteAsset(asset_id: string): Promise<boolean> {
  */
 export async function getAssetStats(siteId: string): Promise<AssetStats> {
   const data = await query<{ status: string; asset_type: string | null }>(
-    `SELECT status, asset_type FROM assets WHERE site_id = $1`,
+    `SELECT status, asset_type FROM assets WHERE site_code = $1`,
     [siteId],
   );
 

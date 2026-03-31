@@ -19,16 +19,15 @@ const VALID_STATUSES = ["Active", "Under Maintenance", "Inactive", "Disposed"];
 
 export const create = async (req: Request, res: Response) => {
   try {
-    const { site_code, site_id, ...rest } = req.body;
-    const finalSiteId = site_id || site_code;
+    const { site_code, ...rest } = req.body;
 
-    if (!finalSiteId) {
-      return sendError(res, "Site identification (site_id or site_code) is required");
+    if (!site_code) {
+      return sendError(res, "site_code is required");
     }
 
     const data = {
       ...rest,
-      site_id: finalSiteId,
+      site_code,
     };
 
     const asset = await assetsRepository.createAsset(data);
@@ -252,11 +251,12 @@ export const update = async (req: Request, res: Response) => {
       return sendNotFound(res, "Asset");
     }
 
-    const { site_code, site_id, ...rest } = req.body;
-    const updateData = {
-      ...rest,
-      ...( (site_id || site_code) && { site_id: site_id || site_code } )
-    };
+    const { site_code, ...rest } = req.body;
+    const updateData = { ...rest };
+
+    if (site_code) {
+      updateData.site_code = site_code;
+    }
 
     const asset = await assetsRepository.updateAsset(assetId, updateData);
     return sendSuccess(res, asset);
@@ -334,10 +334,10 @@ export const bulkUpsert = async (req: Request, res: Response) => {
     }
 
     const mappedAssets = assets.map((asset: any) => {
-      const { site_code, site_id, ...rest } = asset;
+      const { site_code, ...rest } = asset;
       return {
         ...rest,
-        site_id: site_id || site_code,
+        site_code: site_code,
       };
     });
 

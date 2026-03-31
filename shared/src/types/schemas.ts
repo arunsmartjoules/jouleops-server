@@ -124,9 +124,7 @@ export const updatePMInstanceSchema = createPMInstanceSchema
  */
 export const createAssetSchema = z.object({
   asset_id: z.string().min(1),
-  // Acceptance of both site_id and site_code for flexibility
-  site_id: z.string().optional(),
-  site_code: z.string().optional(),
+  site_code: z.string().min(1),
   asset_name: z.string().min(1),
   category: z.string().optional().nullable(),
   asset_type: z.string().optional().nullable(),
