@@ -120,6 +120,31 @@ export const updatePMInstanceSchema = createPMInstanceSchema
   .partial();
 
 /**
+ * Asset Schemas
+ */
+export const createAssetSchema = z.object({
+  asset_id: z.string().min(1),
+  // Acceptance of both site_id and site_code for flexibility
+  site_id: z.string().optional(),
+  site_code: z.string().optional(),
+  asset_name: z.string().min(1),
+  category: z.string().optional().nullable(),
+  asset_type: z.string().optional().nullable(),
+  status: z.string().optional().default("Active"),
+  criticality: z.string().optional().nullable(),
+  floor: z.string().optional().nullable(),
+  warranty_start_date: z.string().optional().nullable(),
+  warranty_end_date: z.string().optional().nullable(),
+  vendor_id: z.string().optional().nullable(),
+  qr_id: z.string().optional().nullable(),
+  equipment_type: z.string().optional().nullable(),
+  area_floor_id: z.string().optional().nullable(),
+  area_type: z.string().optional().nullable(),
+});
+
+export const updateAssetSchema = createAssetSchema.partial().omit({ asset_id: true });
+
+/**
  * Auth Schemas
  */
 export const loginSchema = z.object({

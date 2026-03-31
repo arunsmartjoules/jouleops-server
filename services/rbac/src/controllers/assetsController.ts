@@ -19,7 +19,19 @@ const VALID_STATUSES = ["Active", "Under Maintenance", "Inactive", "Disposed"];
 
 export const create = async (req: Request, res: Response) => {
   try {
-    const asset = await assetsRepository.createAsset(req.body);
+    const { site_code, site_id, ...rest } = req.body;
+    const finalSiteId = site_id || site_code;
+
+    if (!finalSiteId) {
+      return sendError(res, "Site identification (site_id or site_code) is required");
+    }
+
+    const data = {
+      ...rest,
+      site_id: finalSiteId,
+    };
+
+    const asset = await assetsRepository.createAsset(data);
     return sendCreated(res, asset);
   } catch (error: any) {
     console.error("Create asset error:", error);
@@ -240,7 +252,13 @@ export const update = async (req: Request, res: Response) => {
       return sendNotFound(res, "Asset");
     }
 
-    const asset = await assetsRepository.updateAsset(assetId, req.body);
+    const { site_code, site_id, ...rest } = req.body;
+    const updateData = {
+      ...rest,
+      ...( (site_id || site_code) && { site_id: site_id || site_code } )
+    };
+
+    const asset = await assetsRepository.updateAsset(assetId, updateData);
     return sendSuccess(res, asset);
   } catch (error: any) {
     console.error("Update asset error:", error);
@@ -315,9 +333,21 @@ export const bulkUpsert = async (req: Request, res: Response) => {
       return sendError(res, "No assets data provided");
     }
 
-    const { count } = await assetsRepository.bulkUpsertAssets(assets);
+    const mappedAssets = assets.map((asset: any) => {
+      const { site_code, site_id, ...rest } = asset;
+      return {
+        ...rest,
+        site_id: site_id || site_code,
+      };
+    });
 
-    return sendSuccess(res, { count }, { message: `Successfully imported ${count} assets` });
+    const { count } = await assetsRepository.bulkUpsertAssets(mappedAssets);
+
+    return sendSuccess(
+      res,
+      { count },
+      { message: `Successfully imported ${count} assets` },
+    );
   } catch (error: any) {
     console.error("Bulk upsert assets error:", error);
     return sendServerError(res, error);

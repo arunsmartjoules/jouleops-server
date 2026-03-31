@@ -6,6 +6,7 @@ import {
   verifyAnyAuth,
   requireRole,
 } from "../middleware/auth.ts";
+import { validate, createAssetSchema, updateAssetSchema } from "@jouleops/shared";
 
 const router = express.Router();
 
@@ -52,12 +53,14 @@ router.post(
   "/",
   verifyAnyAuth,
   requireRole(["admin", "superadmin"]),
+  validate(createAssetSchema),
   assetsController.create,
 );
 router.put(
   "/:assetId",
   verifyAnyAuth,
   requireRole(["admin", "superadmin"]),
+  validate(updateAssetSchema),
   assetsController.update,
 );
 router.patch(
