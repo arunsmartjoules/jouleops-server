@@ -16,12 +16,17 @@
 
 export interface Complaint {
   complaint_id: string;
+  ticket_no?: string;
   /** Current status of the complaint, e.g. 'Open' | 'Inprogress' | other */
   status: string;
   /** Timestamp when the complaint entered its current status */
   status_changed_at: Date | string;
   /** User assigned to this complaint */
   assigned_to?: string | null;
+  site_code?: string;
+  site_name?: string;
+  category?: string;
+  priority?: string;
   [key: string]: any;
 }
 

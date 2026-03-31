@@ -23,7 +23,7 @@ export const findMissedCheckIns = async () => {
   const users = await query(
     "SELECT user_id, name, work_location_type FROM users WHERE is_active = true",
   );
-  const missedCheckIns = [];
+  const missedUsers = [];
   const today = getTodayDate();
 
   for (const user of users) {
@@ -38,11 +38,11 @@ export const findMissedCheckIns = async () => {
 
     if (!attendance) {
       // User hasn't checked in
-      missedCheckIns.push(user.user_id);
+      missedUsers.push({ id: user.user_id, name: user.name });
     }
   }
 
-  return missedCheckIns;
+  return missedUsers;
 };
 
 /**
@@ -52,13 +52,19 @@ export const findMissedCheckIns = async () => {
 export const findMissedCheckOuts = async () => {
   const today = getTodayDate();
 
-  // Find attendance records with check-in but no check-out for today
+  // Find attendance records with check-in but no check-out for today, joining with users to get names
   const attendanceRecords = await query(
-    "SELECT user_id FROM attendance_logs WHERE date = $1 AND check_in_time IS NOT NULL AND check_out_time IS NULL",
+    `SELECT al.user_id as id, u.name 
+     FROM attendance_logs al
+     JOIN users u ON al.user_id = u.user_id
+     WHERE al.date = $1 AND al.check_in_time IS NOT NULL AND al.check_out_time IS NULL`,
     [today],
   );
 
-  return attendanceRecords.map((record) => record.user_id);
+  return attendanceRecords.map((record) => ({
+    id: record.id,
+    name: record.name,
+  }));
 };
 
 /**
@@ -66,30 +72,55 @@ export const findMissedCheckOuts = async () => {
  */
 export const sendMissedCheckInNotifications = async () => {
   try {
-    const missedUserIds = await findMissedCheckIns();
+    const missedUsers = (await findMissedCheckIns()) as {
+      id: string;
+      name: string;
+    }[];
 
-    if (missedUserIds.length === 0) {
+    if (missedUsers.length === 0) {
       console.log("No users found who missed check-in");
       return { success: true, count: 0 };
     }
 
-    const message = await getCheckInMessage();
+    const baseMessage = (await getCheckInMessage()) || "Don't forget to check in!";
     let sentCount = 0;
 
-    for (const userId of missedUserIds) {
+    for (const user of missedUsers) {
       // Check user preferences
-      const preferences = await getUserPreferences(userId);
+      const preferences = await getUserPreferences(user.id);
 
       if (!preferences.attendance_notifications_enabled) {
-        console.log(`User ${userId} has disabled attendance notifications`);
+        console.log(`User ${user.id} has disabled attendance notifications`);
         continue;
       }
 
+      // PREVENTION: Check if check-in reminder was already sent today
+      const alreadySent = await queryOne(
+        `SELECT id FROM notification_logs 
+         WHERE user_id = $1 
+         AND notification_type = 'check_in_reminder' 
+         AND sent_at::date = CURRENT_DATE
+         AND status = 'sent'
+         LIMIT 1`,
+        [user.id]
+      );
+
+      if (alreadySent) {
+        console.log(`Check-in reminder already sent today for user ${user.id}`);
+        continue;
+      }
+
+      // Replace placeholders
+      const personalizedMessage = baseMessage.replace(
+        /{{name}}/g,
+        user.name || "there"
+      );
+
       const result = await sendNotificationToUser(
-        userId,
+        user.id,
         "Check-In Reminder",
-        message || "Don't forget to check in!",
-        { type: "check_in_reminder", screen: "attendance" },
+        personalizedMessage,
+        { type: "check_in_reminder", screen: "attendance" }
       );
 
       if (result.success) {
@@ -110,30 +141,56 @@ export const sendMissedCheckInNotifications = async () => {
  */
 export const sendMissedCheckOutNotifications = async () => {
   try {
-    const missedUserIds = await findMissedCheckOuts();
+    const missedUsers = (await findMissedCheckOuts()) as {
+      id: string;
+      name: string;
+    }[];
 
-    if (missedUserIds.length === 0) {
+    if (missedUsers.length === 0) {
       console.log("No users found who missed check-out");
       return { success: true, count: 0 };
     }
 
-    const message = await getCheckOutMessage();
+    const baseMessage =
+      (await getCheckOutMessage()) || "Remember to check out!";
     let sentCount = 0;
 
-    for (const userId of missedUserIds) {
+    for (const user of missedUsers) {
       // Check user preferences
-      const preferences = await getUserPreferences(userId);
+      const preferences = await getUserPreferences(user.id);
 
       if (!preferences.attendance_notifications_enabled) {
-        console.log(`User ${userId} has disabled attendance notifications`);
+        console.log(`User ${user.id} has disabled attendance notifications`);
         continue;
       }
 
+      // PREVENTION: Check if check-out reminder was already sent today
+      const alreadySent = await queryOne(
+        `SELECT id FROM notification_logs 
+         WHERE user_id = $1 
+         AND notification_type = 'check_out_reminder' 
+         AND sent_at::date = CURRENT_DATE
+         AND status = 'sent'
+         LIMIT 1`,
+        [user.id]
+      );
+
+      if (alreadySent) {
+        console.log(`Check-out reminder already sent today for user ${user.id}`);
+        continue;
+      }
+
+      // Replace placeholders
+      const personalizedMessage = baseMessage.replace(
+        /{{name}}/g,
+        user.name || "there"
+      );
+
       const result = await sendNotificationToUser(
-        userId,
+        user.id,
         "Check-Out Reminder",
-        message || "Remember to check out!",
-        { type: "check_out_reminder", screen: "attendance" },
+        personalizedMessage,
+        { type: "check_out_reminder", screen: "attendance" }
       );
 
       if (result.success) {

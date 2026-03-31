@@ -69,9 +69,19 @@ async function fetchTodayAttendance(): Promise<
 /** Fetch complaints currently in a given status, including assigned_to and site_code */
 async function fetchComplaintsByStatus(status: string): Promise<Complaint[]> {
   return query<Complaint>(
-    `SELECT id AS complaint_id, status, updated_at AS status_changed_at, assigned_to, site_code
-     FROM complaints
-     WHERE status = $1`,
+    `SELECT 
+        c.id AS complaint_id, 
+        c.ticket_no,
+        c.status, 
+        c.updated_at AS status_changed_at, 
+        c.assigned_to, 
+        c.site_code,
+        s.name AS site_name,
+        c.category,
+        c.priority
+     FROM complaints c
+     LEFT JOIN sites s ON c.site_code = s.site_code
+     WHERE c.status = $1`,
     [status],
   );
 }
@@ -108,7 +118,9 @@ async function dispatchForUsers(
   context: Record<string, string>,
 ): Promise<void> {
   // 1. Filter out physically excluded users
-  const nonExcludedIds = eligibleUserIds.filter((id) => !excludedUserIds.includes(id));
+  const nonExcludedIds = eligibleUserIds.filter(
+    (id) => !excludedUserIds.includes(id)
+  );
   if (nonExcludedIds.length === 0) return;
 
   // 2. Determine active template
@@ -131,40 +143,45 @@ async function dispatchForUsers(
 
   const { template } = templateResult;
 
-  // 3. Fetch user site codes if not specifically provided in context (e.g. for attendance)
-  const userSiteCodes = new Map<string, string>();
-  if (!context.site_code) {
-    const userRows = await query<{ user_id: string, site_code: string }>(
-      "SELECT user_id, site_code FROM users WHERE user_id = ANY($1)",
-      [nonExcludedIds]
-    );
-    for (const row of userRows) {
-      if (row.site_code) userSiteCodes.set(row.user_id, row.site_code);
-    }
+  // 3. Fetch user names and site codes if not specifically provided in context
+  const userDetails = new Map<string, { name: string; site_code: string }>();
+  const userRows = await query<{
+    user_id: string;
+    name: string;
+    site_code: string;
+  }>(
+    "SELECT user_id, name, site_code FROM users WHERE user_id = ANY($1)",
+    [nonExcludedIds]
+  );
+  for (const row of userRows) {
+    userDetails.set(row.user_id, { name: row.name, site_code: row.site_code });
   }
 
   // 4. Dispatch to each user
   for (const userId of nonExcludedIds) {
-    // Resolve placeholders (name might vary per user if template uses it, but current templates don't)
-    const resolvedContext = { ...context };
+    const user = userDetails.get(userId);
     
-    // If we have a per-user site_code, add it to context for this specific dispatch
-    const siteCode = context.site_code || userSiteCodes.get(userId);
+    // Resolve placeholders per user
+    const resolvedContext = { 
+      ...context,
+      name: user?.name || "there",
+      site_name: context.site_name || context.site_code || user?.site_code || "",
+      // Map common ticket field name aliases
+      ticket_no: context.ticket_no || context.complaint_id || "",
+      complaint_title: context.title || context.ticket_no || context.complaint_id || "",
+    };
+
+    const siteCode = context.site_code || user?.site_code;
 
     const title = resolvePlaceholders(template.title_template, resolvedContext);
     const body = resolvePlaceholders(template.body_template, resolvedContext);
 
     // Unify dispatches using pushNotificationService
-    await pushNotificationService.sendNotificationToUser(
-      userId,
-      title,
-      body,
-      { 
-        type: triggerKey, 
-        ...(context.complaint_id ? { ticket_no: context.complaint_id } : {}),
-        ...(siteCode ? { site_code: siteCode } : {})
-      }
-    );
+    await pushNotificationService.sendNotificationToUser(userId, title, body, {
+      type: triggerKey,
+      ...(context.complaint_id ? { ticket_no: context.complaint_id } : {}),
+      ...(siteCode ? { site_code: siteCode } : {}),
+    });
   }
 }
 
@@ -189,6 +206,13 @@ async function runSchedulerTick(): Promise<void> {
     // -----------------------------------------------------------------------
     // Time-based triggers: punch_in and punch_out
     // -----------------------------------------------------------------------
+    /* 
+      DUPLICATION PREVENTION:
+      Attendance triggers (punch_in, punch_out) are now handled by the dedicated
+      attendanceReminderJob.ts which has more custom logic and robust daily
+      deduplication. We skip them in this general scheduler to prevent double alerts.
+    */
+    /*
     const timeTriggerKeys = ["punch_in", "punch_out"] as const;
 
     for (const triggerKey of timeTriggerKeys) {
@@ -209,6 +233,7 @@ async function runSchedulerTick(): Promise<void> {
 
       await dispatchForUsers(triggerKey, eligibleUserIds, excludedUserIds, templates, {});
     }
+    */
 
     // -----------------------------------------------------------------------
     // Duration-based triggers: complaint_open and complaint_inprogress
@@ -235,7 +260,7 @@ async function runSchedulerTick(): Promise<void> {
         config.threshold_value,
         frequencyMinutes,
         recentLogs,
-        utcNow,
+        utcNow
       );
 
       // Dispatch per complaint — assigned_to is already fetched with the complaint
@@ -244,7 +269,12 @@ async function runSchedulerTick(): Promise<void> {
 
         const context: Record<string, string> = {
           complaint_id: complaint.complaint_id,
+          ticket_no: complaint.ticket_no || "",
           status: complaint.status,
+          site_code: complaint.site_code || "",
+          site_name: complaint.site_name || "",
+          category: complaint.category || "",
+          priority: complaint.priority || "",
         };
 
         await dispatchForUsers(
@@ -252,7 +282,7 @@ async function runSchedulerTick(): Promise<void> {
           [complaint.assigned_to],
           excludedUserIds,
           templates,
-          context,
+          context
         );
       }
     }
