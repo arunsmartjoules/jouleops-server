@@ -307,9 +307,12 @@ export const update = async (req: AuthRequest, res: Response) => {
       return sendNotFound(res, "PM instance");
     }
 
+    // Ignore updated_at from body to prevent Postgres BigInt/Timestamp mismatch
+    const { updated_at, ...cleanUpdateData } = req.body;
+    
     const instance = await pmInstancesRepository.updatePMInstance(
       instanceId,
-      req.body,
+      cleanUpdateData,
     );
 
     // Sync with Fieldproxy — fire and forget
