@@ -67,9 +67,14 @@ export interface UpdateAssetInput extends Partial<
 export interface GetAssetsOptions {
   page?: number;
   limit?: number;
+  id?: string | null;
+  asset_id?: string | null;
+  asset_name?: string | null;
+  site_id?: string | null;
   asset_type?: string | null;
   equipment_type?: string | null;
   category?: string | null;
+  criticality?: string | null;
   status?: string | null;
   floor?: string | null;
   sortBy?: string;
@@ -179,9 +184,14 @@ export async function getAssetsBySite(
   const {
     page = 1,
     limit = 50,
+    id = null,
+    asset_id = null,
+    asset_name = null,
+    site_id: site_id_query = null, // renamed to avoid conflict with siteId param
     asset_type = null,
     equipment_type = null,
     category = null,
+    criticality = null,
     status = null,
     floor = null,
     sortBy = "asset_name",
@@ -201,6 +211,30 @@ export async function getAssetsBySite(
     paramIndex++;
   }
 
+  if (id) {
+    conditions.push(`id = $${paramIndex}`);
+    params.push(id);
+    paramIndex++;
+  }
+
+  if (asset_id) {
+    conditions.push(`asset_id = $${paramIndex}`);
+    params.push(asset_id);
+    paramIndex++;
+  }
+
+  if (asset_name) {
+    conditions.push(`asset_name ILIKE $${paramIndex}`);
+    params.push(`%${asset_name}%`);
+    paramIndex++;
+  }
+
+  if (site_id_query) {
+    conditions.push(`site_id = $${paramIndex}`);
+    params.push(site_id_query);
+    paramIndex++;
+  }
+
   if (asset_type) {
     conditions.push(`asset_type = $${paramIndex}`);
     params.push(asset_type);
@@ -216,6 +250,12 @@ export async function getAssetsBySite(
   if (category) {
     conditions.push(`category = $${paramIndex}`);
     params.push(category);
+    paramIndex++;
+  }
+
+  if (criticality) {
+    conditions.push(`criticality = $${paramIndex}`);
+    params.push(criticality);
     paramIndex++;
   }
 

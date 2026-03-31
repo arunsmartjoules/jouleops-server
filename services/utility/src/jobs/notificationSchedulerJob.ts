@@ -24,19 +24,26 @@ import { getAllExclusions } from "../repositories/notificationExclusionRepositor
 import { getPunchInEligibleUsers, getPunchOutEligibleUsers } from "../utils/attendanceEligibility.ts";
 import { getEligibleComplaints } from "../utils/durationTriggerEvaluator.ts";
 import { filterExcludedUsers, getActiveTemplate, resolvePlaceholders } from "../utils/notificationFilters.ts";
-import { dispatchToToken } from "../utils/pushDispatcher.ts";
-import type { DeviceToken, DispatchDb, NotificationLogEntry } from "../utils/pushDispatcher.ts";
-import type { User } from "../utils/attendanceEligibility.ts";
+import pushNotificationService from "../services/pushNotificationService.ts";
 import type { Complaint, NotificationLog } from "../utils/durationTriggerEvaluator.ts";
 
 // ---------------------------------------------------------------------------
 // DB helpers — thin wrappers so the scheduler stays readable
 // ---------------------------------------------------------------------------
 
-/** Fetch all active users */
+export interface User {
+  user_id: string;
+  name: string;
+  site_code?: string;
+  [key: string]: any;
+}
+
+/** Fetch all active users who might receive notifications */
 async function fetchActiveUsers(): Promise<User[]> {
   return query<User>(
-    `SELECT user_id FROM users WHERE is_active = true`,
+    `SELECT user_id, name, work_location_type, site_code
+     FROM users
+     WHERE is_active = true`,
   );
 }
 
@@ -59,10 +66,10 @@ async function fetchTodayAttendance(): Promise<
   );
 }
 
-/** Fetch complaints currently in a given status, including assigned_to */
+/** Fetch complaints currently in a given status, including assigned_to and site_code */
 async function fetchComplaintsByStatus(status: string): Promise<Complaint[]> {
   return query<Complaint>(
-    `SELECT id AS complaint_id, status, updated_at AS status_changed_at, assigned_to
+    `SELECT id AS complaint_id, status, updated_at AS status_changed_at, assigned_to, site_code
      FROM complaints
      WHERE status = $1`,
     [status],
@@ -80,79 +87,9 @@ async function fetchRecentLogs(triggerKey: string): Promise<NotificationLog[]> {
   );
 }
 
-/** Fetch all device tokens for a set of user IDs */
-async function fetchDeviceTokens(userIds: string[]): Promise<DeviceToken[]> {
-  if (userIds.length === 0) return [];
-  return query<DeviceToken>(
-    `SELECT user_id, token, platform
-     FROM device_tokens
-     WHERE user_id = ANY($1)`,
-    [userIds],
-  );
-}
-
-/** Write a notification log entry to the DB */
-async function writeNotificationLog(log: NotificationLogEntry): Promise<void> {
-  try {
-    await queryOne(
-      `INSERT INTO notification_logs
-         (trigger_key, user_id, title, body, status, failure_reason, platform)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-      [
-        log.trigger_key,
-        log.user_id,
-        log.title ?? null,
-        log.body ?? null,
-        log.status,
-        log.failure_reason ?? null,
-        log.platform ?? null,
-      ],
-    );
-
-    // Also log to general activity_logs
-    await logActivity({
-      user_id: log.user_id,
-      action:
-        log.status === "sent"
-          ? "PUSH_NOTIFICATION_SENT"
-          : log.status === "failed"
-            ? "PUSH_NOTIFICATION_FAILED"
-            : "PUSH_NOTIFICATION_SUPPRESSED",
-      module: "notifications",
-      description: `Auto-notification ${log.status}: ${log.title || log.trigger_key}`,
-      metadata: {
-        trigger_key: log.trigger_key,
-        title: log.title,
-        body: log.body,
-        status: log.status,
-        failure_reason: log.failure_reason,
-        platform: log.platform,
-      },
-    });
-  } catch (err) {
-    logger.error("[NotificationScheduler] Failed to write notification log", {
-      err,
-    });
-  }
-}
-
-/** Delete a device token from the DB */
-async function deleteDeviceToken(token: string): Promise<void> {
-  try {
-    await queryOne(`DELETE FROM device_tokens WHERE token = $1`, [token]);
-  } catch (err) {
-    logger.error("[NotificationScheduler] Failed to delete device token", { err });
-  }
-}
-
 // ---------------------------------------------------------------------------
-// DB adapter passed to dispatchToToken
+// Main dispatcher
 // ---------------------------------------------------------------------------
-
-const dispatchDb: DispatchDb = {
-  deleteToken: deleteDeviceToken,
-  writeLog: writeNotificationLog,
-};
 
 // ---------------------------------------------------------------------------
 // Per-trigger dispatch helpers
@@ -165,62 +102,69 @@ const dispatchDb: DispatchDb = {
  */
 async function dispatchForUsers(
   triggerKey: string,
-  candidateUserIds: string[],
+  eligibleUserIds: string[],
   excludedUserIds: string[],
-  templates: Awaited<ReturnType<typeof getAllTemplates>>,
+  templates: any[],
   context: Record<string, string>,
 ): Promise<void> {
-  // 1. Apply exclusion filter
-  const eligibleUserIds = filterExcludedUsers(candidateUserIds, excludedUserIds);
+  // 1. Filter out physically excluded users
+  const nonExcludedIds = eligibleUserIds.filter((id) => !excludedUserIds.includes(id));
+  if (nonExcludedIds.length === 0) return;
 
-  // 2. Resolve active template — suppress if inactive/missing
+  // 2. Determine active template
   const templateResult = getActiveTemplate(triggerKey, templates);
+
   if (templateResult.suppressed) {
     // Write a suppressed log for each eligible user
     for (const userId of eligibleUserIds) {
-      await writeNotificationLog({
-        trigger_key: triggerKey,
-        user_id: userId,
-        title: "",
-        body: "",
-        status: "suppressed",
-        failure_reason: templateResult.reason,
-        platform: "",
-      });
+      await pushNotificationService.logNotification(
+        userId,
+        "",
+        "",
+        triggerKey,
+        "skipped",
+        templateResult.reason
+      );
     }
     return;
   }
 
   const { template } = templateResult;
 
-  // 3. Resolve placeholders
-  const title = resolvePlaceholders(template.title_template, context);
-  const body = resolvePlaceholders(template.body_template, context);
-
-  // 4. Fetch device tokens for eligible users
-  const tokens = await fetchDeviceTokens(eligibleUserIds);
-
-  // Build a lookup: user_id → tokens[]
-  const tokensByUser = new Map<string, DeviceToken[]>();
-  for (const t of tokens) {
-    const list = tokensByUser.get(t.user_id) ?? [];
-    list.push(t);
-    tokensByUser.set(t.user_id, list);
+  // 3. Fetch user site codes if not specifically provided in context (e.g. for attendance)
+  const userSiteCodes = new Map<string, string>();
+  if (!context.site_code) {
+    const userRows = await query<{ user_id: string, site_code: string }>(
+      "SELECT user_id, site_code FROM users WHERE user_id = ANY($1)",
+      [nonExcludedIds]
+    );
+    for (const row of userRows) {
+      if (row.site_code) userSiteCodes.set(row.user_id, row.site_code);
+    }
   }
 
-  // 5. Dispatch to each user
-  for (const userId of eligibleUserIds) {
-    const userTokens = tokensByUser.get(userId);
+  // 4. Dispatch to each user
+  for (const userId of nonExcludedIds) {
+    // Resolve placeholders (name might vary per user if template uses it, but current templates don't)
+    const resolvedContext = { ...context };
+    
+    // If we have a per-user site_code, add it to context for this specific dispatch
+    const siteCode = context.site_code || userSiteCodes.get(userId);
 
-    if (!userTokens || userTokens.length === 0) {
-      // No device token registered — skip silently (no log to avoid spam)
-      continue;
-    }
+    const title = resolvePlaceholders(template.title_template, resolvedContext);
+    const body = resolvePlaceholders(template.body_template, resolvedContext);
 
-    // Dispatch to every registered token for this user
-    for (const deviceToken of userTokens) {
-      await dispatchToToken(deviceToken, title, body, triggerKey, dispatchDb);
-    }
+    // Unify dispatches using pushNotificationService
+    await pushNotificationService.sendNotificationToUser(
+      userId,
+      title,
+      body,
+      { 
+        type: triggerKey, 
+        ...(context.complaint_id ? { ticket_no: context.complaint_id } : {}),
+        ...(siteCode ? { site_code: siteCode } : {})
+      }
+    );
   }
 }
 

@@ -1,7 +1,7 @@
 import express from "express";
 import logsController from "../controllers/logsController.ts";
 import { requireAdmin, requireSuperAdmin } from "../middleware/admin.ts";
-import { verifyAnyAuth } from "../middleware/auth.ts";
+import { verifyAnyAuth, optionalAuth } from "../middleware/auth.ts";
 
 const router = express.Router();
 
@@ -13,7 +13,7 @@ const router = express.Router();
 // Get all logs (Admin only)
 router.get("/", requireAdmin, logsController.getLogs);
 
-// Create log (from Mobile app, accessible to any authenticated user)
-router.post("/", verifyAnyAuth, logsController.createLog);
+// Create log (from Mobile app, accessible to any authenticated user, and optionally unauthenticated)
+router.post("/", optionalAuth, logsController.createLog);
 
 export default router;

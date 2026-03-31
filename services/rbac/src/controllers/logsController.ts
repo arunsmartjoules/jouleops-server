@@ -28,8 +28,10 @@ export const getLogs = async (req: Request, res: Response) => {
 export const createLog = async (req: Request, res: Response) => {
   try {
     const { action, module, description, device_info, metadata } = req.body;
-    const user_id = (req as any).user?.userId || "system";
+    const user = (req as any).user;
+    const user_id = user?.user_id || user?.id || null;
 
+    // For unauthenticated logs, we still allow them but they will have user_id = null
     await logsRepository.logActivity({
       user_id: user_id,
       action: action || "APP_LOG",
