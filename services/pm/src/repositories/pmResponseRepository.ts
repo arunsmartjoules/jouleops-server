@@ -107,7 +107,7 @@ export async function getByInstance(
   return query<PMResponse>(
     `SELECT ${selectFields} 
      FROM pm_checklist_responses pr
-     LEFT JOIN pm_checklist pc ON pr.checklist_id = pc.id
+     LEFT JOIN pm_checklist pc ON pr.checklist_id = pc.checklist_id
      WHERE pr.instance_id = $1 
      ORDER BY pc.sequence_no ASC NULLS LAST, pr.created_at ASC`,
     [instanceId],

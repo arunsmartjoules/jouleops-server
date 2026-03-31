@@ -9,9 +9,11 @@ const initFirebase = () => {
   if (serviceAccountJson) {
     try {
       const serviceAccount = JSON.parse(serviceAccountJson);
-      return admin.initializeApp({
+      const app = admin.initializeApp({
         credential: admin.credential.cert(serviceAccount),
       });
+      console.log(`[FirebaseAdmin] Initialized successfully for project: ${serviceAccount.project_id}`);
+      return app;
     } catch (e) {
       console.error("[FirebaseAdmin] Failed to parse FIREBASE_SERVICE_ACCOUNT JSON, using default/ADC");
     }

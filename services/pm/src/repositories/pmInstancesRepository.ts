@@ -41,6 +41,7 @@ export interface PMInstance {
   client_sign?: string;
   before_image?: string;
   after_image?: string;
+  completed_on?: Date;
   created_at?: Date;
   updated_at?: Date;
 }
@@ -71,6 +72,7 @@ export interface CreatePMInstanceInput {
   client_sign?: string;
   before_image?: string;
   after_image?: string;
+  completed_on?: Date;
 }
 
 export interface GetPMInstancesOptions {
@@ -253,6 +255,7 @@ export async function getPMInstancesBySite(
         "client_sign",
         "before_image",
         "after_image",
+        "completed_on",
         "created_at",
         "updated_at",
       ],
@@ -363,7 +366,7 @@ export async function updatePMInstance(
   instanceId: string,
   updateData: Partial<PMInstance>,
 ): Promise<PMInstance> {
-  const { instance_id, created_at, ...allowedUpdates } = updateData as any;
+  const { id, instance_id, created_at, ...allowedUpdates } = updateData as any;
 
   const entries = Object.entries(allowedUpdates).filter(
     ([, value]) => value !== undefined,
@@ -454,13 +457,13 @@ export async function getPMStats(
   let paramIdx = 2;
 
   if (from_date && to_date) {
-    queryStr += ` AND (start_due_date AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata')::date BETWEEN $${paramIdx++}::date AND $${paramIdx++}::date`;
+    queryStr += ` AND start_due_date BETWEEN $${paramIdx++}::date AND $${paramIdx++}::date`;
     params.push(from_date, to_date);
   } else if (from_date) {
-    queryStr += ` AND (start_due_date AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata')::date >= $${paramIdx++}::date`;
+    queryStr += ` AND start_due_date >= $${paramIdx++}::date`;
     params.push(from_date);
   } else if (to_date) {
-    queryStr += ` AND (start_due_date AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata')::date <= $${paramIdx++}::date`;
+    queryStr += ` AND start_due_date <= $${paramIdx++}::date`;
     params.push(to_date);
   }
 

@@ -64,6 +64,7 @@ app.use(errorHandler);
 const server = app.listen(Number(PORT), "0.0.0.0", () => {
   logger.info(`JouleOps Attendance Service running on port ${PORT}`);
   logger.info(`Health check: http://localhost:${PORT}/health`);
+  logger.info(`Firebase Service Account: ${process.env.FIREBASE_SERVICE_ACCOUNT ? "FOUND" : "MISSING"}`);
 });
 
 server.timeout = 300000;
