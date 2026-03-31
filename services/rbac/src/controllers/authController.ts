@@ -351,17 +351,23 @@ export const changePassword = asyncHandler(
       return sendError(res, "Password not set for this account");
     }
 
-    // Verify current password
-    const isCurrentPasswordValid = await bcrypt.compare(
-      currentPassword,
-      user.password!,
-    );
+    // Verify current password, only if NOT authenticated natively via Firebase
+    // If authenticated via Firebase, we implicitly trust the token 
+    // and just want to sync the Postgres password to match Firebase.
+    const isFirebase = (req.user as any)?.is_firebase;
+    
+    if (!isFirebase) {
+      const isCurrentPasswordValid = await bcrypt.compare(
+        currentPassword,
+        user.password!,
+      );
 
-    if (!isCurrentPasswordValid) {
-      return res.status(401).json({
-        success: false,
-        error: "Current password is incorrect",
-      });
+      if (!isCurrentPasswordValid) {
+        return res.status(401).json({
+          success: false,
+          error: "Current password is incorrect",
+        });
+      }
     }
 
     // Hash new password

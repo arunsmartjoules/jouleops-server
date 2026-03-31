@@ -129,6 +129,7 @@ export const verifyToken = async (
     // Ensure user_id and id are consistent (backward compatibility)
     if (!decoded.user_id && decoded.id) decoded.user_id = decoded.id;
     if (!decoded.id && decoded.user_id) decoded.id = decoded.user_id;
+    decoded.is_firebase = isFirebaseToken;
 
     req.user = decoded;
     next();
