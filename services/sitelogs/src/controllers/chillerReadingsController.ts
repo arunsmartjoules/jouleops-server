@@ -19,8 +19,14 @@ import {
   asyncHandler,
   logActivity,
 } from "@jouleops/shared";
+import { calculateDateShift } from "../utils/shiftHelper.ts";
 
 export const create = asyncHandler(async (req: Request, res: Response) => {
+  // ── Ensure date_shift exists before repository call if possible ────────────
+  if (!req.body.date_shift) {
+    req.body.date_shift = calculateDateShift(req.body.reading_time);
+  }
+
   const reading = await chillerReadingsRepository.createChillerReading(
     req.body,
   );
@@ -38,7 +44,7 @@ export const create = asyncHandler(async (req: Request, res: Response) => {
     log_id: reading.log_id,
     site_id: reading.site_code,
     chiller_id: reading.chiller_id,
-    date_shift: reading.date_shift,
+    date_shift: reading.date_shift || calculateDateShift(reading.reading_time),
     executor_id: reading.executor_id,
     reading_time: reading.reading_time,
     condenser_inlet_temp: reading.condenser_inlet_temp,
@@ -223,7 +229,7 @@ export const update = asyncHandler(async (req: Request, res: Response) => {
       log_id: reading.log_id,
       site_id: reading.site_code,
       chiller_id: reading.chiller_id,
-      date_shift: reading.date_shift,
+      date_shift: reading.date_shift || calculateDateShift(reading.reading_time),
       executor_id: reading.executor_id,
       reading_time: reading.reading_time,
       condenser_inlet_temp: reading.condenser_inlet_temp,
