@@ -440,15 +440,31 @@ export async function deletePMInstance(instanceId: string): Promise<boolean> {
 /**
  * Get PM statistics
  */
-export async function getPMStats(siteCode: string): Promise<{
+export async function getPMStats(
+  siteCode: string,
+  from_date?: string | null,
+  to_date?: string | null,
+): Promise<{
   total: number;
   byStatus: Record<string, number>;
   byFrequency: Record<string, number>;
 }> {
-  const data = await query<{ status: string; frequency: string }>(
-    `SELECT status, frequency FROM pm_instances WHERE site_code = $1`,
-    [siteCode],
-  );
+  let queryStr = `SELECT status, frequency FROM pm_instances WHERE site_code = $1`;
+  const params: any[] = [siteCode];
+  let paramIdx = 2;
+
+  if (from_date && to_date) {
+    queryStr += ` AND start_due_date::date BETWEEN $${paramIdx++}::date AND $${paramIdx++}::date`;
+    params.push(from_date, to_date);
+  } else if (from_date) {
+    queryStr += ` AND start_due_date::date >= $${paramIdx++}::date`;
+    params.push(from_date);
+  } else if (to_date) {
+    queryStr += ` AND start_due_date::date <= $${paramIdx++}::date`;
+    params.push(to_date);
+  }
+
+  const data = await query<{ status: string; frequency: string }>(queryStr, params);
 
   const stats = {
     total: data.length,

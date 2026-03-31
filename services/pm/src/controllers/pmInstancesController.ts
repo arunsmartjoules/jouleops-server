@@ -487,7 +487,12 @@ export const getStats = async (req: Request, res: Response) => {
     if (!siteCode) {
       return sendError(res, "Site Code is required");
     }
-    const stats = await pmInstancesRepository.getPMStats(siteCode);
+    const { from_date, to_date } = req.query;
+    const stats = await pmInstancesRepository.getPMStats(
+      siteCode,
+      from_date as string | undefined,
+      to_date as string | undefined,
+    );
     return sendSuccess(res, stats);
   } catch (error: any) {
     console.error("Get stats error:", error);
