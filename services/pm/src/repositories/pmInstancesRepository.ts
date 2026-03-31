@@ -206,13 +206,13 @@ export async function getPMInstancesBySite(
     filters.push({
       fieldId: "start_due_date",
       operator: "between",
-      value: from_date,
-      valueEnd: to_date,
+      value: `${from_date} 00:00:00`,
+      valueEnd: `${to_date} 23:59:59`,
     });
   } else if (from_date) {
-    filters.push({ fieldId: "start_due_date", operator: ">=", value: from_date });
+    filters.push({ fieldId: "start_due_date", operator: ">=", value: `${from_date} 00:00:00` });
   } else if (to_date) {
-    filters.push({ fieldId: "start_due_date", operator: "<=", value: to_date });
+    filters.push({ fieldId: "start_due_date", operator: "<=", value: `${to_date} 23:59:59` });
   }
 
   const selectFields = options.fields && options.fields.length > 0 ? options.fields.join(", ") : "*";
@@ -454,13 +454,13 @@ export async function getPMStats(
   let paramIdx = 2;
 
   if (from_date && to_date) {
-    queryStr += ` AND start_due_date::date BETWEEN $${paramIdx++}::date AND $${paramIdx++}::date`;
+    queryStr += ` AND (start_due_date AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata')::date BETWEEN $${paramIdx++}::date AND $${paramIdx++}::date`;
     params.push(from_date, to_date);
   } else if (from_date) {
-    queryStr += ` AND start_due_date::date >= $${paramIdx++}::date`;
+    queryStr += ` AND (start_due_date AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata')::date >= $${paramIdx++}::date`;
     params.push(from_date);
   } else if (to_date) {
-    queryStr += ` AND start_due_date::date <= $${paramIdx++}::date`;
+    queryStr += ` AND (start_due_date AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata')::date <= $${paramIdx++}::date`;
     params.push(to_date);
   }
 
