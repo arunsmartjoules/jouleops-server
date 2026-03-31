@@ -147,6 +147,21 @@ export async function getAssetById(assetId: string): Promise<Asset | null> {
 }
 
 /**
+ * Get asset by QR ID (with caching)
+ */
+export async function getAssetByQrId(qrId: string): Promise<Asset | null> {
+  const cacheKey = buildKey("asset_qr:", qrId);
+
+  return cached(
+    cacheKey,
+    async () => {
+      return queryOne<Asset>(`SELECT * FROM assets WHERE qr_id = $1`, [qrId]);
+    },
+    TTL.MEDIUM,
+  );
+}
+
+/**
  * Get assets by site with pagination and filtering
  */
 export async function getAssetsBySite(
@@ -432,6 +447,7 @@ export async function getAssetStats(siteId: string): Promise<AssetStats> {
 export default {
   createAsset,
   getAssetById,
+  getAssetByQrId,
   getAssetsBySite,
   getAssetsByType,
   getAssetsByLocation,

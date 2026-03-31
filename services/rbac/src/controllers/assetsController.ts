@@ -44,6 +44,23 @@ export const getById = async (req: Request, res: Response) => {
   }
 };
 
+export const getByQrId = async (req: Request, res: Response) => {
+  try {
+    const { qrId } = req.params;
+    if (!qrId) {
+      return sendError(res, "QR ID is required");
+    }
+    const asset = await assetsRepository.getAssetByQrId(qrId);
+    if (!asset) {
+      return sendNotFound(res, "Asset for this QR code");
+    }
+    return sendSuccess(res, asset);
+  } catch (error: any) {
+    console.error("Get asset by QR ID error:", error);
+    return sendServerError(res, error);
+  }
+};
+
 export const getAll = async (req: Request, res: Response) => {
   try {
     const {
@@ -290,6 +307,7 @@ export const bulkUpsert = async (req: Request, res: Response) => {
 export default {
   create,
   getById,
+  getByQrId,
   getAll,
   getBySite,
   getByType,

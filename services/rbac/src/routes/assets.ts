@@ -38,6 +38,7 @@ router.get(
   assetsController.getWarrantyExpiring,
 );
 router.get("/site/:siteCode/stats", verifyAnyAuth, assetsController.getStats);
+router.get("/qr/:qrId", verifyAnyAuth, assetsController.getByQrId);
 router.get("/:assetId", verifyAnyAuth, assetsController.getById);
 // Modification and privileged operations (unifying auth but still requiring role if needed)
 // NOTE: For now, we unify auth for GET. Admin ops stay protected.
