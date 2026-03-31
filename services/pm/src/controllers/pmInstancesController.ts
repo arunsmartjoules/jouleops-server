@@ -189,6 +189,8 @@ export const getBySite = async (req: Request, res: Response) => {
       fields,
       search,
       filters,
+      from_date,
+      to_date,
     } = req.query;
     let statusFilter = status as string | undefined;
     let frequencyFilter = frequency as string | undefined;
@@ -226,6 +228,8 @@ export const getBySite = async (req: Request, res: Response) => {
       fields: fields ? (fields as string).split(",") : undefined,
       search: search as string | undefined,
       filters: filters as any | undefined,
+      from_date: from_date as string | undefined,
+      to_date: to_date as string | undefined,
     });
     return sendSuccess(res, result.data, { pagination: result.pagination });
   } catch (error: any) {
@@ -506,6 +510,8 @@ export const getAll = async (req: Request, res: Response) => {
       fields,
       search,
       filters,
+      from_date,
+      to_date,
     } = req.query;
     let statusFilter = status as string | undefined;
     let frequencyFilter = frequency as string | undefined;
@@ -543,6 +549,8 @@ export const getAll = async (req: Request, res: Response) => {
       fields: fields ? (fields as string).split(",") : undefined,
       search: search as string | undefined,
       filters: filters as any | undefined,
+      from_date: from_date as string | undefined,
+      to_date: to_date as string | undefined,
     });
     return sendSuccess(res, result.data, { pagination: result.pagination });
   } catch (error: any) {

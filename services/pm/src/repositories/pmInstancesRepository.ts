@@ -86,6 +86,8 @@ export interface GetPMInstancesOptions {
   fields?: string[];
   search?: string | null;
   filters?: FilterRule[] | string | null;
+  from_date?: string | null;
+  to_date?: string | null;
 }
 
 // ============================================================================
@@ -163,6 +165,8 @@ export async function getPMInstancesBySite(
     asset_type = null,
     search = null,
     filters: optFilters = null,
+    from_date = null,
+    to_date = null,
   } = options;
 
   const filters: FilterRule[] = [];
@@ -196,6 +200,19 @@ export async function getPMInstancesBySite(
   }
   if (options.maintenance_id) {
     filters.push({ fieldId: "maintenance_id", operator: "=", value: options.maintenance_id });
+  }
+
+  if (from_date && to_date) {
+    filters.push({
+      fieldId: "start_due_date",
+      operator: "between",
+      value: from_date,
+      valueEnd: to_date,
+    });
+  } else if (from_date) {
+    filters.push({ fieldId: "start_due_date", operator: ">=", value: from_date });
+  } else if (to_date) {
+    filters.push({ fieldId: "start_due_date", operator: "<=", value: to_date });
   }
 
   const selectFields = options.fields && options.fields.length > 0 ? options.fields.join(", ") : "*";
