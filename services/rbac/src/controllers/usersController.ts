@@ -82,6 +82,23 @@ export const getByPhone = async (req: Request, res: Response) => {
   }
 };
 
+export const getByEmail = async (req: Request, res: Response) => {
+  try {
+    const { email } = req.params;
+    if (!email) {
+      return sendError(res, "Email is required");
+    }
+    const user = await usersRepository.getUserByEmail(email);
+    if (!user) {
+      return sendNotFound(res, "User");
+    }
+    return sendSuccess(res, user);
+  } catch (error: any) {
+    console.error("Get user by email error:", error);
+    return sendServerError(res, error);
+  }
+};
+
 export const getBySite = async (req: Request, res: Response) => {
   try {
     const { siteCode } = req.params;
@@ -280,6 +297,7 @@ export default {
   create,
   getById,
   getByPhone,
+  getByEmail,
   getBySite,
   getAll,
   update,

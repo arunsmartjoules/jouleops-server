@@ -24,6 +24,7 @@ const buildKey = (prefix: string, id: string) => `${prefix}${id}`;
 // ============================================================================
 
 export interface User {
+  id?: string; // Internal UUID
   user_id: string;
   email: string;
   name: string;
@@ -32,16 +33,29 @@ export interface User {
   role: string;
   is_active: boolean;
   is_superadmin?: boolean;
-  site_code?: string;
+  site_id?: string; // Legacy
+  site_code?: string; // Primary site identifier
   employee_code?: string;
   department?: string;
   designation?: string;
   work_location_type?: string;
+  platform_email?: string;
+  mobile?: string;
+  approving_authority?: string;
+  status?: string;
+  travel_approver?: string;
+  assigned_shift_code?: string;
+  supervisor?: string;
+  project_type?: string;
+  date_of_birth?: Date | string;
+  date_of_joining?: Date | string;
   created_at: Date;
   updated_at?: Date;
 }
 
-export interface CreateUserInput {
+export interface CreateUserInput extends Partial<
+  Omit<User, "id" | "created_at" | "updated_at">
+> {
   user_id: string;
   email: string;
   name: string;
@@ -56,19 +70,9 @@ export interface CreateUserInput {
   work_location_type?: string;
 }
 
-export interface UpdateUserInput {
-  email?: string;
-  name?: string;
-  password?: string;
-  phone?: string;
-  role?: string;
-  is_active?: boolean;
-  site_code?: string;
-  employee_code?: string;
-  department?: string;
-  designation?: string;
-  work_location_type?: string;
-}
+export interface UpdateUserInput extends Partial<
+  Omit<User, "user_id" | "id" | "created_at" | "updated_at">
+> {}
 
 export interface GetUsersOptions {
   page?: number;

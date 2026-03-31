@@ -19,6 +19,7 @@ router.post("/bulk-delete", verifyAnyAuth, usersController.bulkRemove);
 router.post("/", verifyAnyAuth, usersController.create);
 router.get("/", verifyAnyAuth, usersController.getAll);
 router.get("/phone/:phone", verifyAnyAuth, usersController.getByPhone);
+router.get("/email/:email", verifyAnyAuth, usersController.getByEmail);
 router.get("/site/:siteCode", verifyAnyAuth, usersController.getBySite);
 router.get("/:userId", verifyAnyAuth, usersController.getById);
 router.put("/:userId", verifyAnyAuth, usersController.update);
