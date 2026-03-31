@@ -21,8 +21,8 @@ import {
   sendError,
   sendNotFound,
   asyncHandler,
+  firebaseAdmin,
 } from "@jouleops/shared";
-import { supabase } from "../services/supabase.service.ts";
 
 interface AuthRequest extends Request {
   user?: {
@@ -69,26 +69,25 @@ export const login = asyncHandler(async (req: Request, res: Response) => {
     });
   }
 
-  // Generate JWT
+  // Generate access token (now using Firebase)
+  const is_admin =
+    user.role === "Admin" ||
+    user.role === "admin" ||
+    user.is_superadmin ||
+    false;
+  const is_superadmin = user.is_superadmin || false;
+
+  const token = await firebaseAdmin.auth().createCustomToken(user.user_id, {
+    role: user.role,
+    is_admin,
+    is_superadmin,
+    email: user.email,
+  });
+
   const secret = (process.env.JWT_SECRET || "") as string;
   if (!secret) {
     throw new Error("JWT_SECRET is not defined");
   }
-
-  const tokenPayload = {
-    user_id: user.user_id,
-    role: user.role,
-    email: user.email,
-    is_admin:
-      user.role === "Admin" ||
-      user.role === "admin" ||
-      user.is_superadmin ||
-      false,
-    is_superadmin: user.is_superadmin || false,
-    jti: uuidv4(),
-  };
-
-  const token = jwt.sign(tokenPayload, secret, { expiresIn: "7d" });
 
   // Generate refresh token
   const newRefreshToken = jwt.sign(
@@ -175,29 +174,19 @@ export const signup = asyncHandler(async (req: Request, res: Response) => {
     });
   }
 
-  // Generate JWT
+  // Modern Authentication: Use Firebase Admin SDK for createCustomToken
+  const token = await firebaseAdmin.auth().createCustomToken(user.user_id, {
+    role: user.role,
+    is_admin:
+      user.role === "Admin" ||
+      user.role === "admin" ||
+      user.is_superadmin ||
+      false,
+    is_superadmin: user.is_superadmin || false,
+    email: user.email,
+  });
+
   const secret = (process.env.JWT_SECRET || "") as string;
-  if (!secret) {
-    throw new Error("JWT_SECRET is not defined");
-  }
-
-  const token = jwt.sign(
-    {
-      user_id: user.user_id,
-      role: user.role,
-      email: user.email,
-      is_admin:
-        user.role === "Admin" ||
-        user.role === "admin" ||
-        user.is_superadmin ||
-        false,
-      is_superadmin: user.is_superadmin || false,
-      jti: uuidv4(),
-    },
-    secret,
-    { expiresIn: "7d" },
-  );
-
   // Generate refresh token
   const newRefreshToken = jwt.sign(
     { user_id: user.user_id, type: "refresh" },
@@ -588,6 +577,9 @@ export const verifySignupCode = asyncHandler(
     return sendSuccess(res, null, { message: "Email verified successfully" });
   },
 );
+// ============================================================================
+// Password Reset Code (Firebase + Custom SMTP)
+// ============================================================================
 
 export const sendPasswordResetCode = asyncHandler(
   async (req: Request, res: Response) => {
@@ -597,25 +589,26 @@ export const sendPasswordResetCode = asyncHandler(
       return sendError(res, "Email is required");
     }
 
-    const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: "jouleops://reset-password",
-    });
-
-    if (error) {
-      return sendError(res, error.message);
-    }
+    const emailService = await import("../services/email.service.ts");
+    const code = emailService.generateVerificationCode();
+    
+    // Store verification code in database
+    await emailService.storeVerificationCode(email, code, "password-reset");
+    
+    // Send email via our SMTP service
+    await emailService.sendVerificationEmail(email, code, "password-reset");
 
     // Log the reset request
     await logActivity({
       action: "PASSWORD_RESET_REQUESTED",
       module: "AUTH",
-      description: `Password reset requested via Supabase for ${email}`,
+      description: `Password reset requested for ${email}`,
       ip_address: req.ip,
       device_info: req.headers["user-agent"] as string,
     }).catch(() => {});
 
     return sendSuccess(res, null, {
-      message: "If the email exists, a reset link has been sent",
+      message: "If the email exists, a reset code has been sent",
     });
   },
 );
@@ -720,26 +713,22 @@ export const googleLogin = asyncHandler(async (req: Request, res: Response) => {
 
     const user = userRecord!; // Guaranteed non-null here
 
-    // Generate JWT
-    const secret = (process.env.JWT_SECRET || "") as string;
-    if (!secret) {
-      throw new Error("JWT_SECRET is not defined");
-    }
+    const is_admin =
+      user.role === "Admin" ||
+      user.role === "admin" ||
+      user.is_superadmin ||
+      false;
+    const is_superadmin = user.is_superadmin || false;
 
-    const tokenPayload = {
-      user_id: user.user_id,
+    // Modern Authentication: Use Firebase Admin SDK for createCustomToken
+    const token = await firebaseAdmin.auth().createCustomToken(user.user_id, {
       role: user.role,
+      is_admin,
+      is_superadmin,
       email: user.email,
-      is_admin:
-        user.role === "Admin" ||
-        user.role === "admin" ||
-        user.is_superadmin ||
-        false,
-      is_superadmin: user.is_superadmin || false,
-      jti: uuidv4(),
-    };
+    });
 
-    const token = jwt.sign(tokenPayload, secret, { expiresIn: "7d" });
+    const secret = (process.env.JWT_SECRET || "") as string;
 
     // Generate refresh token
     const newRefreshToken = jwt.sign(

@@ -1,18 +1,7 @@
-import jwt from "jsonwebtoken";
-import { createPublicKey } from "crypto";
 import type { Request, Response, NextFunction } from "express";
+import { firebaseAdmin } from "@jouleops/shared";
 
-function getSupabasePublicKey(): string | null {
-  const jwk = process.env.SUPABASE_JWT_JWK;
-  if (!jwk) return null;
-  try {
-    const parsed = JSON.parse(jwk);
-    return createPublicKey({ key: parsed, format: "jwk" })
-      .export({ type: "spki", format: "pem" }) as string;
-  } catch {
-    return null;
-  }
-}
+// Supabase public key logic removed in favor of Firebase Admin
 
 export interface AuthRequest extends Request {
   user?: {
@@ -56,46 +45,48 @@ export const verifyToken = async (
       });
     }
 
-    const secret = process.env.JWT_SECRET;
-    if (!secret) {
-      throw new Error("JWT_SECRET is not defined");
-    }
-
     let decoded: any;
-    let isSupabaseToken = false;
+    let isFirebaseToken = false;
 
     try {
-      decoded = jwt.verify(token, secret);
-    } catch (legacyErr: any) {
-      const supabasePublicKey = getSupabasePublicKey();
-      if (!supabasePublicKey) throw legacyErr;
-      decoded = jwt.verify(token, supabasePublicKey, { algorithms: ["ES256"] });
-      isSupabaseToken = true;
+      // 1. Try Firebase verification first (Primary)
+      decoded = await firebaseAdmin.auth().verifyIdToken(token);
+      isFirebaseToken = true;
+      
+      // Normalize Firebase claims
+      decoded.user_id = decoded.uid;
+      decoded.id = decoded.uid;
+    } catch (firebaseErr: any) {
+      // 2. Fallback to legacy custom JWT if secret is present
+      const secret = process.env.JWT_SECRET;
+      if (secret) {
+        try {
+          const jwt = await import("jsonwebtoken");
+          decoded = jwt.default.verify(token, secret);
+        } catch (jwtErr) {
+          throw firebaseErr; // Prefer Firebase error if both fail
+        }
+      } else {
+        throw firebaseErr;
+      }
     }
 
-    // Normalize Supabase token claims to the expected user shape
-    if (isSupabaseToken) {
-      const meta = decoded.user_metadata || {};
-      const appMeta = decoded.app_metadata || {};
-      decoded.user_id = decoded.sub;
-      decoded.id = decoded.sub;
-      // Supabase puts email at top-level; fall back to user_metadata.email
-      decoded.email = decoded.email || meta.email || "";
-      decoded.role = appMeta.role ?? meta.role ?? decoded.role ?? "user";
-      decoded.is_admin = appMeta.is_admin ?? meta.is_admin ?? false;
-      decoded.is_superadmin = appMeta.is_superadmin ?? meta.is_superadmin ?? false;
-
-      // Resolve the real DB user_id via email — Supabase UUID ≠ DB user_id
-      // Without this, attendance records get stored with the Supabase UUID
-      // and can't be joined back to the users table
+    // Sync with database to resolve the real DB user_id (Identity Provider ID ≠ DB user_id)
+    if (decoded.email) {
       try {
         const { getUserByEmail } = await import("../repositories/attendanceRepository.ts");
         const dbUser = await getUserByEmail(decoded.email);
         if (dbUser) {
-          // Preserve the original Supabase UUID before overwriting with DB user_id
-          decoded.supabase_id = decoded.user_id;
+          // Preserve the original Firebase UID before overwriting with DB user_id
+          (decoded as any).firebase_id = decoded.user_id;
           decoded.user_id = dbUser.user_id;
           decoded.id = dbUser.user_id;
+          decoded.role = dbUser.role || decoded.role || "user";
+          decoded.is_superadmin = dbUser.is_superadmin || false;
+          decoded.is_admin =
+            decoded.is_superadmin ||
+            dbUser.role?.toLowerCase() === "admin" ||
+            dbUser.role?.toLowerCase() === "superadmin";
         }
       } catch (dbErr) {
         console.error("[AttendanceAuthMiddleware] DB user_id resolution failed:", dbErr);

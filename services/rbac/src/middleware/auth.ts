@@ -1,24 +1,13 @@
 import jwt from "jsonwebtoken";
-import { createPublicKey } from "crypto";
 import type { Request, Response, NextFunction } from "express";
+import { firebaseAdmin } from "@jouleops/shared";
 import usersRepository from "../repositories/usersRepository.ts";
 import {
   isTokenBlacklisted,
   validateApiKey,
 } from "../repositories/authRepository.ts";
 
-/** Convert a Supabase EC JWK (ES256) to a Node.js KeyObject for jwt.verify */
-function getSupabasePublicKey(): string | null {
-  const jwk = process.env.SUPABASE_JWT_JWK;
-  if (!jwk) return null;
-  try {
-    const parsed = JSON.parse(jwk);
-    return createPublicKey({ key: parsed, format: "jwk" })
-      .export({ type: "spki", format: "pem" }) as string;
-  } catch {
-    return null;
-  }
-}
+// Supabase public key logic removed in favor of Firebase Admin
 
 export interface AuthRequest extends Request {
   user?: {
@@ -65,58 +54,68 @@ export const verifyToken = async (
       });
     }
 
-    const secret = process.env.JWT_SECRET;
-    if (!secret) {
-      throw new Error("JWT_SECRET is not defined");
-    }
-
     let decoded: any;
-    let isSupabaseToken = false;
+    let isFirebaseToken = false;
 
     try {
-      // Try legacy JWT secret first
-      decoded = jwt.verify(token, secret);
-    } catch (legacyErr: any) {
-      // Fall back to Supabase public key (ES256 asymmetric signing)
-      const supabasePublicKey = getSupabasePublicKey();
-      if (!supabasePublicKey) {
-        throw legacyErr;
+      // 1. Try Firebase verification first (Primary)
+      decoded = await firebaseAdmin.auth().verifyIdToken(token);
+      isFirebaseToken = true;
+      
+      // Normalize Firebase claims
+      decoded.user_id = decoded.uid;
+      decoded.id = decoded.uid;
+    } catch (firebaseErr: any) {
+      // 2. Fallback to legacy custom JWT if secret is present
+      const secret = process.env.JWT_SECRET;
+      if (secret) {
+        try {
+          const jwt = await import("jsonwebtoken");
+          decoded = jwt.default.verify(token, secret);
+        } catch (jwtErr) {
+          throw firebaseErr; // Prefer Firebase error if both fail
+        }
+      } else {
+        throw firebaseErr;
       }
-      decoded = jwt.verify(token, supabasePublicKey, { algorithms: ["ES256"] });
-      isSupabaseToken = true;
     }
 
-    // Check if legacy token is blacklisted (Supabase manages its own revocation)
-    if (!isSupabaseToken && decoded.jti && (await isTokenBlacklisted(decoded.jti))) {
+    // Check blacklist for legacy tokens
+    if (!isFirebaseToken && decoded.jti && (await isTokenBlacklisted(decoded.jti))) {
       return res.status(401).json({
         success: false,
         error: "Token revoked",
       });
     }
 
-    // Normalize Supabase token claims to the expected user shape
-    if (isSupabaseToken) {
-      const meta = decoded.user_metadata || {};
-      const appMeta = decoded.app_metadata || {};
-      decoded.user_id = decoded.sub;
-      decoded.id = decoded.sub;
-      decoded.email = decoded.email || meta.email || "";
-      // Prefer app_metadata (set server-side) over user_metadata, then JWT role claim
-      decoded.role = appMeta.role ?? meta.role ?? decoded.role ?? "user";
-      decoded.is_admin = appMeta.is_admin ?? meta.is_admin ?? false;
-      decoded.is_superadmin = appMeta.is_superadmin ?? meta.is_superadmin ?? false;
-
-      // Sync with database to resolve the real DB user_id (Supabase sub ≠ DB user_id)
-      // and pull latest permissions
+    // Sync with database to resolve the real DB user_id and pull latest permissions
+    if (decoded.email) {
       try {
-        const dbUser = await usersRepository.getUserByEmail(decoded.email);
+        let dbUser = await usersRepository.getUserByEmail(decoded.email);
+        
+        // Auto-provision user if not found (Firebase is the source of truth)
+        if (!dbUser && isFirebaseToken) {
+          try {
+            const newUser = {
+              user_id: crypto.randomUUID(), 
+              email: decoded.email,
+              name: decoded.name || decoded.email.split("@")[0],
+              role: "staff",
+              is_active: true,
+            };
+            dbUser = await usersRepository.createUser(newUser);
+            console.log(`[AuthMiddleware] Auto-provisioned user: ${decoded.email}`);
+          } catch (createErr) {
+            console.error("[AuthMiddleware] Auto-provisioning failed:", createErr);
+          }
+        }
+
         if (dbUser) {
-          // Replace Supabase UUID with the actual DB user_id so all downstream
-          // queries (attendance, site-users, etc.) use the correct identifier
+          // Replace Identity Provider ID with the actual DB user_id
           decoded.user_id = dbUser.user_id;
           decoded.id = dbUser.user_id;
-          decoded.role = dbUser.role || decoded.role;
-          decoded.is_superadmin = dbUser.is_superadmin ?? decoded.is_superadmin;
+          decoded.role = dbUser.role || decoded.role || "user";
+          decoded.is_superadmin = dbUser.is_superadmin || false;
           decoded.is_admin =
             decoded.is_superadmin ||
             dbUser.role?.toLowerCase() === "admin" ||

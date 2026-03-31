@@ -13,7 +13,8 @@
     "build": "turbo run build",
     "start": "turbo run start",
     "test": "turbo run test",
-    "lint": "turbo run lint"
+    "lint": "turbo run lint",
+    "migrate-users": "bun scripts/migrate_supabase_to_firebase.ts"
   },
   "devDependencies": {
     "@types/bcryptjs": "^3.0.0",
@@ -42,6 +43,7 @@
     "dotenv": "^17.2.3",
     "express": "^5.2.1",
     "express-rate-limit": "^8.2.1",
+    "firebase-admin": "^13.7.0",
     "helmet": "^8.1.0",
     "http-proxy-middleware": "^3.0.5",
     "ioredis": "^5.9.2",

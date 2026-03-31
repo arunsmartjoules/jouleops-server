@@ -524,9 +524,9 @@ export async function deleteAttendanceLog(id: string): Promise<boolean> {
 /**
  * Get a user record by email (used for auth fallback when Supabase UUID differs from DB user_id)
  */
-export async function getUserByEmail(email: string): Promise<{ user_id: string; email: string } | null> {
-  return queryOne<{ user_id: string; email: string }>(
-    `SELECT user_id, email FROM users WHERE email = $1 OR platform_email = $1 LIMIT 1`,
+export async function getUserByEmail(email: string): Promise<{ user_id: string; email: string; role: string; is_superadmin: boolean } | null> {
+  return queryOne<{ user_id: string; email: string; role: string; is_superadmin: boolean }>(
+    `SELECT user_id, email, role, is_superadmin FROM users WHERE email = $1 OR platform_email = $1 LIMIT 1`,
     [email],
   );
 }

@@ -11,6 +11,8 @@ export {
   healthCheck as dbHealthCheck,
 } from "./lib/db.ts";
 
+export { firebaseAdmin } from "./lib/firebase.ts";
+
 // Redis & Caching
 export {
   redis,
