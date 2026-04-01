@@ -135,6 +135,7 @@ export const getBySite = async (req: Request, res: Response) => {
       floor,
       sortBy,
       sortOrder,
+      search,
     } = req.query;
     const result = await assetsRepository.getAssetsBySite(siteCode, {
       page: parseInt(page as string) || 1,
@@ -150,6 +151,7 @@ export const getBySite = async (req: Request, res: Response) => {
       floor: floor as string | undefined,
       sortBy: sortBy as string | undefined,
       sortOrder: sortOrder as "asc" | "desc" | undefined,
+      search: search as string | undefined,
     });
     return sendSuccess(res, result.data, { pagination: result.pagination });
   } catch (error: any) {

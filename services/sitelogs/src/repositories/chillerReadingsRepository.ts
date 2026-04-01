@@ -223,7 +223,7 @@ export async function getChillerReadingsBySite(
     condenser_inlet_temp, condenser_outlet_temp,
     evaporator_inlet_temp, evaporator_outlet_temp,
     set_point_celsius, compressor_suction_temp,
-    discharge_pressure, main_suction_pressure,
+    discharge_pressure, main_suction_pressure, signature_text,
     sla_status, created_at, updated_at`;
 
   const data = await query<ChillerReading>(

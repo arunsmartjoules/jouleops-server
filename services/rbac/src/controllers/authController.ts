@@ -136,7 +136,7 @@ export const login = asyncHandler(async (req: Request, res: Response) => {
 // ============================================================================
 
 export const signup = asyncHandler(async (req: Request, res: Response) => {
-  const { email, password, name } = req.body;
+  const { email, password, name, firebase_uid } = req.body;
 
   if (!email || !password || !name) {
     return sendError(res, "Email, password, and name are required");
@@ -149,7 +149,10 @@ export const signup = asyncHandler(async (req: Request, res: Response) => {
     return sendError(res, "Account already registered. Please sign in.");
   }
 
-  // Hash password
+  // Use provided firebase_uid or generate a new UUID
+  const user_id = firebase_uid || uuidv4();
+
+  // Hash password for our local DB fallback
   const salt = await bcrypt.genSalt(10);
   const hashedPassword = await bcrypt.hash(password, salt);
 
@@ -165,7 +168,7 @@ export const signup = asyncHandler(async (req: Request, res: Response) => {
   } else {
     // Scenario B: Entirely new user (Registering)
     user = await usersRepository.createUser({
-      user_id: uuidv4(),
+      user_id: user_id,
       email,
       password: hashedPassword,
       name,
@@ -173,6 +176,16 @@ export const signup = asyncHandler(async (req: Request, res: Response) => {
       is_active: true,
     });
   }
+
+  // Log detailed signup activity
+  await logActivity({
+    user_id: user.user_id,
+    action: existingUser ? "SIGNUP_SYNC_CLAIM" : "SIGNUP_SYNC_REGISTER",
+    module: "AUTH",
+    description: `User ${user.email} synced from Firebase (${user.user_id})`,
+    ip_address: req.ip,
+    device_info: req.headers["user-agent"] as string,
+  });
 
   // Modern Authentication: Use Firebase Admin SDK for createCustomToken
   const token = await firebaseAdmin.auth().createCustomToken(user.user_id, {
