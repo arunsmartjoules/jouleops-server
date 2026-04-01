@@ -236,3 +236,33 @@ export const attendanceSchema = z.object({
   status: z.string().optional().default("Present"),
   remarks: z.string().optional().nullable(),
 });
+
+/**
+ * User Schemas
+ */
+export const createUserSchema = z.object({
+  user_id: z.string().min(1),
+  email: z.string().email(),
+  name: z.string().min(1),
+  phone: z.string().optional().nullable(),
+  role: z.string().min(1),
+  is_active: z.boolean().optional().default(true),
+  is_superadmin: z.boolean().optional().default(false),
+  site_code: z.string().optional().nullable(),
+  employee_code: z.string().optional().nullable(),
+  department: z.string().optional().nullable(),
+  designation: z.string().optional().nullable(),
+  work_location_type: z.string().optional().nullable(),
+  platform_email: z.string().optional().nullable(),
+  mobile: z.string().optional().nullable(),
+  approving_authority: z.string().optional().nullable(),
+  status: z.string().optional().default("Active"),
+  travel_approver: z.string().optional().nullable(),
+  assigned_shift_code: z.string().optional().nullable(),
+  supervisor: z.string().optional().nullable(),
+  project_type: z.string().optional().nullable(),
+  date_of_birth: z.union([z.string(), z.coerce.date()]).optional().nullable(),
+  date_of_joining: z.union([z.string(), z.coerce.date()]).optional().nullable(),
+});
+
+export const updateUserSchema = createUserSchema.partial().omit({ user_id: true });

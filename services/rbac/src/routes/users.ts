@@ -1,6 +1,11 @@
 import express from "express";
 import usersController from "../controllers/usersController.ts";
 import { verifyAnyAuth } from "../middleware/auth.ts";
+import {
+  validate,
+  createUserSchema,
+  updateUserSchema,
+} from "@jouleops/shared";
 
 const router = express.Router();
 
@@ -16,13 +21,18 @@ router.post("/bulk-update", verifyAnyAuth, usersController.bulkUpdate);
 router.post("/bulk-delete", verifyAnyAuth, usersController.bulkRemove);
 
 // Standard CRUD
-router.post("/", verifyAnyAuth, usersController.create);
+router.post("/", verifyAnyAuth, validate(createUserSchema), usersController.create);
 router.get("/", verifyAnyAuth, usersController.getAll);
 router.get("/phone/:phone", verifyAnyAuth, usersController.getByPhone);
 router.get("/email/:email", verifyAnyAuth, usersController.getByEmail);
 router.get("/site/:siteCode", verifyAnyAuth, usersController.getBySite);
 router.get("/:userId", verifyAnyAuth, usersController.getById);
-router.put("/:userId", verifyAnyAuth, usersController.update);
+router.put(
+  "/:userId",
+  verifyAnyAuth,
+  validate(updateUserSchema),
+  usersController.update,
+);
 router.delete("/:userId", verifyAnyAuth, usersController.remove);
 
 export default router;
