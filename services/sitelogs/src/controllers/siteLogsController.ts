@@ -81,12 +81,18 @@ export const getBySite = asyncHandler(async (req: Request, res: Response) => {
     log_id,
     log_name,
     site_code,
+    task_name,
     status,
     task_line_id,
     date_from,
     date_to,
     site_codes,
     startDate,
+    fromDate,
+    toDate,
+    scheduled_date,
+    scheduled_date_from,
+    scheduled_date_to,
     remarks,
     filters,
   } = req.query;
@@ -99,6 +105,7 @@ export const getBySite = asyncHandler(async (req: Request, res: Response) => {
   let statusFilter = status as string | undefined;
   let siteCodeFilter = site_code as string | undefined;
   let logIdFilter = log_id as string | undefined;
+  let taskNameFilter = task_name as string | undefined;
 
   if (filters) {
     try {
@@ -131,10 +138,19 @@ export const getBySite = asyncHandler(async (req: Request, res: Response) => {
     log_id: logIdFilter,
     status: statusFilter,
     task_line_id: task_line_id as string | undefined,
+    task_name: taskNameFilter,
     date_from: (date_from as string) || (startDate as string) || undefined,
     date_to: (date_to as string) || undefined,
     remarks: remarksFilter,
     site_codes: site_codes ? (site_codes as string).split(",") : undefined,
+    // Mobile client passes fromDate/toDate for scheduled_date filtering.
+    scheduled_date: scheduled_date as string | undefined,
+    scheduled_date_from:
+      (scheduled_date_from as string) ||
+      (fromDate as string) ||
+      undefined,
+    scheduled_date_to:
+      (scheduled_date_to as string) || (toDate as string) || undefined,
   });
   return sendSuccess(res, result.data, { pagination: result.pagination });
 });

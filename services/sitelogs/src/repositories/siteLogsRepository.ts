@@ -93,6 +93,12 @@ export interface GetSiteLogsOptions {
   log_id?: string | null;
   status?: string | null;
   task_line_id?: string | null;
+  task_name?: string | null;
+  // Exact date match (YYYY-MM-DD) or ISO-like strings (will be normalized)
+  scheduled_date?: string | null;
+  // Date range match (inclusive). These will be normalized to YYYY-MM-DD.
+  scheduled_date_from?: string | null;
+  scheduled_date_to?: string | null;
   date_from?: string | null;
   date_to?: string | null;
   remarks?: string | null;
@@ -171,6 +177,10 @@ export async function getLogsBySite(
     log_id = null,
     status = null,
     task_line_id = null,
+    task_name = null,
+    scheduled_date = null,
+    scheduled_date_from = null,
+    scheduled_date_to = null,
     date_from = null,
     date_to = null,
     remarks: remarksFilter = null,
@@ -225,8 +235,16 @@ export async function getLogsBySite(
     paramIndex++;
   }
 
-  // Only apply date filters if NOT searching for all pending logs
-  if (!isPendingSearch) {
+  if (task_name) {
+    conditions.push(`task_name = $${paramIndex}`);
+    params.push(task_name);
+    paramIndex++;
+  }
+
+  // If we're searching for "pending" without any date constraints, we return
+  // all pending records across dates. If the caller provides date filters,
+  // we apply them even for pending.
+  if (!isPendingSearch || date_from || date_to) {
     if (date_from) {
       conditions.push(`created_at >= $${paramIndex}`);
       params.push(date_from);
@@ -236,6 +254,33 @@ export async function getLogsBySite(
     if (date_to) {
       conditions.push(`created_at <= $${paramIndex}`);
       params.push(date_to);
+      paramIndex++;
+    }
+  }
+
+  if (scheduled_date) {
+    const normalized = sanitizeScheduledDate(scheduled_date);
+    if (normalized) {
+      conditions.push(`scheduled_date = $${paramIndex}`);
+      params.push(normalized);
+      paramIndex++;
+    }
+  }
+
+  if (scheduled_date_from) {
+    const normalized = sanitizeScheduledDate(scheduled_date_from);
+    if (normalized) {
+      conditions.push(`scheduled_date >= $${paramIndex}`);
+      params.push(normalized);
+      paramIndex++;
+    }
+  }
+
+  if (scheduled_date_to) {
+    const normalized = sanitizeScheduledDate(scheduled_date_to);
+    if (normalized) {
+      conditions.push(`scheduled_date <= $${paramIndex}`);
+      params.push(normalized);
       paramIndex++;
     }
   }
@@ -269,7 +314,10 @@ export async function getLogsBySite(
     `SELECT sl.*, lm.sequence_number 
      FROM site_logs sl
      LEFT JOIN log_master lm ON sl.task_name = lm.task_name AND sl.log_name = lm.log_name
-     ${whereClause.replace(/([^a-zA-Z0-9_])(site_code|log_name|log_id|status|task_line_id|created_at|remarks|executor_id)/g, "$1sl.$2")}
+     ${whereClause.replace(
+       /([^a-zA-Z0-9_])(site_code|log_name|log_id|status|task_line_id|created_at|scheduled_date|task_name|remarks|executor_id)/g,
+       "$1sl.$2",
+     )}
      ORDER BY lm.sequence_number ASC NULLS LAST, sl.created_at DESC
      LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`,
     [...params, limit, offset],

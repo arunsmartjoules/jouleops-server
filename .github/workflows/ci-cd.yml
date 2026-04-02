@@ -136,6 +136,5 @@ jobs:
           script: |
             cd ${{ secrets.DEPLOY_PATH }}
             git pull origin main
-            docker compose pull powersync mongo
             docker compose up -d --build
             docker image prune -f
