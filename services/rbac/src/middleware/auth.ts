@@ -95,15 +95,17 @@ export const verifyToken = async (
     // Sync with database to resolve the real DB user_id and pull latest permissions
     if (decoded.email) {
       try {
-        let dbUser = await usersRepository.getUserByEmail(decoded.email);
+        const normalizedEmail = String(decoded.email).trim().toLowerCase();
+        decoded.email = normalizedEmail;
+        let dbUser = await usersRepository.getUserByEmail(normalizedEmail);
 
         // Auto-provision user if not found (Firebase is the source of truth)
         if (!dbUser && isFirebaseToken) {
           try {
             const newUser = {
               user_id: crypto.randomUUID(),
-              email: decoded.email,
-              name: decoded.name || decoded.email.split("@")[0],
+              email: normalizedEmail,
+              name: decoded.name || normalizedEmail.split("@")[0],
               role: "staff",
               is_active: true,
             };

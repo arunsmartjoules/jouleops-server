@@ -245,12 +245,12 @@ export const signup = asyncHandler(async (req: Request, res: Response) => {
 
 export const getProfile = asyncHandler(
   async (req: AuthRequest, res: Response) => {
-    // Try by user_id first; fall back to email for Supabase tokens
-    // where the sub (Supabase UUID) may differ from the DB user_id
-    let user = await usersRepository.getUserById(req.user!.user_id);
-
-    if (!user && req.user!.email) {
-      user = await usersRepository.getUserByEmail(req.user!.email);
+    // Resolve by email first to avoid identity-provider UUID mismatches.
+    let user = req.user!.email
+      ? await usersRepository.getUserByEmail(req.user!.email)
+      : null;
+    if (!user) {
+      user = await usersRepository.getUserById(req.user!.user_id);
     }
 
     if (!user) {
@@ -704,8 +704,12 @@ export const googleLogin = asyncHandler(async (req: Request, res: Response) => {
       return sendError(res, "Invalid Google token payload");
     }
 
-    const email = payload.email!;
+    const email = String(payload.email || "").trim().toLowerCase();
     const name = (payload.name || email.split("@")[0]) as string;
+
+    if (!email) {
+      return sendError(res, "Invalid Google email in token payload");
+    }
 
     // Find or create user
     let userRecord = await usersRepository.getUserByEmail(email);

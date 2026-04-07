@@ -165,9 +165,12 @@ export async function getUserByIdUncached(
  * Checks both email and platform_email columns since some users only have one set.
  */
 export async function getUserByEmail(email: string): Promise<User | null> {
+  const normalizedEmail = String(email || "").trim().toLowerCase();
+  if (!normalizedEmail) return null;
+
   return queryOne<User>(
-    `SELECT * FROM users WHERE email = $1 OR platform_email = $1 LIMIT 1`,
-    [email],
+    `SELECT * FROM users WHERE LOWER(TRIM(email)) = $1 OR LOWER(TRIM(platform_email)) = $1 LIMIT 1`,
+    [normalizedEmail],
   );
 }
 
