@@ -29,6 +29,9 @@ export interface CreatePMResponseInput {
   completed_by?: string;
 }
 
+const isUuid = (id: string) =>
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+
 /**
  * Create or Upsert a PM response
  */
@@ -104,11 +107,17 @@ export async function getByInstance(
     fields && fields.length > 0
       ? fields.join(", ")
       : "pr.*, pc.task_name, pc.sequence_no";
+
+  const whereClause = isUuid(instanceId)
+    ? "pr.instance_id = $1"
+    : "pi.instance_id = $1";
+
   return query<PMResponse>(
     `SELECT ${selectFields} 
      FROM pm_checklist_responses pr
+     LEFT JOIN pm_instances pi ON pi.id::text = pr.instance_id
      LEFT JOIN pm_checklist pc ON pr.checklist_id = pc.id::text
-     WHERE pr.instance_id = $1 
+     WHERE ${whereClause}
      ORDER BY pc.sequence_no ASC NULLS LAST, pr.created_at ASC`,
     [instanceId],
   );
