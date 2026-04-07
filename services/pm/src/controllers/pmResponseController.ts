@@ -12,11 +12,71 @@ import {
   sendNotFound,
   sendServerError,
   logActivity,
+  queryOne,
 } from "@jouleops/shared";
+import pmChecklistRepository from "../repositories/pmChecklistRepository.ts";
+import pmInstancesRepository from "../repositories/pmInstancesRepository.ts";
+import { createPMInstanceTaskLineInFieldproxy } from "../services/fieldproxyService.ts";
 
 export const create = async (req: AuthRequest, res: Response) => {
   try {
     const response = await pmResponseRepository.create(req.body);
+
+    // Fire-and-forget: create one row per checklist upsert in Fieldproxy
+    // sheet "pm_instance_task_line".
+    Promise.all([
+      pmInstancesRepository.getPMInstanceById(req.body.instance_id),
+      pmChecklistRepository.getPMChecklistItemById(req.body.checklist_id),
+    ])
+      .then(async ([instance, checklistItem]) => {
+        if (!instance?.instance_id || !checklistItem?.task_name) {
+          logActivity({
+            action: "CREATE_FIELDPROXY_PM_INSTANCE_TASK_LINE_SKIPPED",
+            module: "PM",
+            description:
+              "Skipped fieldproxy pm_instance_task_line forward due to missing instance/checklist mapping",
+            metadata: {
+              instance_uuid: req.body.instance_id,
+              checklist_uuid: req.body.checklist_id,
+              has_instance_id: !!instance?.instance_id,
+              has_task_name: !!checklistItem?.task_name,
+            },
+          }).catch(() => {});
+          return;
+        }
+
+        const fpRes = await createPMInstanceTaskLineInFieldproxy({
+          instance_id: instance.instance_id,
+          task_name: checklistItem.task_name,
+          status: req.body.response_value ?? "Pending",
+          checklist_id: req.body.checklist_id,
+        });
+
+        logActivity({
+          action: "CREATE_FIELDPROXY_PM_INSTANCE_TASK_LINE",
+          module: "PM",
+          description: `Created fieldproxy pm_instance_task_line row for instance ${instance.instance_id}`,
+          metadata: {
+            instance_id: instance.instance_id,
+            checklist_id: req.body.checklist_id,
+            task_name: checklistItem.task_name,
+            status: req.body.response_value ?? "Pending",
+            fieldproxy_response: fpRes,
+          },
+        }).catch(() => {});
+      })
+      .catch((err: Error) => {
+        logActivity({
+          action: "CREATE_FIELDPROXY_PM_INSTANCE_TASK_LINE_FAILED",
+          module: "PM",
+          description: `Failed to create fieldproxy pm_instance_task_line row: ${err.message}`,
+          metadata: {
+            instance_uuid: req.body.instance_id,
+            checklist_uuid: req.body.checklist_id,
+            error: err.message,
+          },
+        }).catch(() => {});
+      });
 
     logActivity({
       user_id: req.user?.user_id,

@@ -233,6 +233,55 @@ export interface TaskManagementFieldproxyPayload {
   assigned_to?: string;       // employee_code of the user
 }
 
+// ─── Create PM Instance Task Line in Fieldproxy ──────────────────────────────
+
+export interface PMInstanceTaskLinePayload {
+  instance_id: string;
+  task_name: string;
+  status?: string | null;
+  checklist_id: string;
+}
+
+/**
+ * Creates a row in Fieldproxy sheet "pm_instance_task_line".
+ * This is append-only and should be called for each checklist upsert.
+ */
+export async function createPMInstanceTaskLineInFieldproxy(
+  payload: PMInstanceTaskLinePayload,
+): Promise<any> {
+  const token = await getAccessToken();
+
+  const body = {
+    sheetId: "pm_instance_task_line",
+    sheetName: "pm_instance_task_line",
+    tableData: {
+      instance_id: payload.instance_id,
+      task_name: payload.task_name,
+      status: payload.status ?? null,
+      checklist_id: payload.checklist_id,
+    },
+  };
+
+  const res = await fetch(`${FIELDPROXY_BASE}/sheetsRow`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-api-key": token,
+    },
+    body: JSON.stringify(body),
+  });
+
+  const responseData = await res.json().catch(() => ({}));
+
+  if (!res.ok) {
+    throw new Error(
+      `Fieldproxy sheetsRow failed [pm_instance_task_line]: ${res.status} ${res.statusText} — ${JSON.stringify(responseData)}`,
+    );
+  }
+
+  return responseData;
+}
+
 /**
  * Updates the task_management sheet in Fieldproxy.
  * Looks up the row by source_reference_id = instance_id, then updates.
