@@ -162,6 +162,12 @@ function mapToTaskStatus(status: string): string {
   }
 }
 
+function isRemoteUrl(value?: string | null): boolean {
+  if (!value) return false;
+  const v = String(value).trim().toLowerCase();
+  return v.startsWith("http://") || v.startsWith("https://");
+}
+
 // ─── PM Instance Payload ─────────────────────────────────────────────────────
 
 export interface PMFieldproxyPayload {
@@ -206,9 +212,9 @@ export async function updatePMInstanceInFieldproxy(
   const tableData: Record<string, any> = {};
   if (payload.status)         tableData.status         = mapToPMInstanceStatus(payload.status);
   if (payload.progress)       tableData.progress       = payload.progress;
-  if (payload.before_image)   tableData.before_image   = payload.before_image;
-  if (payload.after_image)    tableData.after_image     = payload.after_image;
-  if (payload.sjpl_sign)      tableData.sjpl_sign      = payload.sjpl_sign;
+  if (isRemoteUrl(payload.before_image)) tableData.before_image = payload.before_image;
+  if (isRemoteUrl(payload.after_image))  tableData.after_image  = payload.after_image;
+  if (isRemoteUrl(payload.sjpl_sign))    tableData.sjpl_sign    = payload.sjpl_sign;
   if (payload.start_datetime) tableData.start_datetime = payload.start_datetime;
   if (payload.end_datetime)   tableData.end_datetime   = payload.end_datetime;
   if (payload.assigned_to)    tableData.assigned_to    = payload.assigned_to;
