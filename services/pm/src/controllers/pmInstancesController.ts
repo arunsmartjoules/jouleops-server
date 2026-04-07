@@ -26,11 +26,19 @@ import {
 // ─── Helper: get employee_code from user_id ─────────────────────────────────
 async function getEmployeeCode(userId?: string): Promise<string | null> {
   if (!userId) return null;
-  const row = await queryOne<{ employee_code: string }>(
-    `SELECT employee_code FROM users WHERE id = $1`,
-    [userId],
-  );
-  return row?.employee_code ?? null;
+  try {
+    const row = await queryOne<{ employee_code: string }>(
+      `SELECT employee_code FROM users WHERE id = $1`,
+      [userId],
+    );
+    return row?.employee_code ?? null;
+  } catch (error) {
+    console.warn(
+      "[PM_INSTANCES_CONTROLLER] Failed to resolve employee_code from users table:",
+      error,
+    );
+    return null;
+  }
 }
 
 // ─── Helper: fire-and-forget Fieldproxy sync for PM ─────────────────────────
