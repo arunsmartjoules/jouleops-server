@@ -16,10 +16,12 @@ import {
   sendServerError,
   logActivity,
   queryOne,
+  query,
 } from "@jouleops/shared";
 import {
   updatePMInstanceInFieldproxy,
   updateTaskManagementInFieldproxy,
+  createPMInstanceTaskLineInFieldproxy,
   type PMFieldproxyPayload,
 } from "../services/fieldproxyService.ts";
 
@@ -587,6 +589,309 @@ export const getAll = async (req: Request, res: Response) => {
   }
 };
 
+type FieldproxySyncError = { scope: string; id: string; error: string };
+
+async function syncSingleInstanceToFieldproxy(instance: any): Promise<{
+  pmInstanceSynced: number;
+  taskManagementSynced: number;
+  taskLineCreated: number;
+  responsesSelected: number;
+  errors: FieldproxySyncError[];
+}> {
+  let pmInstanceSynced = 0;
+  let taskManagementSynced = 0;
+  let taskLineCreated = 0;
+  const errors: FieldproxySyncError[] = [];
+
+  const pmPayload: PMFieldproxyPayload = {
+    instance_id: instance.instance_id,
+    status: instance.status || undefined,
+    progress: instance.progress || undefined,
+    before_image: instance.before_image || undefined,
+    after_image: instance.after_image || undefined,
+    sjpl_sign: instance.client_sign || undefined,
+    start_datetime: instance.start_datetime
+      ? new Date(instance.start_datetime).toISOString()
+      : undefined,
+    end_datetime: instance.end_datetime
+      ? new Date(instance.end_datetime).toISOString()
+      : undefined,
+  };
+
+  try {
+    const pmRes = await updatePMInstanceInFieldproxy(pmPayload);
+    if (!pmRes.error) pmInstanceSynced += 1;
+  } catch (err: any) {
+    errors.push({
+      scope: "pm_instance",
+      id: instance.instance_id,
+      error: err?.message || String(err),
+    });
+  }
+
+  try {
+    const tmRes = await updateTaskManagementInFieldproxy({
+      instance_id: instance.instance_id,
+      task_status: instance.status || undefined,
+      time_log_start: pmPayload.start_datetime,
+      time_log_end: pmPayload.end_datetime,
+    });
+    if (!tmRes.error) taskManagementSynced += 1;
+  } catch (err: any) {
+    errors.push({
+      scope: "task_management",
+      id: instance.instance_id,
+      error: err?.message || String(err),
+    });
+  }
+
+  const responseRows = await query<any>(
+    `SELECT pi.instance_id, r.checklist_id, c.task_name, r.response_value
+     FROM pm_checklist_responses r
+     JOIN pm_instances pi ON pi.id::text = r.instance_id
+     LEFT JOIN pm_checklist c ON c.id::text = r.checklist_id
+     WHERE pi.id = $1 OR pi.instance_id = $2
+     ORDER BY r.created_at ASC`,
+    [instance.id, instance.instance_id],
+  );
+
+  for (const row of responseRows) {
+    try {
+      await createPMInstanceTaskLineInFieldproxy({
+        instance_id: row.instance_id,
+        task_name: row.task_name || "PM Task",
+        status: row.response_value || "Pending",
+        checklist_id: row.checklist_id,
+      });
+      taskLineCreated += 1;
+    } catch (err: any) {
+      errors.push({
+        scope: "pm_instance_task_line",
+        id: `${row.instance_id}:${row.checklist_id}`,
+        error: err?.message || String(err),
+      });
+    }
+  }
+
+  return {
+    pmInstanceSynced,
+    taskManagementSynced,
+    taskLineCreated,
+    responsesSelected: responseRows.length,
+    errors,
+  };
+}
+
+export const syncFieldproxyByInstance = async (req: AuthRequest, res: Response) => {
+  try {
+    const { instanceId } = req.params;
+    if (!instanceId) return sendError(res, "Instance ID is required");
+
+    const instance = await pmInstancesRepository.getPMInstanceById(instanceId);
+    if (!instance) return sendNotFound(res, "PM instance");
+
+    logActivity({
+      user_id: req.user?.user_id,
+      action: "SYNC_FIELDPROXY_PM_INSTANCE_START",
+      module: "PM",
+      description: `Manual fieldproxy sync started for PM ${instance.instance_id}`,
+      metadata: { instance_id: instance.instance_id, instance_uuid: instance.id },
+    }).catch(() => {});
+
+    const result = await syncSingleInstanceToFieldproxy(instance);
+
+    logActivity({
+      user_id: req.user?.user_id,
+      action: "SYNC_FIELDPROXY_PM_INSTANCE_SUMMARY",
+      module: "PM",
+      description: `Manual fieldproxy sync completed for PM ${instance.instance_id}`,
+      metadata: {
+        instance_id: instance.instance_id,
+        instance_uuid: instance.id,
+        counts: {
+          pm_instance_synced: result.pmInstanceSynced,
+          task_management_synced: result.taskManagementSynced,
+          pm_instance_task_line_created: result.taskLineCreated,
+          responses_selected: result.responsesSelected,
+          error_count: result.errors.length,
+        },
+        errors: result.errors.slice(0, 50),
+      },
+    }).catch(() => {});
+
+    return sendSuccess(res, {
+      instance_id: instance.instance_id,
+      instance_uuid: instance.id,
+      pm_instance_synced: result.pmInstanceSynced,
+      task_management_synced: result.taskManagementSynced,
+      pm_instance_task_line_created: result.taskLineCreated,
+      responses_selected: result.responsesSelected,
+      errors: result.errors.slice(0, 100),
+    });
+  } catch (error: any) {
+    console.error("Sync PM instance to Fieldproxy error:", error);
+    return sendServerError(res, error);
+  }
+};
+
+export const resyncFieldproxyHistory = async (req: AuthRequest, res: Response) => {
+  try {
+    const {
+      site_code,
+      from_date,
+      to_date,
+      limit = "200",
+    } = (req.query || {}) as Record<string, string>;
+    const bodyInstanceIds = Array.isArray(req.body?.instance_ids)
+      ? req.body.instance_ids.map((v: any) => String(v)).filter(Boolean)
+      : [];
+
+    const filters: string[] = [];
+    const params: any[] = [];
+    let idx = 1;
+
+    if (bodyInstanceIds.length > 0) {
+      filters.push(`(id::text = ANY($${idx}::text[]) OR instance_id = ANY($${idx}::text[]))`);
+      params.push(bodyInstanceIds);
+      idx += 1;
+    }
+
+    if (site_code) {
+      filters.push(`site_code = $${idx++}`);
+      params.push(site_code);
+    }
+    if (from_date) {
+      filters.push(`start_due_date >= $${idx++}::date`);
+      params.push(from_date);
+    }
+    if (to_date) {
+      filters.push(`start_due_date <= $${idx++}::date`);
+      params.push(to_date);
+    }
+
+    const safeLimit = Math.max(1, Math.min(1000, Number(limit) || 200));
+    params.push(safeLimit);
+
+    const whereClause = filters.length > 0 ? `WHERE ${filters.join(" AND ")}` : "";
+    const instances = await query<any>(
+      `SELECT id, instance_id, status, progress, before_image, after_image, client_sign, start_datetime, end_datetime
+       FROM pm_instances
+       ${whereClause}
+       ORDER BY updated_at DESC
+       LIMIT $${idx}`,
+      params,
+    );
+
+    let pmInstanceSynced = 0;
+    let taskManagementSynced = 0;
+    let taskLineCreated = 0;
+    const errors: Array<{ scope: string; id: string; error: string }> = [];
+
+    for (const inst of instances) {
+      const pmPayload: PMFieldproxyPayload = {
+        instance_id: inst.instance_id,
+        status: inst.status || undefined,
+        progress: inst.progress || undefined,
+        before_image: inst.before_image || undefined,
+        after_image: inst.after_image || undefined,
+        sjpl_sign: inst.client_sign || undefined,
+        start_datetime: inst.start_datetime
+          ? new Date(inst.start_datetime).toISOString()
+          : undefined,
+        end_datetime: inst.end_datetime
+          ? new Date(inst.end_datetime).toISOString()
+          : undefined,
+      };
+
+      try {
+        const pmRes = await updatePMInstanceInFieldproxy(pmPayload);
+        if (!pmRes.error) pmInstanceSynced += 1;
+      } catch (err: any) {
+        errors.push({
+          scope: "pm_instance",
+          id: inst.instance_id,
+          error: err?.message || String(err),
+        });
+      }
+
+      try {
+        const tmRes = await updateTaskManagementInFieldproxy({
+          instance_id: inst.instance_id,
+          task_status: inst.status || undefined,
+          time_log_start: pmPayload.start_datetime,
+          time_log_end: pmPayload.end_datetime,
+        });
+        if (!tmRes.error) taskManagementSynced += 1;
+      } catch (err: any) {
+        errors.push({
+          scope: "task_management",
+          id: inst.instance_id,
+          error: err?.message || String(err),
+        });
+      }
+    }
+
+    const responseRows = await query<any>(
+      `SELECT pi.instance_id, r.checklist_id, c.task_name, r.response_value
+       FROM pm_checklist_responses r
+       JOIN pm_instances pi ON pi.id::text = r.instance_id
+       LEFT JOIN pm_checklist c ON c.id::text = r.checklist_id
+       ${whereClause}
+       ORDER BY r.created_at ASC
+       LIMIT $${idx}`,
+      params,
+    );
+
+    for (const row of responseRows) {
+      try {
+        await createPMInstanceTaskLineInFieldproxy({
+          instance_id: row.instance_id,
+          task_name: row.task_name || "PM Task",
+          status: row.response_value || "Pending",
+          checklist_id: row.checklist_id,
+        });
+        taskLineCreated += 1;
+      } catch (err: any) {
+        errors.push({
+          scope: "pm_instance_task_line",
+          id: `${row.instance_id}:${row.checklist_id}`,
+          error: err?.message || String(err),
+        });
+      }
+    }
+
+    logActivity({
+      user_id: req.user?.user_id,
+      action: "RESYNC_FIELDPROXY_PM_HISTORY",
+      module: "PM",
+      description: "Manual PM history resync to Fieldproxy executed",
+      metadata: {
+        filter: { site_code: site_code || null, from_date: from_date || null, to_date: to_date || null, limit: safeLimit },
+        counts: {
+          instances_selected: instances.length,
+          responses_selected: responseRows.length,
+          pm_instance_synced: pmInstanceSynced,
+          task_management_synced: taskManagementSynced,
+          pm_instance_task_line_created: taskLineCreated,
+          error_count: errors.length,
+        },
+      },
+    }).catch(() => {});
+
+    return sendSuccess(res, {
+      instances_selected: instances.length,
+      responses_selected: responseRows.length,
+      pm_instance_synced: pmInstanceSynced,
+      task_management_synced: taskManagementSynced,
+      pm_instance_task_line_created: taskLineCreated,
+      errors: errors.slice(0, 100),
+    });
+  } catch (error: any) {
+    console.error("Resync PM fieldproxy history error:", error);
+    return sendServerError(res, error);
+  }
+};
+
 export default {
   create,
   getById,
@@ -598,6 +903,7 @@ export default {
   update,
   updateStatus,
   updateProgress,
+  resyncFieldproxyHistory,
   remove,
   getStats,
 };

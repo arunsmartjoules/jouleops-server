@@ -28,6 +28,11 @@ router.get(
   pmInstancesController.getStats,
 );
 router.get("/asset/:assetId", verifyAnyAuth, pmInstancesController.getByAsset);
+router.post(
+  "/:instanceId/sync-fieldproxy",
+  verifyAnyAuth,
+  pmInstancesController.syncFieldproxyByInstance,
+);
 router.get("/:instanceId", verifyAnyAuth, pmInstancesController.getById);
 router.put("/:instanceId", verifyAnyAuth, pmInstancesController.update);
 router.patch(
@@ -39,6 +44,11 @@ router.patch(
   "/:instanceId/progress",
   verifyAnyAuth,
   pmInstancesController.updateProgress,
+);
+router.post(
+  "/resync/fieldproxy-history",
+  verifyAnyAuth,
+  pmInstancesController.resyncFieldproxyHistory,
 );
 router.delete("/:instanceId", verifyAnyAuth, pmInstancesController.remove);
 
