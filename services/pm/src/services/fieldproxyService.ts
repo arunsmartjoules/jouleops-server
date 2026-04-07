@@ -168,6 +168,21 @@ function isRemoteUrl(value?: string | null): boolean {
   return v.startsWith("http://") || v.startsWith("https://");
 }
 
+function normalizeProgress(value?: string | null): string | undefined {
+  if (!value) return undefined;
+  const raw = String(value).trim();
+  if (!raw) return undefined;
+
+  // Mobile often stores progress as "answered/total" (e.g. "6/6").
+  // Fieldproxy pm_instance commonly expects a scalar.
+  if (raw.includes("/")) {
+    const [answered] = raw.split("/");
+    const n = Number(answered);
+    if (!Number.isNaN(n)) return String(n);
+  }
+  return raw;
+}
+
 // ─── PM Instance Payload ─────────────────────────────────────────────────────
 
 export interface PMFieldproxyPayload {
@@ -211,7 +226,8 @@ export async function updatePMInstanceInFieldproxy(
   // 2. Prepare tableData — only include fields that are provided
   const tableData: Record<string, any> = {};
   if (payload.status)         tableData.status         = mapToPMInstanceStatus(payload.status);
-  if (payload.progress)       tableData.progress       = payload.progress;
+  const normalizedProgress = normalizeProgress(payload.progress || null);
+  if (normalizedProgress)     tableData.progress       = normalizedProgress;
   if (isRemoteUrl(payload.before_image)) tableData.before_image = payload.before_image;
   if (isRemoteUrl(payload.after_image))  tableData.after_image  = payload.after_image;
   if (isRemoteUrl(payload.sjpl_sign))    tableData.sjpl_sign    = payload.sjpl_sign;
@@ -223,10 +239,28 @@ export async function updatePMInstanceInFieldproxy(
     return { lookup: lookupResponse, error: "No fields to update" };
   }
 
-  // 3. Update
-  const updateResponse = await updateSheetRow(rowId, "pm_instance", tableData, token);
+  // 3. Update (with graceful fallback if media columns are rejected)
+  try {
+    const updateResponse = await updateSheetRow(rowId, "pm_instance", tableData, token);
+    return { lookup: lookupResponse, update: updateResponse };
+  } catch (err: any) {
+    const retryData = { ...tableData };
+    delete retryData.before_image;
+    delete retryData.after_image;
+    delete retryData.sjpl_sign;
 
-  return { lookup: lookupResponse, update: updateResponse };
+    // Retry only when there are meaningful non-media fields to keep instance status in sync.
+    if (Object.keys(retryData).length > 0) {
+      const retryResponse = await updateSheetRow(rowId, "pm_instance", retryData, token);
+      return {
+        lookup: lookupResponse,
+        update: retryResponse,
+        error: `Media fields skipped after initial failure: ${err?.message || String(err)}`,
+      };
+    }
+
+    throw err;
+  }
 }
 
 // ─── Update Task Management in Fieldproxy ────────────────────────────────────
