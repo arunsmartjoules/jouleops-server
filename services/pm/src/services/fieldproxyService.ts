@@ -240,6 +240,7 @@ export interface PMInstanceTaskLinePayload {
   task_name: string;
   status?: string | null;
   checklist_id: string;
+  task_line_id?: string;
 }
 
 /**
@@ -255,6 +256,9 @@ export async function createPMInstanceTaskLineInFieldproxy(
     sheetId: "pm_instance_task_line",
     sheetName: "pm_instance_task_line",
     tableData: {
+      task_line_id:
+        payload.task_line_id ||
+        `${payload.instance_id}:${payload.checklist_id}`,
       instance_id: payload.instance_id,
       task_name: payload.task_name,
       status: payload.status ?? null,
