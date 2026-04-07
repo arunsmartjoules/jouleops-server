@@ -903,6 +903,7 @@ export default {
   update,
   updateStatus,
   updateProgress,
+  syncFieldproxyByInstance,
   resyncFieldproxyHistory,
   remove,
   getStats,
