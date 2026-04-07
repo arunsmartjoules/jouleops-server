@@ -746,37 +746,52 @@ export const resyncFieldproxyHistory = async (req: AuthRequest, res: Response) =
       ? req.body.instance_ids.map((v: any) => String(v)).filter(Boolean)
       : [];
 
-    const filters: string[] = [];
+    const instanceFilters: string[] = [];
+    const responseFilters: string[] = [];
     const params: any[] = [];
     let idx = 1;
 
     if (bodyInstanceIds.length > 0) {
-      filters.push(`(id::text = ANY($${idx}::text[]) OR instance_id = ANY($${idx}::text[]))`);
+      instanceFilters.push(
+        `(pm_instances.id::text = ANY($${idx}::text[]) OR pm_instances.instance_id = ANY($${idx}::text[]))`,
+      );
+      responseFilters.push(
+        `(pi.id::text = ANY($${idx}::text[]) OR pi.instance_id = ANY($${idx}::text[]))`,
+      );
       params.push(bodyInstanceIds);
       idx += 1;
     }
 
     if (site_code) {
-      filters.push(`site_code = $${idx++}`);
+      instanceFilters.push(`pm_instances.site_code = $${idx}`);
+      responseFilters.push(`pi.site_code = $${idx}`);
       params.push(site_code);
+      idx += 1;
     }
     if (from_date) {
-      filters.push(`start_due_date >= $${idx++}::date`);
+      instanceFilters.push(`pm_instances.start_due_date >= $${idx}::date`);
+      responseFilters.push(`pi.start_due_date >= $${idx}::date`);
       params.push(from_date);
+      idx += 1;
     }
     if (to_date) {
-      filters.push(`start_due_date <= $${idx++}::date`);
+      instanceFilters.push(`pm_instances.start_due_date <= $${idx}::date`);
+      responseFilters.push(`pi.start_due_date <= $${idx}::date`);
       params.push(to_date);
+      idx += 1;
     }
 
     const safeLimit = Math.max(1, Math.min(1000, Number(limit) || 200));
     params.push(safeLimit);
 
-    const whereClause = filters.length > 0 ? `WHERE ${filters.join(" AND ")}` : "";
+    const instanceWhereClause =
+      instanceFilters.length > 0 ? `WHERE ${instanceFilters.join(" AND ")}` : "";
+    const responseWhereClause =
+      responseFilters.length > 0 ? `WHERE ${responseFilters.join(" AND ")}` : "";
     const instances = await query<any>(
       `SELECT id, instance_id, status, progress, before_image, after_image, client_sign, start_datetime, end_datetime
        FROM pm_instances
-       ${whereClause}
+       ${instanceWhereClause}
        ORDER BY updated_at DESC
        LIMIT $${idx}`,
       params,
@@ -836,7 +851,7 @@ export const resyncFieldproxyHistory = async (req: AuthRequest, res: Response) =
        FROM pm_checklist_responses r
        JOIN pm_instances pi ON pi.id::text = r.instance_id
        LEFT JOIN pm_checklist c ON c.id::text = r.checklist_id
-       ${whereClause}
+       ${responseWhereClause}
        ORDER BY r.created_at ASC
        LIMIT $${idx}`,
       params,
