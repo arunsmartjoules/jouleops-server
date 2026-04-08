@@ -159,32 +159,32 @@ export const updateUserPreferences = async (
   userId: string,
   preferences: Partial<UserPreferences>,
 ): Promise<UserPreferences | null> => {
-  const {
-    attendance_notifications_enabled,
-    ticket_notifications_enabled,
-  } = preferences;
+  const existingPreferences = await queryOne<UserPreferences>(
+    "SELECT * FROM user_notification_preferences WHERE user_id = $1",
+    [userId],
+  );
+
+  const attendance_notifications_enabled =
+    preferences.attendance_notifications_enabled ??
+    existingPreferences?.attendance_notifications_enabled ??
+    true;
+
+  const ticket_notifications_enabled =
+    preferences.ticket_notifications_enabled ??
+    existingPreferences?.ticket_notifications_enabled ??
+    true;
 
   const result = await queryOne<UserPreferences>(
     `
         INSERT INTO user_notification_preferences (user_id, attendance_notifications_enabled, ticket_notifications_enabled, updated_at)
         VALUES ($1, $2, $3, NOW())
         ON CONFLICT (user_id) DO UPDATE SET
-        attendance_notifications_enabled = CASE 
-            WHEN EXCLUDED.attendance_notifications_enabled IS NULL THEN user_notification_preferences.attendance_notifications_enabled 
-            ELSE EXCLUDED.attendance_notifications_enabled 
-        END,
-        ticket_notifications_enabled = CASE 
-            WHEN EXCLUDED.ticket_notifications_enabled IS NULL THEN user_notification_preferences.ticket_notifications_enabled 
-            ELSE EXCLUDED.ticket_notifications_enabled 
-        END,
+        attendance_notifications_enabled = EXCLUDED.attendance_notifications_enabled,
+        ticket_notifications_enabled = EXCLUDED.ticket_notifications_enabled,
         updated_at = NOW()
         RETURNING *
     `,
-    [
-      userId,
-      attendance_notifications_enabled !== undefined ? attendance_notifications_enabled : null,
-      ticket_notifications_enabled !== undefined ? ticket_notifications_enabled : null,
-    ],
+    [userId, attendance_notifications_enabled, ticket_notifications_enabled],
   );
   return result;
 };

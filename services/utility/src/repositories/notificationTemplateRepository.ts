@@ -33,7 +33,14 @@ export interface UpdateTemplateInput {
   is_active?: boolean;
 }
 
-const VALID_TRIGGER_KEYS = ["punch_in", "punch_out", "complaint_open", "complaint_inprogress", "ticket_created"] as const;
+const VALID_TRIGGER_KEYS = [
+  "punch_in",
+  "punch_out",
+  "complaint_open",
+  "complaint_inprogress",
+  "pm_inprogress",
+  "ticket_created",
+] as const;
 
 export interface ValidationError {
   field: string;

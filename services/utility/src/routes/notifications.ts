@@ -369,7 +369,41 @@ router.get("/preferences", verifyAnyAuth, async (req: any, res) => {
 router.put("/preferences", verifyAnyAuth, async (req: any, res) => {
   try {
     const userId = req.user.user_id;
-    const { attendance_notifications_enabled, ticket_notifications_enabled } = req.body;
+    const requestBody = req.body || {};
+    const { attendance_notifications_enabled, ticket_notifications_enabled } = requestBody;
+    const hasAttendanceField = Object.prototype.hasOwnProperty.call(
+      requestBody,
+      "attendance_notifications_enabled",
+    );
+    const hasTicketField = Object.prototype.hasOwnProperty.call(
+      requestBody,
+      "ticket_notifications_enabled",
+    );
+
+    if (!hasAttendanceField && !hasTicketField) {
+      return res.status(400).json({
+        success: false,
+        error:
+          "At least one preference field is required: attendance_notifications_enabled or ticket_notifications_enabled",
+      });
+    }
+
+    if (attendance_notifications_enabled === null || ticket_notifications_enabled === null) {
+      return res.status(400).json({
+        success: false,
+        error: "Preference values cannot be null",
+      });
+    }
+
+    if (
+      (hasAttendanceField && typeof attendance_notifications_enabled !== "boolean") ||
+      (hasTicketField && typeof ticket_notifications_enabled !== "boolean")
+    ) {
+      return res.status(400).json({
+        success: false,
+        error: "Preference values must be boolean",
+      });
+    }
 
     const preferences = await notificationSettingsService.updateUserPreferences(
       userId,

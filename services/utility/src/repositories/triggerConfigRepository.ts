@@ -8,7 +8,13 @@ import { query, queryOne } from "@jouleops/shared";
 
 export interface TriggerConfig {
   id: string;
-  trigger_key: "punch_in" | "punch_out" | "complaint_open" | "complaint_inprogress" | "ticket_created";
+  trigger_key:
+    | "punch_in"
+    | "punch_out"
+    | "complaint_open"
+    | "complaint_inprogress"
+    | "pm_inprogress"
+    | "ticket_created";
   is_enabled: boolean;
   threshold_value: number;
   repeat_frequency_minutes: number | null;
@@ -19,7 +25,7 @@ export interface TriggerConfig {
 const TIME_TRIGGER_KEYS = ["punch_in", "punch_out"] as const;
 
 /** Trigger keys that use elapsed duration (duration-based) */
-const DURATION_TRIGGER_KEYS = ["complaint_open", "complaint_inprogress"] as const;
+const DURATION_TRIGGER_KEYS = ["complaint_open", "complaint_inprogress", "pm_inprogress"] as const;
 
 /** Trigger keys that are event-based (no threshold/frequency) */
 const EVENT_TRIGGER_KEYS = ["ticket_created"] as const;

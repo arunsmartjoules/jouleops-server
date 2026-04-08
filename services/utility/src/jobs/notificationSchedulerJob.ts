@@ -14,57 +14,21 @@
  * Requirements: 1.1, 2.1, 3.1, 4.1, 5.1, 5.2
  */
 
-import { logger, query, queryOne, logActivity } from "@jouleops/shared";
+import { logger, query } from "@jouleops/shared";
 import cron from "node-cron";
 
 import { getAllTriggerConfigs } from "../repositories/triggerConfigRepository.ts";
 import { getAllTemplates } from "../repositories/notificationTemplateRepository.ts";
 import { getAllExclusions } from "../repositories/notificationExclusionRepository.ts";
 
-import { getPunchInEligibleUsers, getPunchOutEligibleUsers } from "../utils/attendanceEligibility.ts";
 import { getEligibleComplaints } from "../utils/durationTriggerEvaluator.ts";
-import { filterExcludedUsers, getActiveTemplate, resolvePlaceholders } from "../utils/notificationFilters.ts";
+import { getActiveTemplate, resolvePlaceholders } from "../utils/notificationFilters.ts";
 import pushNotificationService from "../services/pushNotificationService.ts";
 import type { Complaint, NotificationLog } from "../utils/durationTriggerEvaluator.ts";
 
 // ---------------------------------------------------------------------------
 // DB helpers — thin wrappers so the scheduler stays readable
 // ---------------------------------------------------------------------------
-
-export interface User {
-  user_id: string;
-  name: string;
-  site_code?: string;
-  [key: string]: any;
-}
-
-/** Fetch all active users who might receive notifications */
-async function fetchActiveUsers(): Promise<User[]> {
-  return query<User>(
-    `SELECT user_id, name, work_location_type, site_code
-     FROM users
-     WHERE is_active = true`,
-  );
-}
-
-/** Fetch today's attendance records (IST date) */
-async function fetchTodayAttendance(): Promise<
-  { user_id: string; punch_in_time: string | null; punch_out_time: string | null }[]
-> {
-  const today = new Intl.DateTimeFormat("en-CA", {
-    timeZone: "Asia/Kolkata",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).format(new Date());
-
-  return query(
-    `SELECT user_id, check_in_time AS punch_in_time, check_out_time AS punch_out_time
-     FROM attendance_logs
-     WHERE date = $1`,
-    [today],
-  );
-}
 
 /** Fetch complaints currently in a given status, including assigned_to and site_code */
 async function fetchComplaintsByStatus(status: string): Promise<Complaint[]> {
@@ -84,6 +48,77 @@ async function fetchComplaintsByStatus(status: string): Promise<Complaint[]> {
      WHERE c.status = $1`,
     [status],
   );
+}
+
+/** Fetch PM instances currently in a given status */
+async function fetchPmInstancesByStatus(status: string): Promise<Complaint[]> {
+  return query<Complaint>(
+    `SELECT
+        p.id::text AS complaint_id,
+        p.instance_id AS ticket_no,
+        p.status,
+        COALESCE(p.start_datetime, p.updated_at) AS status_changed_at,
+        p.assigned_to,
+        p.site_code,
+        s.name AS site_name,
+        p.asset_type AS category,
+        ''::text AS priority
+     FROM pm_instances p
+     LEFT JOIN sites s ON p.site_code = s.site_code
+     WHERE p.status = $1`,
+    [status],
+  );
+}
+
+/** Fetch user ids mapped to a site code */
+async function fetchSiteUserIdsBySiteCode(siteCode?: string): Promise<string[]> {
+  if (!siteCode) return [];
+
+  const rows = await query<{ user_id: string }>(
+    `SELECT DISTINCT su.user_id
+     FROM site_user su
+     JOIN sites s ON su.site_id = s.site_id
+     WHERE s.site_code = $1`,
+    [siteCode],
+  );
+
+  return rows.map((row) => row.user_id);
+}
+
+/** Keep only users with ticket notifications enabled (or unset => enabled) */
+async function filterUsersByTicketPreference(userIds: string[]): Promise<string[]> {
+  if (userIds.length === 0) return [];
+
+  const rows = await query<{ user_id: string }>(
+    `SELECT u.user_id
+     FROM users u
+     LEFT JOIN user_notification_preferences p ON p.user_id = u.user_id
+     WHERE u.user_id = ANY($1)
+       AND COALESCE(p.ticket_notifications_enabled, true) = true`,
+    [userIds],
+  );
+
+  return rows.map((row) => row.user_id);
+}
+
+/** Format elapsed minutes as Xm, Xh Ym, or Xd Yh */
+function formatElapsedFromMinutes(totalMinutes: number): string {
+  const safeMinutes = Math.max(0, Math.floor(totalMinutes));
+  if (safeMinutes < 60) {
+    return `${safeMinutes}m`;
+  }
+
+  const totalHours = Math.floor(safeMinutes / 60);
+  if (totalHours < 24) {
+    const remainingMinutes = safeMinutes % 60;
+    return remainingMinutes > 0
+      ? `${totalHours}h ${remainingMinutes}m`
+      : `${totalHours}h`;
+  }
+
+  const days = Math.floor(totalHours / 24);
+  const remainingHours = totalHours % 24;
+  return remainingHours > 0 ? `${days}d ${remainingHours}h` : `${days}d`;
 }
 
 /** Fetch recent notification logs for a trigger key (last 24 h to bound the query) */
@@ -160,6 +195,7 @@ async function dispatchForUsers(
   // 4. Dispatch to each user
   for (const userId of nonExcludedIds) {
     const user = userDetails.get(userId);
+    const resolvedTicketNo = context.ticket_no || context.complaint_id || "";
     
     // Resolve placeholders per user
     const resolvedContext = { 
@@ -167,8 +203,13 @@ async function dispatchForUsers(
       name: user?.name || "there",
       site_name: context.site_name || context.site_code || user?.site_code || "",
       // Map common ticket field name aliases
-      ticket_no: context.ticket_no || context.complaint_id || "",
-      complaint_title: context.title || context.ticket_no || context.complaint_id || "",
+      ticket_no: resolvedTicketNo,
+      // Keep legacy placeholder {{complaint_id}} compatible with visible ticket number.
+      complaint_id: resolvedTicketNo,
+      complaint_title: context.title || resolvedTicketNo,
+      // Support both template variants: {{elapsed}} and {{duration_minutes}}
+      elapsed: context.elapsed || context.duration_minutes || "",
+      duration_minutes: context.duration_minutes || context.elapsed || "",
     };
 
     const siteCode = context.site_code || user?.site_code;
@@ -263,9 +304,12 @@ async function runSchedulerTick(): Promise<void> {
         utcNow
       );
 
-      // Dispatch per complaint — assigned_to is already fetched with the complaint
+      // Dispatch per complaint — recipients are site users for the complaint site
       for (const complaint of eligibleComplaints) {
-        if (!complaint.assigned_to) continue;
+        const siteUserIds = await fetchSiteUserIdsBySiteCode(complaint.site_code);
+        const preferenceEligibleUserIds = await filterUsersByTicketPreference(siteUserIds);
+        const recipientUserIds = [...new Set(preferenceEligibleUserIds)];
+        if (recipientUserIds.length === 0) continue;
 
         const context: Record<string, string> = {
           complaint_id: complaint.complaint_id,
@@ -275,11 +319,101 @@ async function runSchedulerTick(): Promise<void> {
           site_name: complaint.site_name || "",
           category: complaint.category || "",
           priority: complaint.priority || "",
+          elapsed: formatElapsedFromMinutes(
+            (utcNow.getTime() - new Date(complaint.status_changed_at).getTime()) /
+              60_000,
+          ),
+          duration_minutes: String(
+            Math.max(
+              0,
+              Math.floor(
+                (utcNow.getTime() - new Date(complaint.status_changed_at).getTime()) /
+                  60_000,
+              ),
+            ),
+          ),
         };
 
         await dispatchForUsers(
           triggerKey,
-          [complaint.assigned_to],
+          recipientUserIds,
+          excludedUserIds,
+          templates,
+          context
+        );
+      }
+    }
+
+    // -----------------------------------------------------------------------
+    // PM duration-based trigger: pm_inprogress
+    // -----------------------------------------------------------------------
+    const pmTriggerKey = "pm_inprogress";
+    const pmConfig = triggerConfigs.find((c) => c.trigger_key === pmTriggerKey);
+
+    if (pmConfig?.is_enabled) {
+      const frequencyMinutes = pmConfig.repeat_frequency_minutes ?? 30;
+      const [pmInProgressStatusA, pmInProgressStatusB] = [
+        "In Progress",
+        "In-progress",
+      ] as const;
+
+      const [pmStatusA, pmStatusB, recentPmLogs] = await Promise.all([
+        fetchPmInstancesByStatus(pmInProgressStatusA),
+        fetchPmInstancesByStatus(pmInProgressStatusB),
+        fetchRecentLogs(pmTriggerKey),
+      ]);
+
+      const eligiblePmInstances = [
+        ...getEligibleComplaints(
+          pmStatusA,
+          pmInProgressStatusA,
+          pmConfig.threshold_value,
+          frequencyMinutes,
+          recentPmLogs,
+          utcNow
+        ),
+        ...getEligibleComplaints(
+          pmStatusB,
+          pmInProgressStatusB,
+          pmConfig.threshold_value,
+          frequencyMinutes,
+          recentPmLogs,
+          utcNow
+        ),
+      ];
+
+      for (const pmInstance of eligiblePmInstances) {
+        const siteUserIds = await fetchSiteUserIdsBySiteCode(pmInstance.site_code);
+        const preferenceEligibleUserIds = await filterUsersByTicketPreference(siteUserIds);
+        const recipientUserIds = [...new Set(preferenceEligibleUserIds)];
+        if (recipientUserIds.length === 0) continue;
+
+        const context: Record<string, string> = {
+          complaint_id: pmInstance.complaint_id,
+          ticket_no: pmInstance.ticket_no || "",
+          status: pmInstance.status,
+          site_code: pmInstance.site_code || "",
+          site_name: pmInstance.site_name || "",
+          category: pmInstance.category || "",
+          priority: pmInstance.priority || "",
+          elapsed: formatElapsedFromMinutes(
+            (utcNow.getTime() - new Date(pmInstance.status_changed_at).getTime()) /
+              60_000,
+          ),
+          duration_minutes: String(
+            Math.max(
+              0,
+              Math.floor(
+                (utcNow.getTime() - new Date(pmInstance.status_changed_at).getTime()) /
+                  60_000,
+              ),
+            ),
+          ),
+        };
+
+        await dispatchForUsers(
+          pmTriggerKey,
+          recipientUserIds,
           excludedUserIds,
           templates,
           context

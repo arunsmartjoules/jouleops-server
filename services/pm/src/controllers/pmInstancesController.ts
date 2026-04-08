@@ -314,6 +314,24 @@ export const update = async (req: AuthRequest, res: Response) => {
 
     // Ignore updated_at from body to prevent Postgres BigInt/Timestamp mismatch
     const { updated_at, ...cleanUpdateData } = req.body;
+    const incomingStatus = cleanUpdateData.status as string | undefined;
+    const normalizedStatus = incomingStatus?.toLowerCase().replace(/[\s-]/g, "");
+    const previousStatusNormalized = (existing.status || "")
+      .toLowerCase()
+      .replace(/[\s-]/g, "");
+
+    const movedToInProgress =
+      normalizedStatus === "inprogress" && previousStatusNormalized !== "inprogress";
+    const movedToCompleted =
+      normalizedStatus === "completed" && previousStatusNormalized !== "completed";
+
+    if (movedToInProgress && !cleanUpdateData.start_datetime) {
+      cleanUpdateData.start_datetime = new Date();
+    }
+
+    if (movedToCompleted && !cleanUpdateData.end_datetime) {
+      cleanUpdateData.end_datetime = new Date();
+    }
     
     const instance = await pmInstancesRepository.updatePMInstance(
       instanceId,
