@@ -2,7 +2,7 @@
  * Fieldproxy Integration Service for Site Logs & Chiller Readings
  *
  * Site Logs: Records already exist in Fieldproxy — only UPDATE.
- *   - Sheet: "log_task_line" (lookup by log_id)
+ *   - Sheet: "log_task_line" (lookup by scheduled_date + task_name + log_name)
  *   - After updating log_task_line, also update "task_management" (lookup by source_reference_id = log_id)
  *
  * Chiller Readings: CREATE on insert, UPDATE on update.
@@ -56,6 +56,41 @@ async function getRowIdByField(
   token: string,
 ): Promise<{ id: string | null; response: any }> {
   const whereClause = `${field}='${value}'`;
+  const url = `${FIELDPROXY_BASE}/getFilteredSheetData?sheet_id=${sheetId}&where_clause=${encodeURIComponent(whereClause)}`;
+
+  const res = await fetch(url, {
+    method: "GET",
+    headers: { "x-api-key": token },
+  });
+
+  const responseBody = (await res.json().catch(() => ({}))) as any;
+
+  if (!res.ok) {
+    throw new Error(
+      `Fieldproxy getFilteredSheetData failed: ${res.status} — ${JSON.stringify(responseBody)}`,
+    );
+  }
+
+  const data = Array.isArray(responseBody)
+    ? responseBody[0]?.data
+    : responseBody.data;
+
+  if (Array.isArray(data) && data.length > 0) {
+    return { id: String(data[0].id), response: responseBody };
+  }
+
+  return { id: null, response: responseBody };
+}
+
+function escapeWhereValue(value: string): string {
+  return value.replace(/'/g, "''");
+}
+
+async function getRowIdByWhereClause(
+  sheetId: string,
+  whereClause: string,
+  token: string,
+): Promise<{ id: string | null; response: any }> {
   const url = `${FIELDPROXY_BASE}/getFilteredSheetData?sheet_id=${sheetId}&where_clause=${encodeURIComponent(whereClause)}`;
 
   const res = await fetch(url, {
@@ -146,8 +181,10 @@ async function createRow(
 // ============================================================================
 
 export interface SiteLogSyncPayload {
-  log_id: string;
+  log_id?: string;
   log_name?: string;
+  task_name?: string;
+  scheduled_date?: string | null;
   // Temp RH
   temperature?: number | null;
   rh?: number | null;
@@ -224,62 +261,72 @@ function buildSiteLogTableData(log: SiteLogSyncPayload): Record<string, any> {
 export async function updateSiteLogInFieldproxy(
   log: SiteLogSyncPayload,
 ): Promise<{ logTaskLine: any; taskManagement: any; error?: string }> {
-  if (!log.log_id) {
-    return { logTaskLine: null, taskManagement: null, error: "Missing log_id" };
+  if (!log.scheduled_date || !log.task_name || !log.log_name) {
+    return {
+      logTaskLine: null,
+      taskManagement: null,
+      error:
+        "Missing scheduled_date/task_name/log_name for log_task_line lookup",
+    };
   }
 
   const token = await getAccessToken();
 
   // ── 1. Update log_task_line ──────────────────────────────────────────────
-  const { id: logRowId, response: logLookup } = await getRowIdByField(
+  const whereClause = `scheduled_date='${escapeWhereValue(log.scheduled_date)}' AND task_name='${escapeWhereValue(log.task_name)}' AND log_name='${escapeWhereValue(log.log_name)}'`;
+  const { id: logRowId, response: logLookup } = await getRowIdByWhereClause(
     "log_task_line",
-    "log_id",
-    log.log_id,
+    whereClause,
     token,
   );
 
   let logTaskLineResult: any = logLookup;
 
   if (!logRowId) {
-    console.warn(`[FIELDPROXY] log_task_line row not found for log_id: ${log.log_id}`);
+    console.warn(
+      `[FIELDPROXY] log_task_line row not found for scheduled_date=${log.scheduled_date}, task_name=${log.task_name}, log_name=${log.log_name}`,
+    );
     logTaskLineResult = { error: "Row not found in log_task_line" };
   } else {
     const tableData = buildSiteLogTableData(log);
 
     if (Object.keys(tableData).length > 0) {
       logTaskLineResult = await updateRow("log_task_line", logRowId, tableData, token);
-      console.log(`[FIELDPROXY] Updated log_task_line row ${logRowId} for log_id: ${log.log_id}`);
+      console.log(`[FIELDPROXY] Updated log_task_line row ${logRowId} for task ${log.task_name}`);
     } else {
       logTaskLineResult = { skipped: "No fields to update" };
     }
   }
 
   // ── 2. Update task_management ────────────────────────────────────────────
-  const { id: taskRowId, response: taskLookup } = await getRowIdByField(
-    "task_management",
-    "source_reference_id",
-    log.log_id,
-    token,
-  );
+  let taskManagementResult: any = { skipped: "Missing log_id for task_management lookup" };
+  if (log.log_id) {
+    const { id: taskRowId, response: taskLookup } = await getRowIdByField(
+      "task_management",
+      "source_reference_id",
+      log.log_id,
+      token,
+    );
 
-  let taskManagementResult: any = taskLookup;
+    taskManagementResult = taskLookup;
 
-  if (!taskRowId) {
-    console.warn(`[FIELDPROXY] task_management row not found for source_reference_id: ${log.log_id}`);
-    taskManagementResult = { error: "Row not found in task_management" };
-  } else {
-    const taskData: Record<string, any> = {};
-
-    if (log.status != null) taskData.task_status = log.status;
-    if (log.executor_id != null) taskData.assigned_to = log.executor_id;
-    if (log.signature != null) taskData.signature = typeof log.signature === "string" ? log.signature : JSON.stringify(log.signature);
-    if (log.entry_time != null) taskData.time_log_start = new Date(log.entry_time).toISOString();
-
-    if (Object.keys(taskData).length > 0) {
-      taskManagementResult = await updateRow("task_management", taskRowId, taskData, token);
-      console.log(`[FIELDPROXY] Updated task_management row ${taskRowId} for log_id: ${log.log_id}`);
+    if (!taskRowId) {
+      console.warn(`[FIELDPROXY] task_management row not found for source_reference_id: ${log.log_id}`);
+      taskManagementResult = { error: "Row not found in task_management" };
     } else {
-      taskManagementResult = { skipped: "No fields to update" };
+      const taskData: Record<string, any> = {};
+
+      if (log.status != null) taskData.task_status = log.status;
+      if (log.executor_id != null) taskData.assigned_to = log.executor_id;
+      if (log.signature != null) taskData.signature = typeof log.signature === "string" ? log.signature : JSON.stringify(log.signature);
+      if (log.entry_time != null) taskData.time_log_start = new Date(log.entry_time).toISOString();
+
+      if (Object.keys(taskData).length > 0) {
+        taskManagementResult = await updateRow("task_management", taskRowId, taskData, token);
+        console.log(`[FIELDPROXY] Updated task_management row ${taskRowId} for log_id: ${log.log_id}`);
+      } else {
+        taskManagementResult = { skipped: "No fields to update" };
+      }
     }
   }
 

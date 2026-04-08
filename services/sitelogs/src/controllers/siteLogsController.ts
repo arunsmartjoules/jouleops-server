@@ -32,6 +32,8 @@ export const create = asyncHandler(async (req: Request, res: Response) => {
     updateSiteLogInFieldproxy({
       log_id: result.log_id,
       log_name: result.log_name,
+      task_name: result.task_name,
+      scheduled_date: result.scheduled_date,
       temperature: result.temperature,
       rh: result.rh,
       tds: result.tds,
@@ -182,6 +184,8 @@ export const update = asyncHandler(async (req: Request, res: Response) => {
     updateSiteLogInFieldproxy({
       log_id: result.log_id,
       log_name: result.log_name,
+      task_name: result.task_name,
+      scheduled_date: result.scheduled_date,
       temperature: result.temperature,
       rh: result.rh,
       tds: result.tds,
