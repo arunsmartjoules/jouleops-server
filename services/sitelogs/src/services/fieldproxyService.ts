@@ -261,40 +261,48 @@ function buildSiteLogTableData(log: SiteLogSyncPayload): Record<string, any> {
 export async function updateSiteLogInFieldproxy(
   log: SiteLogSyncPayload,
 ): Promise<{ logTaskLine: any; taskManagement: any; error?: string }> {
-  if (!log.scheduled_date || !log.task_name || !log.log_name) {
+  if (!log.log_name) {
     return {
       logTaskLine: null,
       taskManagement: null,
-      error:
-        "Missing scheduled_date/task_name/log_name for log_task_line lookup",
+      error: "Missing log_name for log_task_line sync",
     };
   }
 
   const token = await getAccessToken();
 
   // ── 1. Update log_task_line ──────────────────────────────────────────────
-  const whereClause = `scheduled_date='${escapeWhereValue(log.scheduled_date)}' AND task_name='${escapeWhereValue(log.task_name)}' AND log_name='${escapeWhereValue(log.log_name)}'`;
-  const { id: logRowId, response: logLookup } = await getRowIdByWhereClause(
-    "log_task_line",
-    whereClause,
-    token,
-  );
+  let logLookup: any = null;
+  let logRowId: string | null = null;
+  if (log.scheduled_date && log.task_name && log.log_name) {
+    const whereClause = `scheduled_date='${escapeWhereValue(log.scheduled_date)}' AND task_name='${escapeWhereValue(log.task_name)}' AND log_name='${escapeWhereValue(log.log_name)}'`;
+    const lookup = await getRowIdByWhereClause("log_task_line", whereClause, token);
+    logRowId = lookup.id;
+    logLookup = lookup.response;
+  } else if (log.log_id) {
+    const lookup = await getRowIdByField("log_task_line", "log_id", log.log_id, token);
+    logRowId = lookup.id;
+    logLookup = lookup.response;
+  }
 
   let logTaskLineResult: any = logLookup;
 
   if (!logRowId) {
-    console.warn(
-      `[FIELDPROXY] log_task_line row not found for scheduled_date=${log.scheduled_date}, task_name=${log.task_name}, log_name=${log.log_name}`,
-    );
+    console.warn(`[FIELDPROXY] log_task_line row not found for sync payload`, {
+      scheduled_date: log.scheduled_date,
+      task_name: log.task_name,
+      log_name: log.log_name,
+      log_id: log.log_id,
+    });
     const createData = buildSiteLogTableData(log);
-    createData.scheduled_date = log.scheduled_date;
-    createData.task_name = log.task_name;
-    createData.log_name = log.log_name;
+    if (log.scheduled_date != null) createData.scheduled_date = log.scheduled_date;
+    if (log.task_name != null) createData.task_name = log.task_name;
+    if (log.log_name != null) createData.log_name = log.log_name;
     if (log.log_id != null) createData.log_id = log.log_id;
 
     logTaskLineResult = await createRow("log_task_line", createData, token);
     console.log(
-      `[FIELDPROXY] Created log_task_line row for scheduled_date=${log.scheduled_date}, task_name=${log.task_name}, log_name=${log.log_name}`,
+      `[FIELDPROXY] Created log_task_line row for log_name=${log.log_name}`,
     );
   } else {
     const tableData = buildSiteLogTableData(log);
@@ -340,6 +348,48 @@ export async function updateSiteLogInFieldproxy(
   }
 
   return { logTaskLine: logTaskLineResult, taskManagement: taskManagementResult };
+}
+
+/**
+ * Re-fetches the current log_task_line row from Fieldproxy for verification.
+ * Uses the same lookup fallback as update:
+ * 1) scheduled_date + task_name + log_name
+ * 2) log_id
+ */
+export async function verifySiteLogInFieldproxy(
+  log: SiteLogSyncPayload,
+): Promise<{ lookup: any; row?: any; error?: string }> {
+  if (!log.log_name) {
+    return { lookup: null, error: "Missing log_name for verification" };
+  }
+
+  const token = await getAccessToken();
+  let lookupResponse: any = null;
+  let rowId: string | null = null;
+
+  if (log.scheduled_date && log.task_name && log.log_name) {
+    const whereClause = `scheduled_date='${escapeWhereValue(log.scheduled_date)}' AND task_name='${escapeWhereValue(log.task_name)}' AND log_name='${escapeWhereValue(log.log_name)}'`;
+    const lookup = await getRowIdByWhereClause("log_task_line", whereClause, token);
+    rowId = lookup.id;
+    lookupResponse = lookup.response;
+  } else if (log.log_id) {
+    const lookup = await getRowIdByField("log_task_line", "log_id", log.log_id, token);
+    rowId = lookup.id;
+    lookupResponse = lookup.response;
+  }
+
+  if (!rowId) {
+    return { lookup: lookupResponse, error: "Row not found in log_task_line" };
+  }
+
+  const rows = Array.isArray(lookupResponse)
+    ? lookupResponse[0]?.data
+    : lookupResponse?.data;
+  const matchedRow = Array.isArray(rows)
+    ? rows.find((r: any) => String(r?.id) === String(rowId)) ?? rows[0]
+    : null;
+
+  return { lookup: lookupResponse, row: matchedRow ?? null };
 }
 
 // ============================================================================

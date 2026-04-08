@@ -6,7 +6,10 @@
  */
 
 import siteLogsRepository from "../repositories/siteLogsRepository.ts";
-import { updateSiteLogInFieldproxy } from "../services/fieldproxyService.ts";
+import {
+  updateSiteLogInFieldproxy,
+  verifySiteLogInFieldproxy,
+} from "../services/fieldproxyService.ts";
 import type { Request, Response } from "express";
 import {
   sendSuccess,
@@ -16,20 +19,51 @@ import {
   logActivity,
 } from "@jouleops/shared";
 
+function getSyncStatus(fp: any): {
+  action: "SYNC_TO_FIELDPROXY" | "SYNC_TO_FIELDPROXY_FAILED" | "SYNC_TO_FIELDPROXY_SKIPPED";
+  description: string;
+} {
+  const logTaskError = fp?.logTaskLine?.error;
+  const taskMgmtError = fp?.taskManagement?.error;
+  const logTaskSkipped = fp?.logTaskLine?.skipped;
+  const taskMgmtSkipped = fp?.taskManagement?.skipped;
+
+  if (logTaskError || taskMgmtError) {
+    return {
+      action: "SYNC_TO_FIELDPROXY_FAILED",
+      description: "Fieldproxy sync completed with errors",
+    };
+  }
+
+  if (logTaskSkipped || taskMgmtSkipped) {
+    return {
+      action: "SYNC_TO_FIELDPROXY_SKIPPED",
+      description: "Fieldproxy sync skipped (no fields / partial prerequisites)",
+    };
+  }
+
+  return {
+    action: "SYNC_TO_FIELDPROXY",
+    description: "Fieldproxy sync successful",
+  };
+}
+
 export const create = asyncHandler(async (req: Request, res: Response) => {
   const result = await siteLogsRepository.createLog(req.body);
 
   logActivity({
-    user_id: (req as any).user?.user_id,
+    user_id: (req as any).user?.user_id || (req as any).user?.id,
     action: "CREATE_LOG",
     module: "SITE_LOG",
     description: `Created site log ${result.id} of type ${result.log_name}`,
     metadata: { logId: result.id, logName: result.log_name, siteCode: result.site_code },
   });
 
-  // Sync to Fieldproxy — fire and forget
-  // log_task_line lookup now uses scheduled_date + task_name + log_name.
-  if (result.scheduled_date && result.task_name && result.log_name) {
+  // Sync to Fieldproxy — fire and forget.
+  // Service handles lookup fallback:
+  // 1) scheduled_date + task_name + log_name
+  // 2) log_id
+  if (result.log_name) {
     updateSiteLogInFieldproxy({
       log_id: result.log_id,
       log_name: result.log_name,
@@ -51,11 +85,12 @@ export const create = asyncHandler(async (req: Request, res: Response) => {
       status: result.status,
     })
       .then((fp) => {
+        const syncStatus = getSyncStatus(fp);
         logActivity({
-          user_id: (req as any).user?.user_id,
-          action: "SYNC_TO_FIELDPROXY",
+          user_id: (req as any).user?.user_id || (req as any).user?.id,
+          action: syncStatus.action,
           module: "SITE_LOG",
-          description: `Synced site log ${result.id} to Fieldproxy`,
+          description: `${syncStatus.description} for site log ${result.id}`,
           metadata: {
             logId: result.id,
             log_id: result.log_id,
@@ -65,11 +100,49 @@ export const create = asyncHandler(async (req: Request, res: Response) => {
             fieldproxy: fp,
           },
         }).catch(() => {});
+
+        // Post-sync verification snapshot for history-edit/update visibility.
+        if (syncStatus.action !== "SYNC_TO_FIELDPROXY_FAILED") {
+          verifySiteLogInFieldproxy({
+            log_id: result.log_id,
+            log_name: result.log_name,
+            task_name: result.task_name,
+            scheduled_date: result.scheduled_date,
+          })
+            .then((verify) => {
+              logActivity({
+                user_id: (req as any).user?.user_id || (req as any).user?.id,
+                action: "VERIFY_FIELDPROXY_SYNC",
+                module: "SITE_LOG",
+                description: `Verified Fieldproxy row after syncing site log ${result.id}`,
+                metadata: {
+                  logId: result.id,
+                  log_id: result.log_id,
+                  scheduled_date: result.scheduled_date,
+                  task_name: result.task_name,
+                  log_name: result.log_name,
+                  verify,
+                },
+              }).catch(() => {});
+            })
+            .catch((verifyErr) => {
+              logActivity({
+                user_id: (req as any).user?.user_id || (req as any).user?.id,
+                action: "VERIFY_FIELDPROXY_SYNC_FAILED",
+                module: "SITE_LOG",
+                description: `Failed to verify Fieldproxy row after syncing site log ${result.id}`,
+                metadata: {
+                  logId: result.id,
+                  error: verifyErr?.message || String(verifyErr),
+                },
+              }).catch(() => {});
+            });
+        }
       })
       .catch((err) => {
         console.error("[FIELDPROXY] site log sync failed:", err);
         logActivity({
-          user_id: (req as any).user?.user_id,
+          user_id: (req as any).user?.user_id || (req as any).user?.id,
           action: "SYNC_TO_FIELDPROXY_FAILED",
           module: "SITE_LOG",
           description: `Failed to sync site log ${result.id} to Fieldproxy`,
@@ -78,7 +151,7 @@ export const create = asyncHandler(async (req: Request, res: Response) => {
       });
   } else {
     logActivity({
-      user_id: (req as any).user?.user_id,
+      user_id: (req as any).user?.user_id || (req as any).user?.id,
       action: "SYNC_TO_FIELDPROXY_SKIPPED",
       module: "SITE_LOG",
       description: `Skipped Fieldproxy sync for site log ${result.id} due to missing lookup fields`,
@@ -194,15 +267,18 @@ export const update = asyncHandler(async (req: Request, res: Response) => {
   const result = await siteLogsRepository.updateLog(id, req.body);
 
   logActivity({
-    user_id: (req as any).user?.user_id,
+    user_id: (req as any).user?.user_id || (req as any).user?.id,
     action: "UPDATE_LOG",
     module: "SITE_LOG",
     description: `Updated site log ${id} of type ${result.log_name}`,
     metadata: { logId: id, logName: result.log_name, siteCode: result.site_code },
   });
 
-  // Sync to Fieldproxy — fire and forget
-  if (result.scheduled_date && result.task_name && result.log_name) {
+  // Sync to Fieldproxy — fire and forget.
+  // Service handles lookup fallback:
+  // 1) scheduled_date + task_name + log_name
+  // 2) log_id
+  if (result.log_name) {
     updateSiteLogInFieldproxy({
       log_id: result.log_id,
       log_name: result.log_name,
@@ -224,11 +300,12 @@ export const update = asyncHandler(async (req: Request, res: Response) => {
       status: result.status,
     })
       .then((fp) => {
+        const syncStatus = getSyncStatus(fp);
         logActivity({
-          user_id: (req as any).user?.user_id,
-          action: "SYNC_TO_FIELDPROXY",
+          user_id: (req as any).user?.user_id || (req as any).user?.id,
+          action: syncStatus.action,
           module: "SITE_LOG",
-          description: `Synced updated site log ${id} to Fieldproxy`,
+          description: `${syncStatus.description} for updated site log ${id}`,
           metadata: {
             logId: id,
             log_id: result.log_id,
@@ -238,11 +315,49 @@ export const update = asyncHandler(async (req: Request, res: Response) => {
             fieldproxy: fp,
           },
         }).catch(() => {});
+
+        // Post-sync verification snapshot for history-edit/update visibility.
+        if (syncStatus.action !== "SYNC_TO_FIELDPROXY_FAILED") {
+          verifySiteLogInFieldproxy({
+            log_id: result.log_id,
+            log_name: result.log_name,
+            task_name: result.task_name,
+            scheduled_date: result.scheduled_date,
+          })
+            .then((verify) => {
+              logActivity({
+                user_id: (req as any).user?.user_id || (req as any).user?.id,
+                action: "VERIFY_FIELDPROXY_SYNC",
+                module: "SITE_LOG",
+                description: `Verified Fieldproxy row after updating site log ${id}`,
+                metadata: {
+                  logId: id,
+                  log_id: result.log_id,
+                  scheduled_date: result.scheduled_date,
+                  task_name: result.task_name,
+                  log_name: result.log_name,
+                  verify,
+                },
+              }).catch(() => {});
+            })
+            .catch((verifyErr) => {
+              logActivity({
+                user_id: (req as any).user?.user_id || (req as any).user?.id,
+                action: "VERIFY_FIELDPROXY_SYNC_FAILED",
+                module: "SITE_LOG",
+                description: `Failed to verify Fieldproxy row after updating site log ${id}`,
+                metadata: {
+                  logId: id,
+                  error: verifyErr?.message || String(verifyErr),
+                },
+              }).catch(() => {});
+            });
+        }
       })
       .catch((err) => {
         console.error("[FIELDPROXY] site log update sync failed:", err);
         logActivity({
-          user_id: (req as any).user?.user_id,
+          user_id: (req as any).user?.user_id || (req as any).user?.id,
           action: "SYNC_TO_FIELDPROXY_FAILED",
           module: "SITE_LOG",
           description: `Failed to sync updated site log ${id} to Fieldproxy`,
@@ -251,7 +366,7 @@ export const update = asyncHandler(async (req: Request, res: Response) => {
       });
   } else {
     logActivity({
-      user_id: (req as any).user?.user_id,
+      user_id: (req as any).user?.user_id || (req as any).user?.id,
       action: "SYNC_TO_FIELDPROXY_SKIPPED",
       module: "SITE_LOG",
       description: `Skipped Fieldproxy sync for updated site log ${id} due to missing lookup fields`,
