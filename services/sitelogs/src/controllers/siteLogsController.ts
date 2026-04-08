@@ -27,8 +27,9 @@ export const create = asyncHandler(async (req: Request, res: Response) => {
     metadata: { logId: result.id, logName: result.log_name, siteCode: result.site_code },
   });
 
-  // Sync to Fieldproxy — fire and forget (records already exist there, just update)
-  if (result.log_id) {
+  // Sync to Fieldproxy — fire and forget
+  // log_task_line lookup now uses scheduled_date + task_name + log_name.
+  if (result.scheduled_date && result.task_name && result.log_name) {
     updateSiteLogInFieldproxy({
       log_id: result.log_id,
       log_name: result.log_name,
@@ -54,8 +55,15 @@ export const create = asyncHandler(async (req: Request, res: Response) => {
           user_id: (req as any).user?.user_id,
           action: "SYNC_TO_FIELDPROXY",
           module: "SITE_LOG",
-          description: `Synced site log ${result.id} (log_id: ${result.log_id}) to Fieldproxy`,
-          metadata: { logId: result.id, log_id: result.log_id, fieldproxy: fp },
+          description: `Synced site log ${result.id} to Fieldproxy`,
+          metadata: {
+            logId: result.id,
+            log_id: result.log_id,
+            scheduled_date: result.scheduled_date,
+            task_name: result.task_name,
+            log_name: result.log_name,
+            fieldproxy: fp,
+          },
         }).catch(() => {});
       })
       .catch((err) => {
@@ -68,6 +76,20 @@ export const create = asyncHandler(async (req: Request, res: Response) => {
           metadata: { logId: result.id, error: err.message },
         }).catch(() => {});
       });
+  } else {
+    logActivity({
+      user_id: (req as any).user?.user_id,
+      action: "SYNC_TO_FIELDPROXY_SKIPPED",
+      module: "SITE_LOG",
+      description: `Skipped Fieldproxy sync for site log ${result.id} due to missing lookup fields`,
+      metadata: {
+        logId: result.id,
+        log_id: result.log_id,
+        scheduled_date: result.scheduled_date,
+        task_name: result.task_name,
+        log_name: result.log_name,
+      },
+    }).catch(() => {});
   }
 
   return sendCreated(res, result);
@@ -180,7 +202,7 @@ export const update = asyncHandler(async (req: Request, res: Response) => {
   });
 
   // Sync to Fieldproxy — fire and forget
-  if (result.log_id) {
+  if (result.scheduled_date && result.task_name && result.log_name) {
     updateSiteLogInFieldproxy({
       log_id: result.log_id,
       log_name: result.log_name,
@@ -206,8 +228,15 @@ export const update = asyncHandler(async (req: Request, res: Response) => {
           user_id: (req as any).user?.user_id,
           action: "SYNC_TO_FIELDPROXY",
           module: "SITE_LOG",
-          description: `Synced updated site log ${id} (log_id: ${result.log_id}) to Fieldproxy`,
-          metadata: { logId: id, log_id: result.log_id, fieldproxy: fp },
+          description: `Synced updated site log ${id} to Fieldproxy`,
+          metadata: {
+            logId: id,
+            log_id: result.log_id,
+            scheduled_date: result.scheduled_date,
+            task_name: result.task_name,
+            log_name: result.log_name,
+            fieldproxy: fp,
+          },
         }).catch(() => {});
       })
       .catch((err) => {
@@ -220,6 +249,20 @@ export const update = asyncHandler(async (req: Request, res: Response) => {
           metadata: { logId: id, error: err.message },
         }).catch(() => {});
       });
+  } else {
+    logActivity({
+      user_id: (req as any).user?.user_id,
+      action: "SYNC_TO_FIELDPROXY_SKIPPED",
+      module: "SITE_LOG",
+      description: `Skipped Fieldproxy sync for updated site log ${id} due to missing lookup fields`,
+      metadata: {
+        logId: id,
+        log_id: result.log_id,
+        scheduled_date: result.scheduled_date,
+        task_name: result.task_name,
+        log_name: result.log_name,
+      },
+    }).catch(() => {});
   }
 
   return sendSuccess(res, result);
