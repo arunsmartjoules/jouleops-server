@@ -82,8 +82,13 @@ async function getRowIdByField(
   return { id: null, response: responseBody };
 }
 
-function escapeWhereValue(value: string): string {
-  return value.replace(/'/g, "''");
+function escapeWhereValue(value: unknown): string {
+  if (value === null || value === undefined) return "";
+  // Fieldproxy where_clause expects a plain scalar string.
+  // Convert Dates/Numbers/other primitives safely before escaping quotes.
+  const normalized =
+    value instanceof Date ? value.toISOString().slice(0, 10) : String(value);
+  return normalized.replace(/'/g, "''");
 }
 
 async function getRowIdByWhereClause(
