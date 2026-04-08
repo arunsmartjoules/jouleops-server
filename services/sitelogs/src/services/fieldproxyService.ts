@@ -286,7 +286,16 @@ export async function updateSiteLogInFieldproxy(
     console.warn(
       `[FIELDPROXY] log_task_line row not found for scheduled_date=${log.scheduled_date}, task_name=${log.task_name}, log_name=${log.log_name}`,
     );
-    logTaskLineResult = { error: "Row not found in log_task_line" };
+    const createData = buildSiteLogTableData(log);
+    createData.scheduled_date = log.scheduled_date;
+    createData.task_name = log.task_name;
+    createData.log_name = log.log_name;
+    if (log.log_id != null) createData.log_id = log.log_id;
+
+    logTaskLineResult = await createRow("log_task_line", createData, token);
+    console.log(
+      `[FIELDPROXY] Created log_task_line row for scheduled_date=${log.scheduled_date}, task_name=${log.task_name}, log_name=${log.log_name}`,
+    );
   } else {
     const tableData = buildSiteLogTableData(log);
 
