@@ -74,9 +74,32 @@ export async function createLogMaster(
   const values = columns.map((k) => data[k as keyof CreateLogMasterInput]);
   const placeholders = columns.map((_, i) => `$${i + 1}`);
 
+  const conflictUpdateClauses: string[] = [`updated_at = NOW()`];
+  // Only overwrite fields that were explicitly provided.
+  if (columns.includes("sequence_number")) {
+    conflictUpdateClauses.push(`sequence_number = EXCLUDED.sequence_number`);
+  }
+  if (columns.includes("log_id")) {
+    conflictUpdateClauses.push(`log_id = EXCLUDED.log_id`);
+  }
+  if (columns.includes("dlr")) {
+    conflictUpdateClauses.push(`dlr = EXCLUDED.dlr`);
+  }
+  if (columns.includes("dbr")) {
+    conflictUpdateClauses.push(`dbr = EXCLUDED.dbr`);
+  }
+  if (columns.includes("nlt")) {
+    conflictUpdateClauses.push(`nlt = EXCLUDED.nlt`);
+  }
+  if (columns.includes("nmt")) {
+    conflictUpdateClauses.push(`nmt = EXCLUDED.nmt`);
+  }
+
   const sql = `
     INSERT INTO log_master (${columns.join(", ")})
     VALUES (${placeholders.join(", ")})
+    ON CONFLICT (task_name, log_name) DO UPDATE
+    SET ${conflictUpdateClauses.join(", ")}
     RETURNING *
   `;
 
