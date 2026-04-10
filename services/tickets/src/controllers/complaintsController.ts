@@ -669,7 +669,14 @@ export const remove = async (req: Request, res: Response) => {
 export const getStats = async (req: Request, res: Response) => {
   try {
     const { siteCode } = req.params as { siteCode: string };
-    const stats = await complaintsRepository.getComplaintStats(siteCode);
+    const { fromDate, toDate, search, priority } = req.query;
+
+    const stats = await complaintsRepository.getComplaintStats(siteCode, {
+      fromDate: (fromDate as string) || null,
+      toDate: (toDate as string) || null,
+      search: (search as string) || null,
+      priority: (priority as string) || null,
+    });
 
     return sendSuccess(res, stats);
   } catch (error: any) {

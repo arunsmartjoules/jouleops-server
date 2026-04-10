@@ -126,6 +126,107 @@ export interface GetComplaintsOptions {
   priority?: string | null;
 }
 
+/** Stats filters aligned with list filters, excluding status (per-status breakdown). */
+export interface GetComplaintStatsOptions {
+  fromDate?: string | null;
+  toDate?: string | null;
+  search?: string | null;
+  priority?: string | null;
+}
+
+const COMPLAINT_LIST_QUERIER_CONFIG = {
+  tableAlias: "c",
+  searchFields: [
+    "ticket_no",
+    "title",
+    "site_code",
+    "location",
+    "area_asset",
+    "assigned_to",
+    "message_id",
+    "group_id",
+  ],
+  allowedFields: [
+    "id",
+    "ticket_no",
+    "site_code",
+    "title",
+    "status",
+    "category",
+    "location",
+    "area_asset",
+    "assigned_to",
+    "priority",
+    "message_id",
+    "group_id",
+    "created_at",
+    "updated_at",
+  ],
+  defaultSort: "created_at",
+  defaultSortOrder: "desc" as const,
+};
+
+function buildStatsFilterRules(
+  siteCode: string,
+  options: GetComplaintStatsOptions,
+): FilterRule[] {
+  const filters: FilterRule[] = [];
+  if (siteCode !== "all") {
+    filters.push({ fieldId: "site_code", operator: "=", value: siteCode });
+  }
+  const { fromDate, toDate, priority } = options;
+  if (fromDate) {
+    let normalizedFromDate = fromDate;
+    if (typeof fromDate === "string" && /^\d{4}-\d{2}-\d{2}$/.test(fromDate)) {
+      normalizedFromDate = `${fromDate} 00:00:00`;
+    }
+    filters.push({
+      fieldId: "created_at",
+      operator: ">=",
+      value: normalizedFromDate,
+    });
+  }
+  if (toDate) {
+    let normalizedToDate = toDate;
+    if (typeof toDate === "string" && /^\d{4}-\d{2}-\d{2}$/.test(toDate)) {
+      normalizedToDate = `${toDate} 23:59:59`;
+    }
+    filters.push({
+      fieldId: "created_at",
+      operator: "<=",
+      value: normalizedToDate,
+    });
+  }
+  if (priority && priority !== "All" && priority !== "all") {
+    filters.push({ fieldId: "priority", operator: "=", value: priority });
+  }
+  return filters;
+}
+
+function complaintStatsFilterSignature(
+  options?: GetComplaintStatsOptions,
+): string {
+  if (!options) return "";
+  const normalized = {
+    fromDate: options.fromDate ?? "",
+    toDate: options.toDate ?? "",
+    search: (options.search ?? "").trim(),
+    priority:
+      options.priority && options.priority !== "All" && options.priority !== "all"
+        ? options.priority
+        : "",
+  };
+  if (
+    !normalized.fromDate &&
+    !normalized.toDate &&
+    !normalized.search &&
+    !normalized.priority
+  ) {
+    return "";
+  }
+  return `:${encodeURIComponent(JSON.stringify(normalized))}`;
+}
+
 // ============================================================================
 // Repository Functions
 // ============================================================================
@@ -575,40 +676,52 @@ export async function deleteComplaint(identifier: string): Promise<boolean> {
 
 /**
  * Get complaint statistics
- * Uses SQL GROUP BY + cache-aside (60s TTL)
+ * Uses SQL GROUP BY + cache-aside (60s TTL).
+ * Optional filters match list API (date range, search, priority) but never status,
+ * so byStatus remains a full breakdown within the filtered slice.
  */
-export async function getComplaintStats(siteCode: string): Promise<{
+export async function getComplaintStats(
+  siteCode: string,
+  statsOptions?: GetComplaintStatsOptions,
+): Promise<{
   total: number;
   byStatus: Record<string, number>;
   byCategory: Record<string, number>;
 }> {
-  const cacheKey = `complaint_stats:${siteCode}`;
+  const filterSig = complaintStatsFilterSignature(statsOptions);
+  const cacheKey = `complaint_stats:${siteCode}${filterSig}`;
 
   return cached(
     cacheKey,
     async () => {
-      // Build WHERE clause with pre-resolved site_code
-      let whereClause = "";
-      const params: any[] = [];
+      const filters = buildStatsFilterRules(siteCode, statsOptions || {});
+      const searchTrimmed = statsOptions?.search?.trim() || "";
 
-      if (siteCode !== "all") {
-        whereClause = `WHERE site_code = $1`;
-        params.push(siteCode);
-      }
+      const { whereClause, values } = buildQuery(
+        {
+          page: 1,
+          limit: 1,
+          search: searchTrimmed || undefined,
+          filters: filters.length > 0 ? filters : undefined,
+        },
+        COMPLAINT_LIST_QUERIER_CONFIG,
+      );
 
-      // Run all three queries in parallel
+      const baseValues = values.slice(0, -2);
+      const fromSql = `FROM complaints c ${whereClause}`;
+
       const [countResult, statusRows, categoryRows] = await Promise.all([
         queryOne<{ cnt: string }>(
-          `SELECT COUNT(*)::text AS cnt FROM complaints ${whereClause}`,
-          params,
+          `SELECT COUNT(*)::text AS cnt ${fromSql}`,
+          baseValues,
         ),
         query<{ status: string; cnt: string }>(
-          `SELECT status, COUNT(*)::text AS cnt FROM complaints ${whereClause} GROUP BY status`,
-          params,
+          `SELECT c.status, COUNT(*)::text AS cnt ${fromSql} GROUP BY c.status`,
+          baseValues,
         ),
         query<{ category: string; cnt: string }>(
-          `SELECT category, COUNT(*)::text AS cnt FROM complaints ${whereClause} GROUP BY category`,
-          params,
+          `SELECT c.category, COUNT(*)::text AS cnt ${fromSql} GROUP BY c.category`,
+          baseValues,
         ),
       ]);
 
