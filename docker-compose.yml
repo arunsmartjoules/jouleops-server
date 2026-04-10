@@ -80,8 +80,6 @@ services:
         SERVICE_NAME: services/tickets
     environment:
       - PORT=3421
-      - FIELDPROXY_EMAIL=${FIELDPROXY_EMAIL:-}
-      - FIELDPROXY_PASSWORD=${FIELDPROXY_PASSWORD:-}
 
   # Attendance Service
   attendance:
@@ -94,8 +92,6 @@ services:
         SERVICE_NAME: services/attendance
     environment:
       - PORT=3422
-      - FIELDPROXY_EMAIL=${FIELDPROXY_EMAIL:-}
-      - FIELDPROXY_PASSWORD=${FIELDPROXY_PASSWORD:-}
 
   # SiteLogs Service
   sitelogs:
@@ -108,8 +104,6 @@ services:
         SERVICE_NAME: services/sitelogs
     environment:
       - PORT=3423
-      - FIELDPROXY_EMAIL=${FIELDPROXY_EMAIL:-}
-      - FIELDPROXY_PASSWORD=${FIELDPROXY_PASSWORD:-}
 
   # PM Service
   pm:
@@ -122,9 +116,6 @@ services:
         SERVICE_NAME: services/pm
     environment:
       - PORT=3424
-      # Fieldproxy Zapier API (required for PM → Fieldproxy sync)
-      - FIELDPROXY_EMAIL=${FIELDPROXY_EMAIL:-}
-      - FIELDPROXY_PASSWORD=${FIELDPROXY_PASSWORD:-}
 
   # Caddy (Automatic HTTPS)
   caddy:
