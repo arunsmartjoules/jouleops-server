@@ -12,11 +12,19 @@
 const FIELDPROXY_BASE = "https://webapi.fieldproxy.com/v3/zapier";
 
 async function getAccessToken(): Promise<string> {
+  const emailId = process.env.FIELDPROXY_EMAIL?.trim();
+  const password = process.env.FIELDPROXY_PASSWORD?.trim();
+  if (!emailId || !password) {
+    throw new Error(
+      "Fieldproxy auth: set FIELDPROXY_EMAIL and FIELDPROXY_PASSWORD in the environment",
+    );
+  }
+
   const res = await fetch(`${FIELDPROXY_BASE}/generateApiKey`, {
     method: "POST",
     headers: {
-      emailId: "arun.kumar@smartjoules.in",
-      password: "uxA2PfRyUH2bNTW@3420",
+      emailId,
+      password,
     },
   });
 
