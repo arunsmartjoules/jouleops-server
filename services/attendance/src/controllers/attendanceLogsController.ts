@@ -659,6 +659,161 @@ export const bulkUpsert = async (req: AuthRequest, res: Response) => {
   }
 };
 
+/**
+ * Sync a single attendance record to Fieldproxy.
+ * If fieldproxy_punch_id exists, updates the existing row.
+ * Otherwise, creates a new row and saves the punch_id back.
+ */
+export const syncFieldproxySingle = async (req: AuthRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+    if (!id) {
+      return sendError(res, "Attendance ID is required");
+    }
+
+    const log = await attendanceRepository.getAttendanceById(id);
+    if (!log) {
+      return sendNotFound(res, "Attendance record");
+    }
+
+    logActivity({
+      user_id: req.user?.user_id || req.user?.id,
+      action: "MANUAL_FIELDPROXY_SYNC_START",
+      module: "attendance",
+      description: `Manual Fieldproxy sync started for attendance ${id}`,
+      metadata: { attendance_id: id, mode: "single" },
+    }).catch(() => {});
+
+    const result = await syncAttendanceToFieldproxy(log);
+
+    logActivity({
+      user_id: req.user?.user_id || req.user?.id,
+      action: result.action === "failed"
+        ? "MANUAL_FIELDPROXY_SYNC_FAILED"
+        : "MANUAL_FIELDPROXY_SYNC_SUCCESS",
+      module: "attendance",
+      description: result.action === "failed"
+        ? `Manual Fieldproxy sync failed for attendance ${id}`
+        : `Manual Fieldproxy sync ${result.action} for attendance ${id}`,
+      metadata: { attendance_id: id, mode: "single", action: result.action, error: result.error },
+    }).catch(() => {});
+
+    if (result.action === "failed") {
+      return sendError(res, result.error || "Fieldproxy sync failed");
+    }
+
+    return sendSuccess(res, result, {
+      message: `Fieldproxy sync ${result.action} for attendance ${id}`,
+    });
+  } catch (error: any) {
+    console.error("Sync Fieldproxy single error:", error);
+    return sendServerError(res, error);
+  }
+};
+
+/**
+ * Bulk sync attendance records to Fieldproxy.
+ */
+export const syncFieldproxyBulk = async (req: AuthRequest, res: Response) => {
+  try {
+    const { ids } = req.body as { ids?: string[] };
+
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return sendError(res, "ids array is required");
+    }
+
+    const uniqueIds = Array.from(new Set(ids.map((id) => String(id).trim()).filter(Boolean)));
+    const results: { attendance_id: string; action: string; error?: string }[] = [];
+
+    for (const id of uniqueIds) {
+      const log = await attendanceRepository.getAttendanceById(id);
+      if (!log) {
+        results.push({ attendance_id: id, action: "failed", error: "Attendance record not found" });
+        continue;
+      }
+
+      const result = await syncAttendanceToFieldproxy(log);
+      results.push({ attendance_id: id, ...result });
+
+      logActivity({
+        user_id: req.user?.user_id || req.user?.id,
+        action: result.action === "failed"
+          ? "MANUAL_FIELDPROXY_SYNC_FAILED"
+          : "MANUAL_FIELDPROXY_SYNC_SUCCESS",
+        module: "attendance",
+        description: result.action === "failed"
+          ? `Bulk manual Fieldproxy sync failed for attendance ${id}`
+          : `Bulk manual Fieldproxy sync ${result.action} for attendance ${id}`,
+        metadata: { attendance_id: id, mode: "bulk", action: result.action, error: result.error },
+      }).catch(() => {});
+    }
+
+    const summary = {
+      total: results.length,
+      updated: results.filter((r) => r.action === "updated").length,
+      created: results.filter((r) => r.action === "created").length,
+      failed: results.filter((r) => r.action === "failed").length,
+    };
+
+    return sendSuccess(
+      res,
+      { summary, results },
+      {
+        message: `Fieldproxy bulk sync completed: updated ${summary.updated}, created ${summary.created}, failed ${summary.failed}`,
+      },
+    );
+  } catch (error: any) {
+    console.error("Sync Fieldproxy bulk error:", error);
+    return sendServerError(res, error);
+  }
+};
+
+/**
+ * Helper: sync a single attendance log to Fieldproxy (upsert pattern).
+ * If fieldproxy_punch_id exists, update; otherwise create new.
+ */
+async function syncAttendanceToFieldproxy(
+  log: any,
+): Promise<{ action: "updated" | "created" | "failed"; error?: string }> {
+  try {
+    if (log.fieldproxy_punch_id) {
+      // Try updating existing row
+      const updateResult = await updateCheckOutInFieldproxy(log);
+      if (updateResult.update) {
+        return { action: "updated" };
+      }
+      if (updateResult.error) {
+        // Row not found in FP — fall through to create
+        if (updateResult.error.toLowerCase().includes("row not found")) {
+          // Fall through to create below
+        } else {
+          return { action: "failed", error: updateResult.error };
+        }
+      }
+    }
+
+    // Create new row in Fieldproxy (with both punch_in and punch_out if available)
+    const { punch_id } = await forwardPunchInToFieldproxy(log);
+
+    // Save the fieldproxy_punch_id back to our DB
+    await attendanceRepository.updateAttendanceLog(log.id, {
+      fieldproxy_punch_id: punch_id,
+    });
+
+    // If there's a check_out_time, also update the FP row with checkout data
+    if (log.check_out_time) {
+      const logWithFpId = { ...log, fieldproxy_punch_id: punch_id };
+      await updateCheckOutInFieldproxy(logWithFpId).catch((err) => {
+        console.warn(`[FIELDPROXY] Created row but failed to update checkout: ${err.message}`);
+      });
+    }
+
+    return { action: "created" };
+  } catch (error: any) {
+    return { action: "failed", error: error.message || "Failed to sync to Fieldproxy" };
+  }
+}
+
 export default {
   create,
   checkIn,
@@ -675,4 +830,6 @@ export default {
   getUserSites,
   getAll,
   bulkUpsert,
+  syncFieldproxySingle,
+  syncFieldproxyBulk,
 };

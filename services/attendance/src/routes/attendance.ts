@@ -14,10 +14,12 @@ const router = express.Router();
  */
 
 router.post("/bulk-upsert", verifyAnyAuth, attendanceLogsController.bulkUpsert);
+router.post("/sync-fieldproxy", verifyAnyAuth, attendanceLogsController.syncFieldproxyBulk);
 router.post("/", verifyAnyAuth, attendanceLogsController.create);
 router.get("/", verifyAnyAuth, attendanceLogsController.getAll);
 router.post("/check-in", verifyAnyAuth, attendanceLogsController.checkIn);
 router.post("/:id/check-out", verifyAnyAuth, attendanceLogsController.checkOut);
+router.post("/:id/sync-fieldproxy", verifyAnyAuth, attendanceLogsController.syncFieldproxySingle);
 
 // Location validation - check which sites a user can check in at based on their location
 router.get(
