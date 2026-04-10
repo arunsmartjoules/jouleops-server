@@ -33,6 +33,13 @@ router.post(
   adminController.verifySuperadminChange
 );
 
+// Change superadmin in one step with credential check (superadmin only)
+router.post(
+  "/change-superadmin/transfer",
+  requireSuperAdmin,
+  adminController.transferSuperadminWithCredentials
+);
+
 // Get dashboard stats (admin or superadmin)
 router.get("/stats", requireAdmin, adminController.getDashboardStats);
 

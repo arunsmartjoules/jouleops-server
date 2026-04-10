@@ -8,6 +8,7 @@
 import usersRepository from "../repositories/usersRepository.ts";
 import { logActivity } from "../repositories/logsRepository.ts";
 import type { Request, Response } from "express";
+import { v4 as uuidv4 } from "uuid";
 import {
   sendSuccess,
   sendCreated,
@@ -30,7 +31,10 @@ export const create = async (req: AuthRequest, res: Response) => {
       return sendForbidden(res, "Only superadmins can create users");
     }
 
-    const user = await usersRepository.createUser(req.body);
+    const user = await usersRepository.createUser({
+      ...req.body,
+      user_id: req.body.user_id || uuidv4(),
+    });
 
     await logActivity({
       user_id: req.user.user_id,

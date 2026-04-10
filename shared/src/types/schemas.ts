@@ -241,7 +241,7 @@ export const attendanceSchema = z.object({
  * User Schemas
  */
 export const createUserSchema = z.object({
-  user_id: z.string().min(1),
+  user_id: z.string().min(1).optional(),
   email: z.string().email(),
   name: z.string().min(1),
   phone: z.string().optional().nullable(),

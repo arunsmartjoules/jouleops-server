@@ -32,6 +32,29 @@ interface AuthRequest extends Request {
   };
 }
 
+const normalizeEmail = (email: string) => String(email || "").trim().toLowerCase();
+
+function isSignupEmailAllowed(rawEmail: string) {
+  const email = normalizeEmail(rawEmail);
+  if (!email) return false;
+
+  const allowlistedEmails = String(process.env.SIGNUP_ALLOWED_EMAILS || "")
+    .split(",")
+    .map((value) => normalizeEmail(value))
+    .filter(Boolean);
+  if (allowlistedEmails.includes(email)) return true;
+
+  const allowlistedDomains = String(
+    process.env.SIGNUP_ALLOWED_EMAIL_DOMAINS || "smartjoules.in",
+  )
+    .split(",")
+    .map((value) => normalizeEmail(value).replace(/^@/, ""))
+    .filter(Boolean);
+
+  const domain = email.split("@")[1] || "";
+  return allowlistedDomains.includes(domain);
+}
+
 // ============================================================================
 // Login
 // ============================================================================
@@ -140,6 +163,13 @@ export const signup = asyncHandler(async (req: Request, res: Response) => {
 
   if (!email || !password || !name) {
     return sendError(res, "Email, password, and name are required");
+  }
+
+  if (!isSignupEmailAllowed(email)) {
+    return sendError(
+      res,
+      "Signup is restricted to allowlisted company email addresses.",
+    );
   }
 
   // Check if user already exists
@@ -704,7 +734,7 @@ export const googleLogin = asyncHandler(async (req: Request, res: Response) => {
       return sendError(res, "Invalid Google token payload");
     }
 
-    const email = String(payload.email || "").trim().toLowerCase();
+  const email = normalizeEmail(payload.email || "");
     const name = (payload.name || email.split("@")[0]) as string;
 
     if (!email) {
@@ -715,6 +745,12 @@ export const googleLogin = asyncHandler(async (req: Request, res: Response) => {
     let userRecord = await usersRepository.getUserByEmail(email);
 
     if (!userRecord) {
+      if (!isSignupEmailAllowed(email)) {
+        return sendError(
+          res,
+          "Signup is restricted to allowlisted company email addresses.",
+        );
+      }
       // Provision new user
       userRecord = await usersRepository.createUser({
         user_id: uuidv4(),

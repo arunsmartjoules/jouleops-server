@@ -6,8 +6,10 @@
  */
 
 import adminRepository from "../repositories/adminRepository";
+import usersRepository from "../repositories/usersRepository.ts";
 import { logActivity } from "../repositories/logsRepository";
 import type { Request, Response } from "express";
+import bcrypt from "bcryptjs";
 import {
   sendSuccess,
   sendError,
@@ -226,6 +228,81 @@ export const verifySuperadminChange = async (
   }
 };
 
+export const transferSuperadminWithCredentials = async (
+  req: AuthRequest,
+  res: Response,
+) => {
+  try {
+    const { newSuperadminUserId, currentSuperadminUserId, currentPassword } =
+      req.body;
+
+    if (!req.user?.is_superadmin) {
+      return sendForbidden(res, "Only superadmin can change superadmin");
+    }
+
+    if (!newSuperadminUserId || !currentSuperadminUserId || !currentPassword) {
+      return sendError(
+        res,
+        "New superadmin user ID, current superadmin user ID, and password are required",
+      );
+    }
+
+    if (req.user.user_id !== currentSuperadminUserId) {
+      return sendForbidden(
+        res,
+        "Current superadmin user ID does not match the authenticated account",
+      );
+    }
+
+    const currentSuperadmin =
+      await usersRepository.getUserByIdUncached(currentSuperadminUserId);
+    if (!currentSuperadmin || !currentSuperadmin.password) {
+      return sendError(res, "Current superadmin credentials unavailable");
+    }
+
+    const isValidPassword = await bcrypt.compare(
+      currentPassword,
+      currentSuperadmin.password,
+    );
+    if (!isValidPassword) {
+      return sendError(res, "Invalid superadmin password");
+    }
+
+    const targetUser = await adminRepository.getUserById(newSuperadminUserId);
+    if (!targetUser) {
+      return sendNotFound(res, "User");
+    }
+    if (targetUser.role !== "admin") {
+      return sendError(res, "User must be an admin to become superadmin");
+    }
+
+    await adminRepository.removeSuperadmin(currentSuperadminUserId);
+    let newSuperadmin;
+    try {
+      newSuperadmin = await adminRepository.setSuperadmin(newSuperadminUserId);
+    } catch (err) {
+      await adminRepository.setSuperadmin(currentSuperadminUserId);
+      throw err;
+    }
+
+    await logActivity({
+      user_id: req.user.user_id,
+      action: "CHANGE_SUPERADMIN",
+      module: "ADMIN",
+      description: `Superadmin changed from ${currentSuperadmin.email} to ${newSuperadmin.email}`,
+      ip_address: req.ip,
+      device_info: req.headers["user-agent"],
+    });
+
+    return sendSuccess(res, newSuperadmin, {
+      message: "Superadmin transferred successfully",
+    });
+  } catch (error: any) {
+    console.error("Transfer superadmin error:", error);
+    return sendServerError(res, error);
+  }
+};
+
 export const getDashboardStats = async (req: AuthRequest, res: Response) => {
   try {
     const stats = await adminRepository.getDashboardStats();
@@ -242,5 +319,6 @@ export default {
   demoteAdmin,
   requestSuperadminChange,
   verifySuperadminChange,
+  transferSuperadminWithCredentials,
   getDashboardStats,
 };
