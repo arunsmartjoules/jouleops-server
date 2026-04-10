@@ -58,6 +58,53 @@ const buildFieldproxyForwardPayload = (complaint: any) => ({
   created_user: complaint.created_user,
 });
 
+type ManualFieldproxySyncResult = {
+  ticket_no: string;
+  action: "updated" | "created" | "failed";
+  message?: string;
+  error?: string;
+};
+
+const syncComplaintToFieldproxyUpsert = async (
+  complaint: any,
+): Promise<ManualFieldproxySyncResult> => {
+  try {
+    const updateResult = await updateComplaintInFieldproxy(
+      complaint.ticket_no,
+      buildFieldproxyUpdatePayload(complaint),
+    );
+
+    if (updateResult.update) {
+      return {
+        ticket_no: complaint.ticket_no,
+        action: "updated",
+        message: "Updated existing Fieldproxy row",
+      };
+    }
+
+    if (updateResult.error?.toLowerCase().includes("row not found")) {
+      await forwardComplaintToFieldproxy(buildFieldproxyForwardPayload(complaint));
+      return {
+        ticket_no: complaint.ticket_no,
+        action: "created",
+        message: "Created new Fieldproxy row",
+      };
+    }
+
+    return {
+      ticket_no: complaint.ticket_no,
+      action: "failed",
+      error: updateResult.error || "Unknown Fieldproxy update error",
+    };
+  } catch (error: any) {
+    return {
+      ticket_no: complaint.ticket_no,
+      action: "failed",
+      error: error.message || "Failed to sync complaint to Fieldproxy",
+    };
+  }
+};
+
 export const create = async (req: AuthRequest, res: Response) => {
   try {
     const { site_code, sender_id, created_user } = req.body;
@@ -653,6 +700,133 @@ export const bulkUpsert = asyncHandler(async (req: Request, res: Response) => {
   return sendSuccess(res, result);
 });
 
+export const syncFieldproxySingle = asyncHandler(
+  async (req: AuthRequest, res: Response) => {
+    const { id } = req.params as { id: string };
+    if (!id) {
+      return sendError(res, "Ticket identifier is required");
+    }
+
+    const complaint = await complaintsRepository.getComplaint(id);
+    if (!complaint) {
+      return sendNotFound(res, "Complaint");
+    }
+
+    logActivity({
+      user_id: req.user?.user_id,
+      action: "MANUAL_FIELDPROXY_SYNC_START",
+      module: "complaints",
+      description: `Manual Fieldproxy sync started for ${complaint.ticket_no}`,
+      ip_address: req.ip,
+      metadata: { ticket_no: complaint.ticket_no, mode: "single" },
+    }).catch(() => {});
+
+    const result = await syncComplaintToFieldproxyUpsert(complaint);
+
+    logActivity({
+      user_id: req.user?.user_id,
+      action:
+        result.action === "failed"
+          ? "MANUAL_FIELDPROXY_SYNC_FAILED"
+          : "MANUAL_FIELDPROXY_SYNC_SUCCESS",
+      module: "complaints",
+      description:
+        result.action === "failed"
+          ? `Manual Fieldproxy sync failed for ${complaint.ticket_no}`
+          : `Manual Fieldproxy sync ${result.action} for ${complaint.ticket_no}`,
+      ip_address: req.ip,
+      metadata: {
+        ticket_no: complaint.ticket_no,
+        mode: "single",
+        action: result.action,
+        error: result.error,
+      },
+    }).catch(() => {});
+
+    if (result.action === "failed") {
+      return sendError(res, result.error || "Fieldproxy sync failed", {
+        status: 500,
+      });
+    }
+
+    return sendSuccess(res, result, {
+      message: `Fieldproxy sync ${result.action} for ${complaint.ticket_no}`,
+    });
+  },
+);
+
+export const syncFieldproxyBulk = asyncHandler(
+  async (req: AuthRequest, res: Response) => {
+    const { ticket_nos, ids } = req.body as {
+      ticket_nos?: string[];
+      ids?: string[];
+    };
+
+    const targets = Array.isArray(ticket_nos)
+      ? ticket_nos
+      : Array.isArray(ids)
+        ? ids
+        : [];
+
+    if (targets.length === 0) {
+      return sendError(res, "ticket_nos (or ids) array is required");
+    }
+
+    const uniqueTargets = Array.from(new Set(targets.map((t) => String(t).trim()).filter(Boolean)));
+    const results: ManualFieldproxySyncResult[] = [];
+
+    for (const target of uniqueTargets) {
+      const complaint = await complaintsRepository.getComplaint(target);
+      if (!complaint) {
+        results.push({
+          ticket_no: target,
+          action: "failed",
+          error: "Complaint not found",
+        });
+        continue;
+      }
+
+      const result = await syncComplaintToFieldproxyUpsert(complaint);
+      results.push(result);
+
+      logActivity({
+        user_id: req.user?.user_id,
+        action:
+          result.action === "failed"
+            ? "MANUAL_FIELDPROXY_SYNC_FAILED"
+            : "MANUAL_FIELDPROXY_SYNC_SUCCESS",
+        module: "complaints",
+        description:
+          result.action === "failed"
+            ? `Bulk manual Fieldproxy sync failed for ${complaint.ticket_no}`
+            : `Bulk manual Fieldproxy sync ${result.action} for ${complaint.ticket_no}`,
+        ip_address: req.ip,
+        metadata: {
+          ticket_no: complaint.ticket_no,
+          mode: "bulk",
+          action: result.action,
+          error: result.error,
+        },
+      }).catch(() => {});
+    }
+
+    const summary = {
+      total: results.length,
+      updated: results.filter((r) => r.action === "updated").length,
+      created: results.filter((r) => r.action === "created").length,
+      failed: results.filter((r) => r.action === "failed").length,
+    };
+
+    return sendSuccess(
+      res,
+      { summary, results },
+      {
+        message: `Fieldproxy bulk sync completed: updated ${summary.updated}, created ${summary.created}, failed ${summary.failed}`,
+      },
+    );
+  },
+);
+
 export default {
   create,
   getById,
@@ -665,4 +839,6 @@ export default {
   remove,
   getStats,
   bulkUpsert,
+  syncFieldproxySingle,
+  syncFieldproxyBulk,
 };
