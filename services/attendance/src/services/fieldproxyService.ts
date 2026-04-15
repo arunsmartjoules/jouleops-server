@@ -150,6 +150,7 @@ export async function forwardPunchInToFieldproxy(log: any): Promise<any> {
       punch_id: nextPunchId,
       user_id: log.user_id,
       shift_id: shiftId,
+      // DB stores null for WFH-at-home; Fieldproxy sheet expects a sentinel value.
       site_id: log.site_code || "WFH",
       punch_in: punchInTime,
       punch_out: punchOutTime || null,

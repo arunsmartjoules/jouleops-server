@@ -7,9 +7,13 @@
     "scripts": {
         "dev": "bun --hot src/index.ts",
         "start": "bun src/index.ts",
-        "build": "bun build ./src/index.ts --outdir ./dist --target bun"
+        "build": "bun build ./src/index.ts --outdir ./dist --target bun",
+        "test": "bun test src/geofenceUtils.test.ts"
     },
     "dependencies": {
         "@jouleops/shared": "workspace:*"
+    },
+    "devDependencies": {
+        "@types/bun": "latest"
     }
 }

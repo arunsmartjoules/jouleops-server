@@ -8,6 +8,13 @@
 import attendanceRepository from "../repositories/attendanceRepository.ts";
 import type { Request, Response } from "express";
 import {
+  parseCoord,
+  computeSitesWithDistance,
+  pickResolvedInRangeSite,
+  toNearestSitePayload,
+  type SiteDistanceRow,
+} from "../geofenceUtils.ts";
+import {
   sendSuccess,
   sendCreated,
   sendError,
@@ -108,8 +115,8 @@ export const checkIn = async (req: AuthRequest, res: Response) => {
       user_id = getUserId(user);
     }
 
-    if (!user_id || !site_code) {
-      return sendError(res, "user_id and site_code are required");
+    if (!user_id) {
+      return sendError(res, "user_id is required");
     }
 
     // Check if there's an active (not checked out) attendance for today
@@ -124,43 +131,75 @@ export const checkIn = async (req: AuthRequest, res: Response) => {
       });
     }
 
-    // Validate location if coordinates provided
-    if (latitude && longitude) {
-      const userSites =
-        await attendanceRepository.getUserSitesWithCoordinates(user_id);
-      const workLocationType =
-        await attendanceRepository.getUserWorkLocationType(user_id);
+    const workLocationType =
+      await attendanceRepository.getUserWorkLocationType(user_id);
+    const isWFH = workLocationType === "WFH";
 
-      if (workLocationType !== "WFH" && userSites.length > 0) {
-        // Find if user is within range of site
-        const matchingSite = userSites.find((s) => {
-          if (!s.latitude || !s.longitude) return false;
-          const distance = attendanceRepository.calculateDistance(
-            parseFloat(latitude),
-            parseFloat(longitude),
-            parseFloat(s.latitude),
-            parseFloat(s.longitude),
-          );
-          return distance <= (s.radius || 200);
+    const lat = parseCoord(latitude);
+    const lon = parseCoord(longitude);
+
+    const allSites =
+      await attendanceRepository.getAllActiveSitesWithCoordinates();
+
+    let siteCodeForDb: string | null;
+
+    if (!isWFH) {
+      if (lat === null || lon === null) {
+        return res.status(400).json({
+          success: false,
+          error:
+            "Latitude and longitude are required for check-in when you are not on Work From Home",
         });
-
-        if (!matchingSite && site_code !== "WFH") {
-          return res.status(400).json({
-            success: false,
-            error: "You are not within range of any assigned site",
-            allowedSites: userSites,
-          });
-        }
+      }
+      if (allSites.length === 0) {
+        return res.status(400).json({
+          success: false,
+          error:
+            "No active sites with coordinates are configured. Contact your administrator.",
+        });
+      }
+      const ranked = computeSitesWithDistance(lat, lon, allSites);
+      const resolved = pickResolvedInRangeSite(ranked);
+      if (!resolved) {
+        return res.status(400).json({
+          success: false,
+          error: "You are not within range of any active site",
+          nearestSite: toNearestSitePayload(ranked[0]),
+          userLocation: { latitude: lat, longitude: lon },
+        });
+      }
+      const clientCode =
+        site_code !== undefined && site_code !== null && String(site_code).trim() !== ""
+          ? String(site_code).trim()
+          : null;
+      if (
+        clientCode &&
+        clientCode.toUpperCase() !== "WFH" &&
+        clientCode !== resolved.site_code
+      ) {
+        return res.status(400).json({
+          success: false,
+          error: "Selected site does not match your GPS location",
+          nearestSite: toNearestSitePayload(ranked[0]),
+          userLocation: { latitude: lat, longitude: lon },
+        });
+      }
+      siteCodeForDb = resolved.site_code;
+    } else {
+      if (lat !== null && lon !== null && allSites.length > 0) {
+        const ranked = computeSitesWithDistance(lat, lon, allSites);
+        const resolved = pickResolvedInRangeSite(ranked);
+        siteCodeForDb = resolved ? resolved.site_code : null;
+      } else {
+        siteCodeForDb = null;
       }
     }
 
-    const siteCodeForDb = site_code === "WFH" ? null : site_code;
-
     const log = await attendanceRepository.checkIn({
       user_id,
-      site_code: siteCodeForDb!,
-      latitude: latitude ? parseFloat(latitude) : undefined,
-      longitude: longitude ? parseFloat(longitude) : undefined,
+      site_code: siteCodeForDb,
+      latitude: lat ?? undefined,
+      longitude: lon ?? undefined,
       address,
       shift_id,
     });
@@ -230,9 +269,11 @@ export const checkOut = async (req: AuthRequest, res: Response) => {
       });
     }
 
+    const plat = parseCoord(latitude);
+    const plon = parseCoord(longitude);
     const log = await attendanceRepository.checkOut(id, {
-      latitude: latitude ? parseFloat(latitude) : undefined,
-      longitude: longitude ? parseFloat(longitude) : undefined,
+      latitude: plat === null ? undefined : plat,
+      longitude: plon === null ? undefined : plon,
       address,
       remarks,
     });
@@ -291,55 +332,70 @@ export const validateLocation = async (req: AuthRequest, res: Response) => {
 
     const workLocationType =
       await attendanceRepository.getUserWorkLocationType(userId);
-    const userSites =
-      await attendanceRepository.getUserSitesWithCoordinates(userId);
-
     const isWFH = workLocationType === "WFH";
-    let allowedSites: any[] = [];
-    let nearestSite: any = null;
 
-    if (!isWFH && latitude && longitude) {
-      const lat = parseFloat(latitude as string);
-      const lon = parseFloat(longitude as string);
+    const lat = parseCoord(latitude);
+    const lon = parseCoord(longitude);
 
-      allowedSites = userSites
-        .map((s) => {
-          if (!s.latitude || !s.longitude) return null;
-          const distance = attendanceRepository.calculateDistance(
-            lat,
-            lon,
-            parseFloat(s.latitude),
-            parseFloat(s.longitude),
-          );
-          return {
-            ...s,
-            distance,
-            isWithinRange: distance <= (s.radius || 200),
-          };
-        })
-        .filter((s) => s !== null)
-        .sort((a, b) => a!.distance - b!.distance) as any[];
+    const allSites =
+      await attendanceRepository.getAllActiveSitesWithCoordinates();
 
-      nearestSite = allowedSites[0] || null;
+    let ranked: SiteDistanceRow[] = [];
+    if (lat !== null && lon !== null && allSites.length > 0) {
+      ranked = computeSitesWithDistance(lat, lon, allSites);
     }
 
-    const filteredAllowedSites = isWFH
-      ? userSites
-      : allowedSites.filter((s) => s.isWithinRange);
+    const nearestRow = ranked[0] ?? null;
+    const nearestSite = toNearestSitePayload(nearestRow);
+    const inRangeRows = ranked.filter((s) => s.isWithinRange);
+    const allowedSites = inRangeRows.map((s) => toNearestSitePayload(s)!);
 
-    const isValid = isWFH || filteredAllowedSites.length > 0;
+    let isValid: boolean;
+    let resolvedSiteCode: string | null;
+    let message: string;
+
+    if (isWFH) {
+      isValid = true;
+      resolvedSiteCode = pickResolvedInRangeSite(ranked)?.site_code ?? null;
+      if (lat === null || lon === null) {
+        message =
+          "Work From Home: you can check in without being at a site. Enable location to record a site when you are on premises.";
+      } else if (resolvedSiteCode) {
+        message = "Work From Home: you are within an active site geofence.";
+      } else {
+        message = "Work From Home enabled";
+      }
+    } else {
+      if (lat === null || lon === null) {
+        isValid = false;
+        resolvedSiteCode = null;
+        message =
+          "Latitude and longitude are required for site attendance. Enable location and try again.";
+      } else if (allSites.length === 0) {
+        isValid = false;
+        resolvedSiteCode = null;
+        message =
+          "No active sites with coordinates are configured. Contact your administrator.";
+      } else {
+        resolvedSiteCode = pickResolvedInRangeSite(ranked)?.site_code ?? null;
+        isValid = inRangeRows.length > 0;
+        message = isValid
+          ? "Location validated"
+          : "You are not within range of any active site";
+      }
+    }
 
     return sendSuccess(res, {
       isValid,
       isWFH,
-      allowedSites: filteredAllowedSites,
+      allowedSites,
       nearestSite,
-      allSites: userSites,
-      message: isValid
-        ? isWFH
-          ? "Work From Home enabled"
-          : "Location validated"
-        : "You are not within range of any assigned site",
+      resolvedSiteCode,
+      userLocation:
+        lat !== null && lon !== null
+          ? { latitude: lat, longitude: lon }
+          : null,
+      message,
     });
   } catch (error: any) {
     console.error("Validate location error:", error);

@@ -13,7 +13,7 @@ import { query, queryOne } from "@jouleops/shared";
 export interface AttendanceLog {
   id: string;
   user_id: string;
-  site_code: string;
+  site_code: string | null;
   date: string;
   check_in_time?: Date;
   check_out_time?: Date;
@@ -33,7 +33,7 @@ export interface AttendanceLog {
 
 export interface CheckInInput {
   user_id: string;
-  site_code: string;
+  site_code: string | null;
   latitude?: number;
   longitude?: number;
   address?: string;
@@ -148,10 +148,34 @@ export async function getUserSitesWithCoordinates(
 }
 
 /**
+ * All active sites with coordinates (no site_user filter). Used for attendance geofencing.
+ */
+export async function getAllActiveSitesWithCoordinates(): Promise<
+  SiteWithCoordinates[]
+> {
+  return query<SiteWithCoordinates>(
+    `SELECT s.site_code, s.name, s.address, s.city, s.state, s.latitude, s.longitude, s.radius, s.project_type
+     FROM sites s
+     WHERE s.is_active = true
+       AND s.latitude IS NOT NULL
+       AND s.longitude IS NOT NULL`,
+  );
+}
+
+/**
  * Check in
  */
 export async function checkIn(data: CheckInInput): Promise<AttendanceLog> {
   const istDateString = getISTDate();
+
+  const lat =
+    data.latitude !== undefined && data.latitude !== null
+      ? data.latitude
+      : null;
+  const lon =
+    data.longitude !== undefined && data.longitude !== null
+      ? data.longitude
+      : null;
 
   const result = await queryOne<AttendanceLog>(
     `INSERT INTO attendance_logs 
@@ -162,8 +186,8 @@ export async function checkIn(data: CheckInInput): Promise<AttendanceLog> {
     [
       data.user_id,
       data.site_code,
-      data.latitude || null,
-      data.longitude || null,
+      lat,
+      lon,
       data.address || null,
       data.shift_id || null,
       istDateString,
@@ -535,6 +559,7 @@ export default {
   calculateDistance,
   getUserWorkLocationType,
   getUserSitesWithCoordinates,
+  getAllActiveSitesWithCoordinates,
   checkIn,
   checkOut,
   getAttendanceById,
