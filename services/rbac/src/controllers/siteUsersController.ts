@@ -23,13 +23,14 @@ interface AuthRequest extends Request {
 
 export const getAll = async (req: Request, res: Response) => {
   try {
-    const { page, limit, site_code, user_id, search } = req.query;
+    const { page, limit, site_code, user_id, search, group_by } = req.query;
     const result = await siteUsersRepository.getAll({
       page: parseInt(page as string) || 1,
       limit: parseInt(limit as string) || 50,
       siteCode: site_code as string | undefined,
       userId: user_id as string | undefined,
       search: search as string | undefined,
+      groupBy: (group_by as string | undefined) === "site" ? "site" : "user",
     });
     return sendSuccess(res, result.data, { pagination: result.pagination });
   } catch (error: any) {

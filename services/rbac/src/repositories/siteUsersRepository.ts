@@ -36,8 +36,16 @@ export async function getAll(options: {
   siteCode?: string;
   userId?: string;
   search?: string;
+  groupBy?: "user" | "site";
 }) {
-  const { page = 1, limit = 50, siteCode, userId, search } = options;
+  const {
+    page = 1,
+    limit = 50,
+    siteCode,
+    userId,
+    search,
+    groupBy = "user",
+  } = options;
   const offset = (page - 1) * limit;
   const params: any[] = [];
   const conditions: string[] = [];
@@ -62,9 +70,12 @@ export async function getAll(options: {
   const whereClause =
     conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
 
-  // Count query (distinct users that have site assignments matching the filters)
+  const countGroupedField =
+    groupBy === "site" ? "DISTINCT s.site_code" : "DISTINCT u.user_id";
+
+  // Count query
   const countQuery = `
-    SELECT COUNT(DISTINCT u.user_id) as count
+    SELECT COUNT(${countGroupedField}) as count
     FROM site_user su
     JOIN users u ON su.user_id = u.user_id
     JOIN sites s ON su.site_id = s.site_id
@@ -73,9 +84,32 @@ export async function getAll(options: {
   const countResult = await queryOne(countQuery, params);
   const total = parseInt(countResult?.count || "0");
 
-  // Data query (Grouped by user)
   params.push(limit, offset);
-  const dataQuery = `
+  const dataQuery =
+    groupBy === "site"
+      ? `
+    SELECT
+      s.site_code,
+      MAX(s.name) as site_name,
+      json_agg(json_build_object(
+        'user_id', u.user_id,
+        'user_name', u.name,
+        'user_email', u.email,
+        'user_employee_code', u.employee_code,
+        'user_department', u.department,
+        'user_designation', u.designation,
+        'role_at_site', su.role_at_site,
+        'is_primary', su.is_primary
+      ) ORDER BY su.is_primary DESC, u.name) as users
+    FROM site_user su
+    JOIN users u ON su.user_id = u.user_id
+    JOIN sites s ON su.site_id = s.site_id
+    ${whereClause}
+    GROUP BY s.site_code
+    ORDER BY MAX(su.created_at) DESC
+    LIMIT $${params.length - 1} OFFSET $${params.length}
+  `
+      : `
     SELECT 
       u.user_id,
       MAX(u.name) as user_name,
