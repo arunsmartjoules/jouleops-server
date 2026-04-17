@@ -734,7 +734,7 @@ export const googleLogin = asyncHandler(async (req: Request, res: Response) => {
       return sendError(res, "Invalid Google token payload");
     }
 
-  const email = normalizeEmail(payload.email || "");
+    const email = normalizeEmail(payload.email || "");
     const name = (payload.name || email.split("@")[0]) as string;
 
     if (!email) {
@@ -745,13 +745,7 @@ export const googleLogin = asyncHandler(async (req: Request, res: Response) => {
     let userRecord = await usersRepository.getUserByEmail(email);
 
     if (!userRecord) {
-      if (!isSignupEmailAllowed(email)) {
-        return sendError(
-          res,
-          "Signup is restricted to allowlisted company email addresses.",
-        );
-      }
-      // Provision new user
+      // Provision new user (any verified Google email; allowlist applies only to email/password signup)
       userRecord = await usersRepository.createUser({
         user_id: uuidv4(),
         email,
