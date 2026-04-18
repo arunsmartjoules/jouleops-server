@@ -28,6 +28,15 @@ export const verifyToken = async (
     const authHeader = req.headers.authorization;
 
     if (!authHeader) {
+      console.warn(
+        JSON.stringify({
+          event: "auth_missing_authorization_header",
+          service: "sitelogs",
+          method: req.method,
+          path: req.path,
+          hasAuthHeader: false,
+        }),
+      );
       return res.status(401).json({
         success: false,
         error: "No token provided",

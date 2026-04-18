@@ -29,12 +29,17 @@ export const verifyToken = async (
   let authHeader = "";
   try {
     authHeader = req.headers.authorization || "";
-    console.log(
-      `[PM Auth] Header received:`,
-      authHeader ? authHeader.substring(0, 20) + "..." : "NONE",
-    );
 
     if (!authHeader) {
+      console.warn(
+        JSON.stringify({
+          event: "auth_missing_authorization_header",
+          service: "pm",
+          method: req.method,
+          path: req.path,
+          hasAuthHeader: false,
+        }),
+      );
       return res.status(401).json({
         success: false,
         error: "No token provided",
