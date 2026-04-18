@@ -123,7 +123,12 @@ export const updatePMInstanceSchema = createPMInstanceSchema
  * Asset Schemas
  */
 export const createAssetSchema = z.object({
-  asset_id: z.string().min(1),
+  // Optional: repository generates AST-###### when omitted
+  asset_id: z.preprocess(
+    (val) =>
+      val === null || val === undefined || val === "" ? undefined : val,
+    z.string().min(1).optional(),
+  ),
   site_code: z.string().min(1),
   asset_name: z.string().min(1),
   category: z.string().optional().nullable(),
