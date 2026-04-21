@@ -19,6 +19,7 @@ import {
 // Import routes (copied from monolith)
 import complaintsRoutes from "./routes/complaints.ts";
 import categoriesRoutes from "./routes/categories.ts";
+import incidentsRoutes from "./routes/incidents.ts";
 
 const PORT = process.env.TICKETS_PORT || 3421;
 
@@ -50,6 +51,7 @@ app.use("/api/tickets", complaintsRoutes);
 app.use("/api/complaints", complaintsRoutes);
 app.use("/api/complaint_category", categoriesRoutes);
 app.use("/api/complaint-categories", categoriesRoutes);
+app.use("/api/incidents", incidentsRoutes);
 
 // 404 Handler
 app.use((req, res, next) => {

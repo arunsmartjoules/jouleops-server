@@ -4,6 +4,7 @@ export interface UserPreferences {
   user_id: string;
   attendance_notifications_enabled: boolean;
   ticket_notifications_enabled: boolean;
+  incident_notifications_enabled: boolean;
   updated_at?: string;
 }
 
@@ -143,12 +144,14 @@ export const getUserPreferences = async (
       user_id: userId,
       attendance_notifications_enabled: true,
       ticket_notifications_enabled: true,
+      incident_notifications_enabled: true,
     };
   }
 
   return {
     ...data,
     ticket_notifications_enabled: data.ticket_notifications_enabled ?? true,
+    incident_notifications_enabled: data.incident_notifications_enabled ?? true,
   };
 };
 
@@ -173,18 +176,23 @@ export const updateUserPreferences = async (
     preferences.ticket_notifications_enabled ??
     existingPreferences?.ticket_notifications_enabled ??
     true;
+  const incident_notifications_enabled =
+    preferences.incident_notifications_enabled ??
+    existingPreferences?.incident_notifications_enabled ??
+    true;
 
   const result = await queryOne<UserPreferences>(
     `
-        INSERT INTO user_notification_preferences (user_id, attendance_notifications_enabled, ticket_notifications_enabled, updated_at)
-        VALUES ($1, $2, $3, NOW())
+        INSERT INTO user_notification_preferences (user_id, attendance_notifications_enabled, ticket_notifications_enabled, incident_notifications_enabled, updated_at)
+        VALUES ($1, $2, $3, $4, NOW())
         ON CONFLICT (user_id) DO UPDATE SET
         attendance_notifications_enabled = EXCLUDED.attendance_notifications_enabled,
         ticket_notifications_enabled = EXCLUDED.ticket_notifications_enabled,
+        incident_notifications_enabled = EXCLUDED.incident_notifications_enabled,
         updated_at = NOW()
         RETURNING *
     `,
-    [userId, attendance_notifications_enabled, ticket_notifications_enabled],
+    [userId, attendance_notifications_enabled, ticket_notifications_enabled, incident_notifications_enabled],
   );
   return result;
 };

@@ -215,11 +215,72 @@ export const updateComplaintSchema = createComplaintSchema
     ticket_no: true,
     site_code: true,
   })
-  .partial();
+  .partial()
+  .extend({
+    create_incident: z.boolean().optional(),
+    incident_payload: z.record(z.string(), z.any()).optional(),
+  });
 
 export const updateComplaintStatusSchema = z.object({
   status: z.string().min(1),
   remarks: z.string().optional(),
+});
+
+const incidentStatusEnum = z.enum(["Open", "Inprogress", "Resolved"]);
+const incidentRcaStatusEnum = z.enum(["Open", "RCA Under Review", "RCA Submitted"]);
+const incidentFaultTypeEnum = z.enum([
+  "Mechanical",
+  "Electrical",
+  "Controls",
+  "Safety",
+  "Plumbing",
+  "BMS",
+  "Others",
+]);
+const incidentSeverityEnum = z.enum(["Critical", "Moderate", "Low"]);
+
+export const createIncidentSchema = z.object({
+  source: z.enum(["Incident", "Tickets"]).default("Incident"),
+  site_code: z.string().min(1),
+  ticket_id: z.string().uuid().optional().nullable(),
+  asset_location: z.string().optional().nullable(),
+  raised_by: z.string().optional().nullable(),
+  incident_created_time: z.string().datetime().optional().nullable(),
+  incident_updated_time: z.string().datetime().optional().nullable(),
+  incident_resolved_time: z.string().datetime().optional().nullable(),
+  fault_symptom: z.string().min(1),
+  fault_type: incidentFaultTypeEnum,
+  severity: incidentSeverityEnum,
+  operating_condition: z.string().optional().nullable(),
+  immediate_action_taken: z.string().optional().nullable(),
+  attachments: z.array(z.any()).optional().default([]),
+  rca_attachments: z.array(z.any()).optional().default([]),
+  remarks: z.string().optional().nullable(),
+  status: incidentStatusEnum.optional().default("Open"),
+  rca_status: incidentRcaStatusEnum.optional().default("Open"),
+  assigned_by: z.string().optional().nullable(),
+  assignment_type: z.string().optional().nullable(),
+  vendor_tagged: z.string().optional().nullable(),
+  rca_maker: z.string().optional().nullable(),
+  rca_checker: z.string().optional().nullable(),
+  assigned_to: z.union([z.string(), z.array(z.string())]).optional().nullable(),
+  client_request_id: z.string().uuid().optional().nullable(),
+});
+
+export const updateIncidentSchema = createIncidentSchema.partial();
+
+export const updateIncidentStatusSchema = z.object({
+  status: incidentStatusEnum,
+  remarks: z.string().optional().nullable(),
+  incident_updated_time: z.string().datetime().optional().nullable(),
+  incident_resolved_time: z.string().datetime().optional().nullable(),
+  assigned_to: z.union([z.string(), z.array(z.string())]).optional().nullable(),
+});
+
+export const updateIncidentRcaStatusSchema = z.object({
+  rca_status: incidentRcaStatusEnum,
+  rca_attachments: z.array(z.any()).optional(),
+  rca_checker: z.string().optional().nullable(),
 });
 
 /**

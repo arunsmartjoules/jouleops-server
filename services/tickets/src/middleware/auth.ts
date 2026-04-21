@@ -103,9 +103,34 @@ export const verifyToken = async (
     req.user = decoded;
     next();
   } catch (error: any) {
-    console.error("JWT Verification Error:", error.message, error.name);
+    const message = String(error?.message || "");
+    const name = String(error?.name || "UnknownAuthError");
+    const lower = message.toLowerCase();
+    const isExpectedExpiry =
+      name === "TokenExpiredError" ||
+      lower.includes("id-token-expired") ||
+      lower.includes("token has expired");
+    const isExpectedRevoked =
+      lower.includes("id-token-revoked") ||
+      lower.includes("token has been revoked") ||
+      lower.includes("user disabled");
 
-    if (error.name === "TokenExpiredError") {
+    const authMeta = {
+      event: "auth_verify_failed",
+      service: "tickets",
+      method: req.method,
+      path: req.path,
+      errorName: name,
+      errorMessage: message,
+    };
+
+    if (isExpectedExpiry || isExpectedRevoked) {
+      console.warn(JSON.stringify({ ...authMeta, level: "warn" }));
+    } else {
+      console.error(JSON.stringify({ ...authMeta, level: "error" }));
+    }
+
+    if (isExpectedExpiry) {
       return res.status(401).json({
         success: false,
         error: "Token expired",

@@ -40,6 +40,9 @@ const VALID_TRIGGER_KEYS = [
   "complaint_inprogress",
   "pm_inprogress",
   "ticket_created",
+  "incident_created",
+  "incident_inprogress",
+  "incident_resolved",
 ] as const;
 
 export interface ValidationError {

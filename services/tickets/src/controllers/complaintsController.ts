@@ -6,6 +6,10 @@
  */
 
 import complaintsRepository from "../repositories/complaintsRepository.ts";
+import incidentsRepository, {
+  type IncidentRcaStatus,
+} from "../repositories/incidentsRepository.ts";
+import { sendIncidentEventNotifications } from "../services/notificationService.ts";
 import {
   forwardComplaintToFieldproxy,
   updateComplaintInFieldproxy,
@@ -378,10 +382,55 @@ export const update = async (req: AuthRequest, res: Response) => {
       return sendNotFound(res, "Complaint");
     }
 
+    const { create_incident, incident_payload, ...complaintUpdateBody } = req.body as Record<
+      string,
+      unknown
+    > & {
+      create_incident?: boolean;
+      incident_payload?: Record<string, unknown>;
+    };
+
     const complaint = await complaintsRepository.updateComplaint(
       existing.id,
-      req.body,
+      complaintUpdateBody as Parameters<typeof complaintsRepository.updateComplaint>[1],
     );
+
+    if (create_incident === true) {
+      const payload = incident_payload || {};
+      const rcaRaw = payload.rca_status;
+      const allowedRca: IncidentRcaStatus[] = ["Open", "RCA Under Review", "RCA Submitted"];
+      const rca_status: IncidentRcaStatus =
+        typeof rcaRaw === "string" && allowedRca.includes(rcaRaw as IncidentRcaStatus)
+          ? (rcaRaw as IncidentRcaStatus)
+          : "Open";
+
+      const clientRequestId =
+        typeof payload.client_request_id === "string" && /^[0-9a-f-]{36}$/i.test(payload.client_request_id)
+          ? payload.client_request_id
+          : undefined;
+
+      const incident = await incidentsRepository.createIncident({
+        source: "Tickets",
+        ticket_id: existing.id,
+        site_code: existing.site_code,
+        asset_location: (payload.asset_location as string | undefined) || complaint.area_asset || null,
+        raised_by: req.user?.user_id || complaint.created_user || null,
+        fault_symptom: (payload.fault_symptom as string | undefined) || complaint.title,
+        fault_type: (payload.fault_type as string | undefined) || "Others",
+        severity: (payload.severity as string | undefined) || "Moderate",
+        operating_condition: (payload.operating_condition as string | undefined) || null,
+        immediate_action_taken:
+          (payload.immediate_action_taken as string | undefined) || complaint.internal_remarks || null,
+        attachments: Array.isArray(payload.attachments) ? payload.attachments : [],
+        remarks: (payload.remarks as string | undefined) || complaint.internal_remarks || null,
+        status: "Inprogress",
+        incident_updated_time: new Date(),
+        rca_status,
+        assigned_to: (payload.assigned_to as string[] | undefined) || [],
+        ...(clientRequestId ? { client_request_id: clientRequestId } : {}),
+      });
+      sendIncidentEventNotifications("incident_created", incident as any).catch(() => {});
+    }
 
     logActivity({
       user_id: req.user?.user_id,

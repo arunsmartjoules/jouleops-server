@@ -14,7 +14,10 @@ export interface TriggerConfig {
     | "complaint_open"
     | "complaint_inprogress"
     | "pm_inprogress"
-    | "ticket_created";
+    | "ticket_created"
+    | "incident_created"
+    | "incident_inprogress"
+    | "incident_resolved";
   is_enabled: boolean;
   threshold_value: number;
   repeat_frequency_minutes: number | null;
@@ -28,7 +31,7 @@ const TIME_TRIGGER_KEYS = ["punch_in", "punch_out"] as const;
 const DURATION_TRIGGER_KEYS = ["complaint_open", "complaint_inprogress", "pm_inprogress"] as const;
 
 /** Trigger keys that are event-based (no threshold/frequency) */
-const EVENT_TRIGGER_KEYS = ["ticket_created"] as const;
+const EVENT_TRIGGER_KEYS = ["ticket_created", "incident_created", "incident_inprogress", "incident_resolved"] as const;
 
 export interface UpdateTriggerConfigInput {
   threshold_value?: number;

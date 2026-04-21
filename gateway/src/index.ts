@@ -138,6 +138,7 @@ app.use(
     proxyOptions(SERVICES.tickets, "/api/complaint-categories"),
   ),
 );
+app.use(createProxyMiddleware(proxyOptions(SERVICES.tickets, "/api/incidents")));
 app.use(
   createProxyMiddleware(proxyOptions(SERVICES.attendance, "/api/attendance")),
 );

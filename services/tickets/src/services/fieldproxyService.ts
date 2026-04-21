@@ -71,6 +71,34 @@ export interface ComplaintForwardPayload {
   assigned_to?: string;
 }
 
+export interface IncidentForwardPayload {
+  incident_id?: string | null;
+  source?: string | null;
+  site?: string | null;
+  asset_location?: string | null;
+  raised_by?: string | null;
+  timestamp?: string | null;
+  fault_symptom?: string | null;
+  fault_type?: string | null;
+  severity?: string | null;
+  operating_condition?: string | null;
+  immediate_action_taken?: string | null;
+  attachments?: unknown;
+  remarks?: string | null;
+  status?: string | null;
+  assigned_by?: string | null;
+  assignment_type?: string | null;
+  vendor_tagged?: string | null;
+  rca_status?: string | null;
+  rca_maker?: string | null;
+  rca_checker?: string | null;
+  assigned_to?: string | null;
+  incident_created_time?: string | null;
+  incident_updated_time?: string | null;
+  incident_resolved_time?: string | null;
+  rca_attachments?: unknown;
+}
+
 export async function forwardComplaintToFieldproxy(
   complaint: ComplaintForwardPayload,
 ): Promise<any> {
@@ -216,5 +244,146 @@ export async function updateComplaintInFieldproxy(
     );
   }
 
+  return { lookup: lookupResponse, update: updateResponse };
+}
+
+export async function forwardIncidentToFieldproxy(
+  incident: IncidentForwardPayload,
+): Promise<any> {
+  const token = await getAccessToken();
+  const body = {
+    sheetId: "incident_master",
+    sheetName: "incident_master",
+    tableData: {
+      incident_id: incident.incident_id ?? null,
+      source: incident.source ?? null,
+      site: incident.site ?? null,
+      asset_location: incident.asset_location ?? null,
+      raised_by: incident.raised_by ?? null,
+      timestamp: incident.timestamp ?? null,
+      fault_symptom: incident.fault_symptom ?? null,
+      fault_type: incident.fault_type ?? null,
+      severity: incident.severity ?? null,
+      operating_condition: incident.operating_condition ?? null,
+      immediate_action_taken: incident.immediate_action_taken ?? null,
+      attachments: incident.attachments ?? null,
+      remarks: incident.remarks ?? null,
+      status: incident.status ?? null,
+      assigned_by: incident.assigned_by ?? null,
+      assignment_type: incident.assignment_type ?? null,
+      vendor_tagged: incident.vendor_tagged ?? null,
+      rca_status: incident.rca_status ?? null,
+      rca_maker: incident.rca_maker ?? null,
+      rca_checker: incident.rca_checker ?? null,
+      assigned_to: incident.assigned_to ?? null,
+      incident_created_time: incident.incident_created_time ?? null,
+      incident_updated_time: incident.incident_updated_time ?? null,
+      incident_resolved_time: incident.incident_resolved_time ?? null,
+      rca_attachments: incident.rca_attachments ?? null,
+    },
+  };
+
+  const res = await fetch(`${FIELDPROXY_BASE}/sheetsRow`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-api-key": token,
+    },
+    body: JSON.stringify(body),
+  });
+
+  const responseData = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(
+      `Fieldproxy incident sheetsRow failed: ${res.status} ${res.statusText} — ${JSON.stringify(responseData)}`,
+    );
+  }
+  return responseData;
+}
+
+async function getRowIdByIncidentId(
+  incidentId: string,
+  token: string,
+): Promise<{ id: string | null; response: any }> {
+  const whereClause = `incident_id='${incidentId}'`;
+  const url = `${FIELDPROXY_BASE}/getFilteredSheetData?sheet_id=incident_master&where_clause=${encodeURIComponent(whereClause)}`;
+  const res = await fetch(url, {
+    method: "GET",
+    headers: {
+      "x-api-key": token,
+    },
+  });
+  const responseBody = (await res.json().catch(() => ({}))) as any;
+  if (!res.ok) {
+    throw new Error(
+      `Fieldproxy incident getFilteredSheetData failed: ${res.status} — ${JSON.stringify(responseBody)}`,
+    );
+  }
+  const data = Array.isArray(responseBody) ? responseBody[0]?.data : responseBody.data;
+  if (Array.isArray(data) && data.length > 0) {
+    return { id: String(data[0].id), response: responseBody };
+  }
+  return { id: null, response: responseBody };
+}
+
+export async function updateIncidentInFieldproxy(
+  incidentId: string,
+  incident: Partial<IncidentForwardPayload>,
+): Promise<{ lookup: any; update?: any; error?: string }> {
+  const token = await getAccessToken();
+  const { id: rowId, response: lookupResponse } = await getRowIdByIncidentId(incidentId, token);
+  if (!rowId) {
+    return { lookup: lookupResponse, error: "Row not found in Fieldproxy" };
+  }
+
+  const tableData: Record<string, any> = {};
+  if (incident.source !== undefined) tableData.source = incident.source;
+  if (incident.site !== undefined) tableData.site = incident.site;
+  if (incident.asset_location !== undefined) tableData.asset_location = incident.asset_location;
+  if (incident.raised_by !== undefined) tableData.raised_by = incident.raised_by;
+  if (incident.timestamp !== undefined) tableData.timestamp = incident.timestamp;
+  if (incident.fault_symptom !== undefined) tableData.fault_symptom = incident.fault_symptom;
+  if (incident.fault_type !== undefined) tableData.fault_type = incident.fault_type;
+  if (incident.severity !== undefined) tableData.severity = incident.severity;
+  if (incident.operating_condition !== undefined) tableData.operating_condition = incident.operating_condition;
+  if (incident.immediate_action_taken !== undefined) tableData.immediate_action_taken = incident.immediate_action_taken;
+  if (incident.attachments !== undefined) tableData.attachments = incident.attachments;
+  if (incident.remarks !== undefined) tableData.remarks = incident.remarks;
+  if (incident.status !== undefined) tableData.status = incident.status;
+  if (incident.assigned_by !== undefined) tableData.assigned_by = incident.assigned_by;
+  if (incident.assignment_type !== undefined) tableData.assignment_type = incident.assignment_type;
+  if (incident.vendor_tagged !== undefined) tableData.vendor_tagged = incident.vendor_tagged;
+  if (incident.rca_status !== undefined) tableData.rca_status = incident.rca_status;
+  if (incident.rca_maker !== undefined) tableData.rca_maker = incident.rca_maker;
+  if (incident.rca_checker !== undefined) tableData.rca_checker = incident.rca_checker;
+  if (incident.assigned_to !== undefined) tableData.assigned_to = incident.assigned_to;
+  if (incident.incident_created_time !== undefined) tableData.incident_created_time = incident.incident_created_time;
+  if (incident.incident_updated_time !== undefined) tableData.incident_updated_time = incident.incident_updated_time;
+  if (incident.incident_resolved_time !== undefined) tableData.incident_resolved_time = incident.incident_resolved_time;
+  if (incident.rca_attachments !== undefined) tableData.rca_attachments = incident.rca_attachments;
+
+  if (Object.keys(tableData).length === 0) {
+    return { lookup: lookupResponse, error: "No fields to update" };
+  }
+
+  const body = {
+    rowId,
+    sheetId: "incident_master",
+    tableData,
+  };
+  const res = await fetch(`${FIELDPROXY_BASE}/updateRows`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-api-key": token,
+    },
+    body: JSON.stringify(body),
+  });
+  const updateResponse = (await res.json().catch(() => ({}))) as any;
+  if (!res.ok) {
+    throw new Error(
+      `Fieldproxy incident updateRows failed: ${res.status} ${res.statusText} — ${JSON.stringify(updateResponse)}`,
+    );
+  }
   return { lookup: lookupResponse, update: updateResponse };
 }

@@ -370,7 +370,11 @@ router.put("/preferences", verifyAnyAuth, async (req: any, res) => {
   try {
     const userId = req.user.user_id;
     const requestBody = req.body || {};
-    const { attendance_notifications_enabled, ticket_notifications_enabled } = requestBody;
+    const {
+      attendance_notifications_enabled,
+      ticket_notifications_enabled,
+      incident_notifications_enabled,
+    } = requestBody;
     const hasAttendanceField = Object.prototype.hasOwnProperty.call(
       requestBody,
       "attendance_notifications_enabled",
@@ -379,16 +383,24 @@ router.put("/preferences", verifyAnyAuth, async (req: any, res) => {
       requestBody,
       "ticket_notifications_enabled",
     );
+    const hasIncidentField = Object.prototype.hasOwnProperty.call(
+      requestBody,
+      "incident_notifications_enabled",
+    );
 
-    if (!hasAttendanceField && !hasTicketField) {
+    if (!hasAttendanceField && !hasTicketField && !hasIncidentField) {
       return res.status(400).json({
         success: false,
         error:
-          "At least one preference field is required: attendance_notifications_enabled or ticket_notifications_enabled",
+          "At least one preference field is required: attendance_notifications_enabled, ticket_notifications_enabled or incident_notifications_enabled",
       });
     }
 
-    if (attendance_notifications_enabled === null || ticket_notifications_enabled === null) {
+    if (
+      attendance_notifications_enabled === null ||
+      ticket_notifications_enabled === null ||
+      incident_notifications_enabled === null
+    ) {
       return res.status(400).json({
         success: false,
         error: "Preference values cannot be null",
@@ -397,7 +409,8 @@ router.put("/preferences", verifyAnyAuth, async (req: any, res) => {
 
     if (
       (hasAttendanceField && typeof attendance_notifications_enabled !== "boolean") ||
-      (hasTicketField && typeof ticket_notifications_enabled !== "boolean")
+      (hasTicketField && typeof ticket_notifications_enabled !== "boolean") ||
+      (hasIncidentField && typeof incident_notifications_enabled !== "boolean")
     ) {
       return res.status(400).json({
         success: false,
@@ -407,7 +420,11 @@ router.put("/preferences", verifyAnyAuth, async (req: any, res) => {
 
     const preferences = await notificationSettingsService.updateUserPreferences(
       userId,
-      { attendance_notifications_enabled, ticket_notifications_enabled },
+      {
+        attendance_notifications_enabled,
+        ticket_notifications_enabled,
+        incident_notifications_enabled,
+      },
     );
 
     res.json({
