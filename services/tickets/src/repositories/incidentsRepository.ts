@@ -37,6 +37,23 @@ export interface Incident {
   updated_at: Date;
 }
 
+const normalizeJsonArrayValue = (input: unknown): any[] => {
+  if (Array.isArray(input)) return input;
+  if (input == null) return [];
+  if (typeof input === "string") {
+    const raw = input.trim();
+    if (!raw) return [];
+    try {
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  }
+  if (typeof input === "object") return [input];
+  return [];
+};
+
 const INCIDENT_QUERY_CONFIG = {
   tableAlias: "i",
   searchFields: ["incident_id", "fault_symptom", "asset_location", "site_code", "raised_by"],
@@ -84,11 +101,21 @@ export async function createIncident(data: Partial<Incident>): Promise<Incident>
     status: data.status || "Open",
     rca_status: data.rca_status || "Open",
     incident_created_time: data.incident_created_time || now,
+    attachments: normalizeJsonArrayValue((data as any).attachments),
+    rca_attachments: normalizeJsonArrayValue((data as any).rca_attachments),
   };
 
   const columns = Object.keys(payload).filter((k) => (payload as any)[k] !== undefined);
-  const values = columns.map((k) => (payload as any)[k]);
-  const placeholders = columns.map((_, i) => `$${i + 1}`);
+  const values = columns.map((k) => {
+    const v = (payload as any)[k];
+    if (k === "attachments" || k === "rca_attachments") {
+      return JSON.stringify(normalizeJsonArrayValue(v));
+    }
+    return v;
+  });
+  const placeholders = columns.map((k, i) =>
+    (k === "attachments" || k === "rca_attachments") ? `$${i + 1}::jsonb` : `$${i + 1}`,
+  );
 
   const incident = await queryOne<Incident>(
     `INSERT INTO incidents (${columns.join(", ")}) VALUES (${placeholders.join(", ")}) RETURNING *`,
@@ -167,10 +194,27 @@ export async function getIncidentById(id: string): Promise<Incident | null> {
 }
 
 export async function updateIncident(id: string, updateData: Partial<Incident>): Promise<Incident> {
-  const entries = Object.entries(updateData).filter(([, v]) => v !== undefined);
+  const normalizedUpdateData: Partial<Incident> = { ...updateData };
+  if ((updateData as any).attachments !== undefined) {
+    (normalizedUpdateData as any).attachments = normalizeJsonArrayValue((updateData as any).attachments);
+  }
+  if ((updateData as any).rca_attachments !== undefined) {
+    (normalizedUpdateData as any).rca_attachments = normalizeJsonArrayValue((updateData as any).rca_attachments);
+  }
+  const entries = Object.entries(normalizedUpdateData).filter(([, v]) => v !== undefined);
   if (!entries.length) throw new Error("No fields to update");
-  const setClause = entries.map(([k], i) => `${k} = $${i + 1}`).join(", ");
-  const values = entries.map(([, v]) => v);
+  const setClause = entries
+    .map(([k], i) => {
+      if (k === "attachments" || k === "rca_attachments") return `${k} = $${i + 1}::jsonb`;
+      return `${k} = $${i + 1}`;
+    })
+    .join(", ");
+  const values = entries.map(([k, v]) => {
+    if (k === "attachments" || k === "rca_attachments") {
+      return JSON.stringify(normalizeJsonArrayValue(v));
+    }
+    return v;
+  });
   const incident = await queryOne<Incident>(
     `UPDATE incidents SET ${setClause}, updated_at = NOW() WHERE id = $${entries.length + 1} RETURNING *`,
     [...values, id],
@@ -218,8 +262,9 @@ export async function updateIncidentRcaStatus(id: string, rca_status: IncidentRc
 export async function appendIncidentAttachment(id: string, attachment: any) {
   const existing = await getIncidentById(id);
   if (!existing) throw new Error("Incident not found");
-  const current = Array.isArray(existing.attachments) ? existing.attachments : [];
-  return updateIncident(existing.id, { attachments: [...current, attachment] });
+  const current = normalizeJsonArrayValue(existing.attachments);
+  const next = [...current, attachment];
+  return updateIncident(existing.id, { attachments: normalizeJsonArrayValue(next) });
 }
 
 export async function getIncidentStats(site_code?: string) {

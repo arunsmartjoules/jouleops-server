@@ -22,6 +22,19 @@ const normalizeAssignedTo = (input: unknown): string[] => {
   return [];
 };
 
+const normalizeJsonArrayInput = (input: unknown): any[] => {
+  if (Array.isArray(input)) return input;
+  if (typeof input === "string" && input.trim()) {
+    try {
+      const parsed = JSON.parse(input);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  }
+  return [];
+};
+
 const toIsoString = (value?: Date | string | null) => {
   if (!value) return null;
   return value instanceof Date ? value.toISOString() : new Date(value).toISOString();
@@ -85,11 +98,16 @@ export const getById = async (req: Request, res: Response) => {
 export const create = async (req: AuthRequest, res: Response) => {
   try {
     const privileged = isPrivileged(req);
-    const assigned_to = normalizeAssignedTo(req.body?.assigned_to);
+    const currentUserId = req.user?.user_id || null;
+    const assigned_to = privileged
+      ? normalizeAssignedTo(req.body?.assigned_to)
+      : (currentUserId ? [currentUserId] : []);
     const payload = {
       ...req.body,
       raised_by: req.body.raised_by || req.user?.user_id || null,
       assigned_to,
+      attachments: normalizeJsonArrayInput(req.body?.attachments),
+      rca_attachments: normalizeJsonArrayInput(req.body?.rca_attachments),
       assigned_by: assigned_to.length
         ? (privileged ? getActorName(req) : "system")
         : req.body?.assigned_by || null,
@@ -134,7 +152,7 @@ export const update = async (req: AuthRequest, res: Response) => {
     if (!existing) return sendNotFound(res, "Incident");
     const privileged = isPrivileged(req);
     const assigned_to = req.body?.assigned_to !== undefined
-      ? normalizeAssignedTo(req.body.assigned_to)
+      ? (privileged ? normalizeAssignedTo(req.body.assigned_to) : undefined)
       : undefined;
     const patch = {
       ...req.body,
@@ -206,7 +224,10 @@ export const updateStatus = async (req: AuthRequest, res: Response) => {
       return sendError(res, "Remarks are required when resolving an incident.");
     }
     const privileged = isPrivileged(req);
-    const normalizedAssigned = assigned_to !== undefined ? normalizeAssignedTo(assigned_to) : undefined;
+    const normalizedAssigned =
+      assigned_to !== undefined
+        ? (privileged ? normalizeAssignedTo(assigned_to) : undefined)
+        : undefined;
     const updated = await incidentsRepository.updateIncidentStatus(
       existing.id,
       status as any,
