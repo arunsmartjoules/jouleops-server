@@ -156,6 +156,9 @@ export const update = async (req: AuthRequest, res: Response) => {
       : undefined;
     const patch = {
       ...req.body,
+      // Status transitions must go through PATCH /incidents/:id/status
+      // to prevent stale generic updates (offline replay) from downgrading status.
+      status: undefined,
       ...(assigned_to !== undefined ? { assigned_to } : {}),
       ...(assigned_to !== undefined
         ? {
