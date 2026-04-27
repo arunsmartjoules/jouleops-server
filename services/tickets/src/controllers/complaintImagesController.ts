@@ -2,6 +2,7 @@ import type { Request, Response } from "express";
 import complaintImagesRepository from "../repositories/complaintImagesRepository.ts";
 import complaintsRepository from "../repositories/complaintsRepository.ts";
 import whatsappService from "../services/whatsappService.ts";
+import { ticketRealtimeService } from "../services/ticketRealtimeService.ts";
 import {
   sendSuccess,
   sendError,
@@ -78,6 +79,22 @@ class ComplaintImagesController {
         message_text,
         message_id,
       });
+      const complaint = await complaintsRepository.getComplaint(ticketId);
+      if (complaint?.site_code) {
+        ticketRealtimeService.publish({
+          eventType: "ticket_line_item_added",
+          ticketId: complaint.id,
+          siteCode: complaint.site_code,
+          ticketNo: complaint.ticket_no,
+          updatedAt: new Date(),
+          payload: {
+            line_item_id: newItem.message_id || null,
+            has_image: Boolean(newItem.image_url),
+            has_video: Boolean(newItem.video_url),
+            has_text: Boolean(newItem.message_text),
+          },
+        });
+      }
 
       console.log(`[LINE_ITEM] Line item created:`, { 
         ticketId, 

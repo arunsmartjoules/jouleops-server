@@ -1,6 +1,7 @@
 import { query } from "@jouleops/shared";
 
 export interface ComplaintImage {
+  id?: string;
   ticket_id: string;
   image_url?: string;
   video_url?: string;

@@ -15,6 +15,7 @@ import {
   updateComplaintInFieldproxy,
 } from "../services/fieldproxyService.ts";
 import { sendTicketCreatedNotifications } from "../services/notificationService.ts";
+import { ticketRealtimeService } from "../services/ticketRealtimeService.ts";
 import type { Request, Response } from "express";
 import {
   sendSuccess,
@@ -129,6 +130,18 @@ export const create = async (req: AuthRequest, res: Response) => {
     };
 
     const complaint = await complaintsRepository.createComplaint(finalData);
+    ticketRealtimeService.publish({
+      eventType: "ticket_created",
+      ticketId: complaint.id,
+      siteCode: complaint.site_code,
+      ticketNo: complaint.ticket_no,
+      updatedAt: complaint.updated_at || complaint.created_at || new Date(),
+      payload: {
+        status: complaint.status,
+        title: complaint.title,
+        priority: complaint.priority,
+      },
+    });
 
     // Trace: Local persistence success
     logActivity({
@@ -394,6 +407,21 @@ export const update = async (req: AuthRequest, res: Response) => {
       existing.id,
       complaintUpdateBody as Parameters<typeof complaintsRepository.updateComplaint>[1],
     );
+    ticketRealtimeService.publish({
+      eventType: "ticket_updated",
+      ticketId: complaint.id,
+      siteCode: complaint.site_code,
+      ticketNo: complaint.ticket_no,
+      updatedAt: complaint.updated_at || new Date(),
+      payload: {
+        status: complaint.status,
+        category: complaint.category,
+        area_asset: complaint.area_asset,
+        assigned_to: complaint.assigned_to,
+        before_temp: complaint.before_temp,
+        after_temp: complaint.after_temp,
+      },
+    });
 
     if (create_incident === true) {
       const payload = incident_payload || {};
@@ -577,6 +605,18 @@ export const updateStatus = async (req: AuthRequest, res: Response) => {
         ? req.user?.user_id
         : undefined,
     );
+    ticketRealtimeService.publish({
+      eventType: "ticket_status_changed",
+      ticketId: complaint.id,
+      siteCode: complaint.site_code,
+      ticketNo: complaint.ticket_no,
+      updatedAt: complaint.updated_at || new Date(),
+      payload: {
+        old_status: existing.status,
+        status: complaint.status,
+        remarks: remarks || null,
+      },
+    });
 
     logActivity({
       user_id: req.user?.user_id,
@@ -685,6 +725,16 @@ export const remove = async (req: Request, res: Response) => {
     }
 
     await complaintsRepository.deleteComplaint(ticketNo);
+    ticketRealtimeService.publish({
+      eventType: "ticket_updated",
+      ticketId: existing.id,
+      siteCode: existing.site_code,
+      ticketNo: existing.ticket_no,
+      updatedAt: new Date(),
+      payload: {
+        deleted: true,
+      },
+    });
 
     logActivity({
       user_id: (req as AuthRequest).user?.user_id,
