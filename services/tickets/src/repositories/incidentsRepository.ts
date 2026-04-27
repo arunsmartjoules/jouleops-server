@@ -105,16 +105,17 @@ export async function createIncident(data: Partial<Incident>): Promise<Incident>
     rca_attachments: normalizeJsonArrayValue((data as any).rca_attachments),
   };
 
+  const JSONB_COLUMNS = new Set(["attachments", "rca_attachments", "assigned_to"]);
   const columns = Object.keys(payload).filter((k) => (payload as any)[k] !== undefined);
   const values = columns.map((k) => {
     const v = (payload as any)[k];
-    if (k === "attachments" || k === "rca_attachments") {
+    if (JSONB_COLUMNS.has(k)) {
       return JSON.stringify(normalizeJsonArrayValue(v));
     }
     return v;
   });
   const placeholders = columns.map((k, i) =>
-    (k === "attachments" || k === "rca_attachments") ? `$${i + 1}::jsonb` : `$${i + 1}`,
+    JSONB_COLUMNS.has(k) ? `$${i + 1}::jsonb` : `$${i + 1}`,
   );
 
   const incident = await queryOne<Incident>(
@@ -194,6 +195,7 @@ export async function getIncidentById(id: string): Promise<Incident | null> {
 }
 
 export async function updateIncident(id: string, updateData: Partial<Incident>): Promise<Incident> {
+  const JSONB_COLUMNS = new Set(["attachments", "rca_attachments", "assigned_to"]);
   const normalizedUpdateData: Partial<Incident> = { ...updateData };
   if ((updateData as any).attachments !== undefined) {
     (normalizedUpdateData as any).attachments = normalizeJsonArrayValue((updateData as any).attachments);
@@ -205,12 +207,12 @@ export async function updateIncident(id: string, updateData: Partial<Incident>):
   if (!entries.length) throw new Error("No fields to update");
   const setClause = entries
     .map(([k], i) => {
-      if (k === "attachments" || k === "rca_attachments") return `${k} = $${i + 1}::jsonb`;
+      if (JSONB_COLUMNS.has(k)) return `${k} = $${i + 1}::jsonb`;
       return `${k} = $${i + 1}`;
     })
     .join(", ");
   const values = entries.map(([k, v]) => {
-    if (k === "attachments" || k === "rca_attachments") {
+    if (JSONB_COLUMNS.has(k)) {
       return JSON.stringify(normalizeJsonArrayValue(v));
     }
     return v;
