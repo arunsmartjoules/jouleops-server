@@ -117,12 +117,19 @@ function sanitizeScheduledDate(value: string | null | undefined): string | null 
   if (!value) return null;
   // Already YYYY-MM-DD
   if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
+  // Numeric epoch (ms or seconds) — `new Date(string)` doesn't parse pure digits.
+  if (/^\d+$/.test(value)) {
+    const num = Number(value);
+    const ms = num < 1e12 ? num * 1000 : num; // treat <1e12 as seconds
+    const d = new Date(ms);
+    return isNaN(d.getTime()) ? null : d.toISOString().slice(0, 10);
+  }
   // ISO timestamp — take the date part only
   const d = new Date(value);
   if (!isNaN(d.getTime())) {
     return d.toISOString().slice(0, 10);
   }
-  return value;
+  return null;
 }
 
 /**
@@ -345,6 +352,10 @@ export async function getSignatureById(id: string): Promise<string | null> {
   return result?.signature || null;
 }
 
+export async function getLogById(id: string): Promise<SiteLog | null> {
+  return queryOne<SiteLog>(`SELECT * FROM site_logs WHERE id = $1`, [id]);
+}
+
 /**
  * Update a site log
  */
@@ -446,6 +457,7 @@ export async function bulkUpsertLogs(logs: CreateSiteLogInput[]): Promise<{ coun
 export default {
   createLog,
   getLogsBySite,
+  getLogById,
   updateLog,
   deleteLog,
   deleteLogs,

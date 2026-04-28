@@ -410,4 +410,205 @@ export const bulkUpsert = asyncHandler(async (req: Request, res: Response) => {
   return sendSuccess(res, result);
 });
 
-export default { create, getBySite, getAll, update, remove, bulkRemove, bulkUpsert };
+type ManualSiteLogSyncResult = {
+  id: string;
+  log_id?: string | null;
+  action: "created" | "updated" | "skipped" | "failed";
+  message?: string;
+  error?: string;
+};
+
+const buildSiteLogSyncPayload = (log: any) => ({
+  log_id: log.log_id,
+  log_name: log.log_name,
+  task_name: log.task_name,
+  scheduled_date: log.scheduled_date,
+  temperature: log.temperature,
+  rh: log.rh,
+  tds: log.tds,
+  ph: log.ph,
+  hardness: log.hardness,
+  chemical_dosing: log.chemical_dosing,
+  main_remarks: log.main_remarks,
+  remarks: log.remarks,
+  signature: log.signature,
+  attachment: log.attachment,
+  entry_time: log.entry_time,
+  end_time: log.end_time,
+  executor_id: log.executor_id,
+  status: log.status,
+});
+
+const syncSingleSiteLog = async (log: any): Promise<ManualSiteLogSyncResult> => {
+  if (!log.log_name) {
+    return {
+      id: log.id,
+      log_id: log.log_id,
+      action: "failed",
+      error: "Missing log_name — cannot sync to Fieldproxy",
+    };
+  }
+
+  try {
+    const fp = await updateSiteLogInFieldproxy(buildSiteLogSyncPayload(log));
+
+    if (fp.error) {
+      return {
+        id: log.id,
+        log_id: log.log_id,
+        action: "failed",
+        error: fp.error,
+      };
+    }
+
+    const action = fp.action ?? "updated";
+    return {
+      id: log.id,
+      log_id: log.log_id,
+      action,
+      message:
+        action === "created"
+          ? "Created new Fieldproxy row"
+          : action === "skipped"
+            ? "No fields to update"
+            : "Updated existing Fieldproxy row",
+    };
+  } catch (error: any) {
+    return {
+      id: log.id,
+      log_id: log.log_id,
+      action: "failed",
+      error: error?.message || "Failed to sync site log to Fieldproxy",
+    };
+  }
+};
+
+export const syncFieldproxySingle = asyncHandler(
+  async (req: Request, res: Response) => {
+    const { id } = req.params;
+    if (!id) {
+      return sendError(res, "Site log ID is required");
+    }
+
+    const log = await siteLogsRepository.getLogById(id);
+    if (!log) {
+      return sendError(res, "Site log not found");
+    }
+
+    logActivity({
+      user_id: (req as any).user?.user_id || (req as any).user?.id,
+      action: "MANUAL_FIELDPROXY_SYNC_START",
+      module: "SITE_LOG",
+      description: `Manual Fieldproxy sync started for site log ${id}`,
+      metadata: { logId: id, log_id: log.log_id, mode: "single" },
+    }).catch(() => {});
+
+    const result = await syncSingleSiteLog(log);
+
+    logActivity({
+      user_id: (req as any).user?.user_id || (req as any).user?.id,
+      action:
+        result.action === "failed"
+          ? "MANUAL_FIELDPROXY_SYNC_FAILED"
+          : "MANUAL_FIELDPROXY_SYNC_SUCCESS",
+      module: "SITE_LOG",
+      description:
+        result.action === "failed"
+          ? `Manual Fieldproxy sync failed for site log ${id}`
+          : `Manual Fieldproxy sync ${result.action} for site log ${id}`,
+      metadata: {
+        logId: id,
+        log_id: log.log_id,
+        mode: "single",
+        action: result.action,
+        error: result.error,
+      },
+    }).catch(() => {});
+
+    if (result.action === "failed") {
+      return sendError(res, result.error || "Fieldproxy sync failed");
+    }
+
+    return sendSuccess(res, result, {
+      message: `Fieldproxy sync ${result.action} for site log ${id}`,
+    });
+  },
+);
+
+export const syncFieldproxyBulk = asyncHandler(
+  async (req: Request, res: Response) => {
+    const { ids } = req.body as { ids?: string[] };
+
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return sendError(res, "ids array is required");
+    }
+
+    const uniqueIds = Array.from(
+      new Set(ids.map((i) => String(i).trim()).filter(Boolean)),
+    );
+    const results: ManualSiteLogSyncResult[] = [];
+
+    for (const id of uniqueIds) {
+      const log = await siteLogsRepository.getLogById(id);
+      if (!log) {
+        results.push({
+          id,
+          action: "failed",
+          error: "Site log not found",
+        });
+        continue;
+      }
+
+      const result = await syncSingleSiteLog(log);
+      results.push(result);
+
+      logActivity({
+        user_id: (req as any).user?.user_id || (req as any).user?.id,
+        action:
+          result.action === "failed"
+            ? "MANUAL_FIELDPROXY_SYNC_FAILED"
+            : "MANUAL_FIELDPROXY_SYNC_SUCCESS",
+        module: "SITE_LOG",
+        description:
+          result.action === "failed"
+            ? `Bulk Fieldproxy sync failed for site log ${id}`
+            : `Bulk Fieldproxy sync ${result.action} for site log ${id}`,
+        metadata: {
+          logId: id,
+          log_id: log.log_id,
+          mode: "bulk",
+          action: result.action,
+          error: result.error,
+        },
+      }).catch(() => {});
+    }
+
+    const summary = {
+      total: results.length,
+      updated: results.filter((r) => r.action === "updated").length,
+      created: results.filter((r) => r.action === "created").length,
+      skipped: results.filter((r) => r.action === "skipped").length,
+      failed: results.filter((r) => r.action === "failed").length,
+    };
+
+    return sendSuccess(
+      res,
+      { summary, results },
+      {
+        message: `Fieldproxy bulk sync completed: updated ${summary.updated}, created ${summary.created}, failed ${summary.failed}`,
+      },
+    );
+  },
+);
+
+export default {
+  create,
+  getBySite,
+  getAll,
+  update,
+  remove,
+  bulkRemove,
+  bulkUpsert,
+  syncFieldproxySingle,
+  syncFieldproxyBulk,
+};

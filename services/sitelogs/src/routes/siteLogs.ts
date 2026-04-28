@@ -17,6 +17,11 @@ const router = express.Router();
 
 router.post("/bulk-delete", verifyAnyAuth, siteLogsController.bulkRemove);
 router.post("/bulk-upsert", verifyAnyAuth, siteLogsController.bulkUpsert);
+router.post(
+  "/sync-fieldproxy",
+  verifyAnyAuth,
+  siteLogsController.syncFieldproxyBulk,
+);
 router.get("/", verifyAnyAuth, siteLogsController.getAll);
 router.post(
   "/",
@@ -25,6 +30,11 @@ router.post(
   siteLogsController.create,
 );
 router.get("/site/:siteCode", verifyAnyAuth, siteLogsController.getBySite);
+router.post(
+  "/:id/sync-fieldproxy",
+  verifyAnyAuth,
+  siteLogsController.syncFieldproxySingle,
+);
 router.put(
   "/:id",
   verifyAnyAuth,

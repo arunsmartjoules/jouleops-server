@@ -118,11 +118,29 @@ export async function createIncident(data: Partial<Incident>): Promise<Incident>
     JSONB_COLUMNS.has(k) ? `$${i + 1}::jsonb` : `$${i + 1}`,
   );
 
+  // Atomic dedupe: paired with the partial unique index
+  // `incidents_client_request_id_uniq` on (client_request_id) WHERE client_request_id IS NOT NULL.
+  // If a concurrent insert with the same client_request_id wins, ON CONFLICT returns no row;
+  // we then fetch the existing record so the caller still gets the canonical incident back.
+  const onConflictClause = crid
+    ? "ON CONFLICT (client_request_id) WHERE client_request_id IS NOT NULL DO NOTHING"
+    : "";
+
   const incident = await queryOne<Incident>(
-    `INSERT INTO incidents (${columns.join(", ")}) VALUES (${placeholders.join(", ")}) RETURNING *`,
+    `INSERT INTO incidents (${columns.join(", ")}) VALUES (${placeholders.join(", ")}) ${onConflictClause} RETURNING *`,
     values,
   );
-  if (!incident) throw new Error("Failed to create incident");
+
+  if (!incident) {
+    if (crid) {
+      const existing = await queryOne<Incident>(
+        "SELECT * FROM incidents WHERE client_request_id = $1 LIMIT 1",
+        [crid],
+      );
+      if (existing) return existing;
+    }
+    throw new Error("Failed to create incident");
+  }
   cacheInvalidate("incident_stats:*").catch(() => {});
   return incident;
 }

@@ -270,10 +270,20 @@ function buildSiteLogTableData(log: SiteLogSyncPayload): Record<string, any> {
 /**
  * Updates a site log in Fieldproxy (log_task_line sheet),
  * then updates the corresponding task_management row.
+ *
+ * Returns `action`:
+ *   - "created" if log_task_line row did not exist and was created
+ *   - "updated" if log_task_line row existed and was updated
+ *   - "skipped" if row existed but no fields needed updating
  */
 export async function updateSiteLogInFieldproxy(
   log: SiteLogSyncPayload,
-): Promise<{ logTaskLine: any; taskManagement: any; error?: string }> {
+): Promise<{
+  logTaskLine: any;
+  taskManagement: any;
+  action?: "created" | "updated" | "skipped";
+  error?: string;
+}> {
   if (!log.log_name) {
     return {
       logTaskLine: null,
@@ -299,6 +309,7 @@ export async function updateSiteLogInFieldproxy(
   }
 
   let logTaskLineResult: any = logLookup;
+  let action: "created" | "updated" | "skipped" = "updated";
 
   if (!logRowId) {
     console.warn(`[FIELDPROXY] log_task_line row not found for sync payload`, {
@@ -314,6 +325,7 @@ export async function updateSiteLogInFieldproxy(
     if (log.log_id != null) createData.log_id = log.log_id;
 
     logTaskLineResult = await createRow("log_task_line", createData, token);
+    action = "created";
     console.log(
       `[FIELDPROXY] Created log_task_line row for log_name=${log.log_name}`,
     );
@@ -322,9 +334,11 @@ export async function updateSiteLogInFieldproxy(
 
     if (Object.keys(tableData).length > 0) {
       logTaskLineResult = await updateRow("log_task_line", logRowId, tableData, token);
+      action = "updated";
       console.log(`[FIELDPROXY] Updated log_task_line row ${logRowId} for task ${log.task_name}`);
     } else {
       logTaskLineResult = { skipped: "No fields to update" };
+      action = "skipped";
     }
   }
 
@@ -360,7 +374,7 @@ export async function updateSiteLogInFieldproxy(
     }
   }
 
-  return { logTaskLine: logTaskLineResult, taskManagement: taskManagementResult };
+  return { logTaskLine: logTaskLineResult, taskManagement: taskManagementResult, action };
 }
 
 /**
@@ -531,4 +545,54 @@ export async function updateChillerReadingInFieldproxy(
   console.log(`[FIELDPROXY] Updated chiller_readings_log row ${rowId} for log_id: ${reading.log_id}`);
 
   return { lookup: lookupResponse, update: updateResponse };
+}
+
+/**
+ * Upserts a chiller reading row in Fieldproxy.
+ *   - If a row exists (looked up by log_id), it is updated.
+ *   - If not, a new row is created and `log_id` is included in the payload
+ *     so subsequent syncs can find it.
+ */
+export async function syncChillerReadingToFieldproxy(
+  reading: ChillerReadingSyncPayload,
+): Promise<{
+  action: "created" | "updated" | "skipped";
+  lookup?: any;
+  result?: any;
+  error?: string;
+}> {
+  const token = await getAccessToken();
+
+  let rowId: string | null = null;
+  let lookupResponse: any = null;
+
+  if (reading.log_id) {
+    const lookup = await getRowIdByField(
+      "chiller_readings_log",
+      "log_id",
+      reading.log_id,
+      token,
+    );
+    rowId = lookup.id;
+    lookupResponse = lookup.response;
+  }
+
+  const tableData = buildChillerTableData(reading);
+
+  if (rowId) {
+    if (Object.keys(tableData).length === 0) {
+      return { action: "skipped", lookup: lookupResponse, error: "No fields to update" };
+    }
+    const updateResponse = await updateRow("chiller_readings_log", rowId, tableData, token);
+    console.log(`[FIELDPROXY] Updated chiller_readings_log row ${rowId} for log_id: ${reading.log_id}`);
+    return { action: "updated", lookup: lookupResponse, result: updateResponse };
+  }
+
+  if (reading.log_id != null) tableData.log_id = reading.log_id;
+
+  const createResponse = await createRow("chiller_readings_log", tableData, token);
+  console.log(
+    `[FIELDPROXY] Created chiller_readings_log for chiller: ${reading.chiller_id} (log_id: ${reading.log_id ?? "n/a"})`,
+  );
+  return { action: "created", lookup: lookupResponse, result: createResponse };
 }

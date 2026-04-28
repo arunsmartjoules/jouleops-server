@@ -21,6 +21,11 @@ router.post(
   verifyAnyAuth,
   chillerReadingsController.bulkRemove,
 );
+router.post(
+  "/sync-fieldproxy",
+  verifyAnyAuth,
+  chillerReadingsController.syncFieldproxyBulk,
+);
 router.get("/", verifyAnyAuth, chillerReadingsController.getAll);
 router.post(
   "/",
@@ -32,6 +37,11 @@ router.get(
   "/site/:siteCode",
   verifyAnyAuth,
   chillerReadingsController.getBySite,
+);
+router.post(
+  "/:id/sync-fieldproxy",
+  verifyAnyAuth,
+  chillerReadingsController.syncFieldproxySingle,
 );
 router.get(
   "/site/:siteCode/shift/:dateShift",

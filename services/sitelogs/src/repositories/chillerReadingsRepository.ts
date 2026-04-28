@@ -7,6 +7,24 @@
 import { query, queryOne } from "@jouleops/shared";
 import { cached, TTL } from "@jouleops/shared";
 
+/**
+ * Normalize a date filter string for a TIMESTAMP column.
+ * Accepts ISO strings, YYYY-MM-DD, or numeric epoch (ms or seconds).
+ * Returns ISO string or null if unparseable (so the filter is dropped
+ * instead of crashing Postgres with "date/time field value out of range").
+ */
+function sanitizeTimestamp(value: string | null | undefined): string | null {
+  if (!value) return null;
+  if (/^\d+$/.test(value)) {
+    const num = Number(value);
+    const ms = num < 1e12 ? num * 1000 : num;
+    const d = new Date(ms);
+    return isNaN(d.getTime()) ? null : d.toISOString();
+  }
+  const d = new Date(value);
+  return isNaN(d.getTime()) ? null : d.toISOString();
+}
+
 // ============================================================================
 // Types
 // ============================================================================
@@ -186,15 +204,17 @@ export async function getChillerReadingsBySite(
     paramIndex++;
   }
 
-  if (date_from) {
+  const fromTs = sanitizeTimestamp(date_from);
+  if (fromTs) {
     conditions.push(`reading_time >= $${paramIndex}`);
-    params.push(date_from);
+    params.push(fromTs);
     paramIndex++;
   }
 
-  if (date_to) {
+  const toTs = sanitizeTimestamp(date_to);
+  if (toTs) {
     conditions.push(`reading_time <= $${paramIndex}`);
-    params.push(date_to);
+    params.push(toTs);
     paramIndex++;
   }
 
@@ -261,15 +281,17 @@ export async function getChillerReadingsByChiller(
   const params: any[] = [chillerId];
   let paramIndex = 2;
 
-  if (date_from) {
+  const fromTs = sanitizeTimestamp(date_from);
+  if (fromTs) {
     conditions.push(`reading_time >= $${paramIndex}`);
-    params.push(date_from);
+    params.push(fromTs);
     paramIndex++;
   }
 
-  if (date_to) {
+  const toTs = sanitizeTimestamp(date_to);
+  if (toTs) {
     conditions.push(`reading_time <= $${paramIndex}`);
-    params.push(date_to);
+    params.push(toTs);
     paramIndex++;
   }
 
@@ -384,7 +406,10 @@ export async function getChillerAverages(
   dateFrom: string,
   dateTo: string,
 ): Promise<ChillerAverages | null> {
-  const cacheKey = `chiller_avg:${chillerId}:${dateFrom}:${dateTo}`;
+  const fromTs = sanitizeTimestamp(dateFrom);
+  const toTs = sanitizeTimestamp(dateTo);
+  if (!fromTs || !toTs) return null;
+  const cacheKey = `chiller_avg:${chillerId}:${fromTs}:${toTs}`;
 
   return cached(
     cacheKey,
@@ -408,7 +433,7 @@ export async function getChillerAverages(
        WHERE chiller_id = $1
          AND reading_time >= $2
          AND reading_time <= $3`,
-        [chillerId, dateFrom, dateTo],
+        [chillerId, fromTs, toTs],
       );
 
       const count = parseInt(result?.cnt || "0", 10);

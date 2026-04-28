@@ -9,6 +9,7 @@ import chillerReadingsRepository from "../repositories/chillerReadingsRepository
 import {
   createChillerReadingInFieldproxy,
   updateChillerReadingInFieldproxy,
+  syncChillerReadingToFieldproxy,
 } from "../services/fieldproxyService.ts";
 import type { Request, Response } from "express";
 import {
@@ -342,6 +343,205 @@ export const getAll = asyncHandler(
   },
 );
 
+type ManualChillerSyncResult = {
+  id: string;
+  log_id?: string | null;
+  action: "created" | "updated" | "skipped" | "failed";
+  message?: string;
+  error?: string;
+};
+
+const buildChillerSyncPayload = (reading: any) => ({
+  log_id: reading.log_id,
+  site_id: reading.site_code,
+  chiller_id: reading.chiller_id,
+  date_shift: reading.date_shift || calculateDateShift(reading.reading_time),
+  executor_id: reading.executor_id,
+  reading_time: reading.reading_time,
+  condenser_inlet_temp: reading.condenser_inlet_temp,
+  condenser_outlet_temp: reading.condenser_outlet_temp,
+  evaporator_inlet_temp: reading.evaporator_inlet_temp,
+  evaporator_outlet_temp: reading.evaporator_outlet_temp,
+  compressor_suction_temp: reading.compressor_suction_temp,
+  motor_temperature: reading.motor_temperature,
+  saturated_condenser_temp: reading.saturated_condenser_temp,
+  saturated_suction_temp: reading.saturated_suction_temp,
+  discharge_pressure: reading.discharge_pressure,
+  main_suction_pressure: reading.main_suction_pressure,
+  oil_pressure: reading.oil_pressure,
+  oil_pressure_difference: reading.oil_pressure_difference,
+  compressor_load_percentage:
+    reading.compressor_load_percentage ?? reading.compressor_load_percent,
+  inline_btu_meter: reading.inline_btu_meter,
+  set_point_celsius: reading.set_point_celsius ?? reading.set_point,
+  condenser_inlet_pressure: reading.condenser_inlet_pressure,
+  condenser_outlet_pressure: reading.condenser_outlet_pressure,
+  evaporator_inlet_pressure: reading.evaporator_inlet_pressure,
+  evaporator_outlet_pressure: reading.evaporator_outlet_pressure,
+  remarks: reading.remarks,
+  sla_status: reading.sla_status,
+  signature_text: reading.signature_text,
+  attachments: reading.attachments,
+  startdatetime: reading.startdatetime ?? reading.start_datetime,
+  enddatetime: reading.enddatetime,
+});
+
+const syncSingleChillerReading = async (
+  reading: any,
+): Promise<ManualChillerSyncResult> => {
+  try {
+    const fp = await syncChillerReadingToFieldproxy(
+      buildChillerSyncPayload(reading),
+    );
+
+    if (fp.error && fp.action !== "skipped") {
+      return {
+        id: reading.id,
+        log_id: reading.log_id,
+        action: "failed",
+        error: fp.error,
+      };
+    }
+
+    return {
+      id: reading.id,
+      log_id: reading.log_id,
+      action: fp.action,
+      message:
+        fp.action === "created"
+          ? "Created new Fieldproxy row"
+          : fp.action === "skipped"
+            ? "No fields to update"
+            : "Updated existing Fieldproxy row",
+    };
+  } catch (error: any) {
+    return {
+      id: reading.id,
+      log_id: reading.log_id,
+      action: "failed",
+      error: error?.message || "Failed to sync chiller reading to Fieldproxy",
+    };
+  }
+};
+
+export const syncFieldproxySingle = asyncHandler(
+  async (req: Request, res: Response) => {
+    const { id } = req.params;
+    if (!id) {
+      return sendError(res, "Chiller reading ID is required");
+    }
+
+    const reading = await chillerReadingsRepository.getChillerReadingById(id);
+    if (!reading) {
+      return sendNotFound(res, "Chiller reading");
+    }
+
+    logActivity({
+      user_id: (req as any).user?.user_id || (req as any).user?.id,
+      action: "MANUAL_FIELDPROXY_SYNC_START",
+      module: "CHILLER_READING",
+      description: `Manual Fieldproxy sync started for chiller reading ${id}`,
+      metadata: { readingId: id, log_id: reading.log_id, mode: "single" },
+    }).catch(() => {});
+
+    const result = await syncSingleChillerReading(reading);
+
+    logActivity({
+      user_id: (req as any).user?.user_id || (req as any).user?.id,
+      action:
+        result.action === "failed"
+          ? "MANUAL_FIELDPROXY_SYNC_FAILED"
+          : "MANUAL_FIELDPROXY_SYNC_SUCCESS",
+      module: "CHILLER_READING",
+      description:
+        result.action === "failed"
+          ? `Manual Fieldproxy sync failed for chiller reading ${id}`
+          : `Manual Fieldproxy sync ${result.action} for chiller reading ${id}`,
+      metadata: {
+        readingId: id,
+        log_id: reading.log_id,
+        mode: "single",
+        action: result.action,
+        error: result.error,
+      },
+    }).catch(() => {});
+
+    if (result.action === "failed") {
+      return sendError(res, result.error || "Fieldproxy sync failed");
+    }
+
+    return sendSuccess(res, result, {
+      message: `Fieldproxy sync ${result.action} for chiller reading ${id}`,
+    });
+  },
+);
+
+export const syncFieldproxyBulk = asyncHandler(
+  async (req: Request, res: Response) => {
+    const { ids } = req.body as { ids?: string[] };
+
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return sendError(res, "ids array is required");
+    }
+
+    const uniqueIds = Array.from(
+      new Set(ids.map((i) => String(i).trim()).filter(Boolean)),
+    );
+    const results: ManualChillerSyncResult[] = [];
+
+    for (const id of uniqueIds) {
+      const reading = await chillerReadingsRepository.getChillerReadingById(id);
+      if (!reading) {
+        results.push({
+          id,
+          action: "failed",
+          error: "Chiller reading not found",
+        });
+        continue;
+      }
+
+      const result = await syncSingleChillerReading(reading);
+      results.push(result);
+
+      logActivity({
+        user_id: (req as any).user?.user_id || (req as any).user?.id,
+        action:
+          result.action === "failed"
+            ? "MANUAL_FIELDPROXY_SYNC_FAILED"
+            : "MANUAL_FIELDPROXY_SYNC_SUCCESS",
+        module: "CHILLER_READING",
+        description:
+          result.action === "failed"
+            ? `Bulk Fieldproxy sync failed for chiller reading ${id}`
+            : `Bulk Fieldproxy sync ${result.action} for chiller reading ${id}`,
+        metadata: {
+          readingId: id,
+          log_id: reading.log_id,
+          mode: "bulk",
+          action: result.action,
+          error: result.error,
+        },
+      }).catch(() => {});
+    }
+
+    const summary = {
+      total: results.length,
+      updated: results.filter((r) => r.action === "updated").length,
+      created: results.filter((r) => r.action === "created").length,
+      skipped: results.filter((r) => r.action === "skipped").length,
+      failed: results.filter((r) => r.action === "failed").length,
+    };
+
+    return sendSuccess(
+      res,
+      { summary, results },
+      {
+        message: `Fieldproxy bulk sync completed: updated ${summary.updated}, created ${summary.created}, failed ${summary.failed}`,
+      },
+    );
+  },
+);
+
 export default {
   create,
   getById,
@@ -354,4 +554,6 @@ export default {
   remove,
   bulkRemove,
   getAverages,
+  syncFieldproxySingle,
+  syncFieldproxyBulk,
 };
