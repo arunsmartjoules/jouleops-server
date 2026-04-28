@@ -33,6 +33,10 @@ export interface SiteLog {
   main_remarks?: string;
   task_name?: string;
   status?: string;
+  fp_sync_status?: string | null;
+  fp_sync_action?: string | null;
+  fp_synced_at?: Date | string | null;
+  fp_sync_error?: string | null;
   created_at?: Date;
   updated_at?: Date;
 }

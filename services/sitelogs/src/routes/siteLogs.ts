@@ -22,6 +22,11 @@ router.post(
   verifyAnyAuth,
   siteLogsController.syncFieldproxyBulk,
 );
+router.post(
+  "/backfill-fp-sync",
+  verifyAnyAuth,
+  siteLogsController.backfillFpSync,
+);
 router.get("/", verifyAnyAuth, siteLogsController.getAll);
 router.post(
   "/",

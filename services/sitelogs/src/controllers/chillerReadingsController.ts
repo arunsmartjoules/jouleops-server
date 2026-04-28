@@ -6,6 +6,7 @@
  */
 
 import chillerReadingsRepository from "../repositories/chillerReadingsRepository.ts";
+import fpSyncRepository from "../repositories/fpSyncRepository.ts";
 import {
   createChillerReadingInFieldproxy,
   updateChillerReadingInFieldproxy,
@@ -74,7 +75,7 @@ export const create = asyncHandler(async (req: Request, res: Response) => {
     startdatetime: reading.startdatetime ?? reading.start_datetime,
     enddatetime: reading.enddatetime,
   })
-    .then((fp) => {
+    .then(async (fp) => {
       logActivity({
         user_id: (req as any).user?.user_id || (req as any).user?.id,
         action: "SYNC_TO_FIELDPROXY",
@@ -82,8 +83,14 @@ export const create = asyncHandler(async (req: Request, res: Response) => {
         description: `Created chiller reading ${reading.id} in Fieldproxy`,
         metadata: { readingId: reading.id, fieldproxy: fp },
       }).catch(() => {});
+      // createChillerReadingInFieldproxy always creates (no upsert path).
+      await fpSyncRepository.recordSynced(
+        "chiller_readings",
+        reading.id,
+        "created",
+      );
     })
-    .catch((err) => {
+    .catch(async (err) => {
       console.error("[FIELDPROXY] chiller reading create sync failed:", err);
       logActivity({
         user_id: (req as any).user?.user_id || (req as any).user?.id,
@@ -92,7 +99,13 @@ export const create = asyncHandler(async (req: Request, res: Response) => {
         description: `Failed to create chiller reading ${reading.id} in Fieldproxy`,
         metadata: { readingId: reading.id, error: err.message },
       }).catch(() => {});
+      await fpSyncRepository.recordFailed(
+        "chiller_readings",
+        reading.id,
+        err?.message || String(err),
+      );
     });
+  fpSyncRepository.recordPending("chiller_readings", reading.id);
 
   return sendCreated(res, reading);
 });
@@ -226,6 +239,7 @@ export const update = asyncHandler(async (req: Request, res: Response) => {
 
   // Sync to Fieldproxy — fire and forget (UPDATE, lookup by log_id)
   if (reading.log_id) {
+    fpSyncRepository.recordPending("chiller_readings", id);
     updateChillerReadingInFieldproxy({
       log_id: reading.log_id,
       site_id: reading.site_code,
@@ -259,7 +273,7 @@ export const update = asyncHandler(async (req: Request, res: Response) => {
       startdatetime: reading.startdatetime ?? reading.start_datetime,
       enddatetime: reading.enddatetime,
     })
-      .then((fp) => {
+      .then(async (fp) => {
         logActivity({
           user_id: (req as any).user?.user_id || (req as any).user?.id,
           action: "SYNC_TO_FIELDPROXY",
@@ -267,8 +281,24 @@ export const update = asyncHandler(async (req: Request, res: Response) => {
           description: `Updated chiller reading ${id} in Fieldproxy`,
           metadata: { readingId: id, log_id: reading.log_id, fieldproxy: fp },
         }).catch(() => {});
+        if (fp?.error) {
+          await fpSyncRepository.recordFailed(
+            "chiller_readings",
+            id,
+            fp.error,
+          );
+        } else {
+          // updateChillerReadingInFieldproxy looks up by log_id; if it returns
+          // without error, the FP row exists AND was updated, so it's verified.
+          await fpSyncRepository.recordSynced(
+            "chiller_readings",
+            id,
+            "updated",
+          );
+          await fpSyncRepository.recordVerified("chiller_readings", id);
+        }
       })
-      .catch((err) => {
+      .catch(async (err) => {
         console.error("[FIELDPROXY] chiller reading update sync failed:", err);
         logActivity({
           user_id: (req as any).user?.user_id || (req as any).user?.id,
@@ -277,7 +307,18 @@ export const update = asyncHandler(async (req: Request, res: Response) => {
           description: `Failed to update chiller reading ${id} in Fieldproxy`,
           metadata: { readingId: id, error: err.message },
         }).catch(() => {});
+        await fpSyncRepository.recordFailed(
+          "chiller_readings",
+          id,
+          err?.message || String(err),
+        );
       });
+  } else {
+    await fpSyncRepository.recordSkipped(
+      "chiller_readings",
+      id,
+      "Missing log_id",
+    );
   }
 
   return sendSuccess(res, reading);
@@ -389,18 +430,37 @@ const buildChillerSyncPayload = (reading: any) => ({
 const syncSingleChillerReading = async (
   reading: any,
 ): Promise<ManualChillerSyncResult> => {
+  fpSyncRepository.recordPending("chiller_readings", reading.id);
   try {
     const fp = await syncChillerReadingToFieldproxy(
       buildChillerSyncPayload(reading),
     );
 
     if (fp.error && fp.action !== "skipped") {
+      await fpSyncRepository.recordFailed(
+        "chiller_readings",
+        reading.id,
+        fp.error,
+      );
       return {
         id: reading.id,
         log_id: reading.log_id,
         action: "failed",
         error: fp.error,
       };
+    }
+
+    if (fp.action === "skipped") {
+      await fpSyncRepository.recordSkipped("chiller_readings", reading.id);
+    } else {
+      // syncChillerReadingToFieldproxy returning created/updated without error
+      // means the FP write API confirmed the row, so it's verified.
+      await fpSyncRepository.recordSynced(
+        "chiller_readings",
+        reading.id,
+        fp.action,
+      );
+      await fpSyncRepository.recordVerified("chiller_readings", reading.id);
     }
 
     return {
@@ -415,11 +475,13 @@ const syncSingleChillerReading = async (
             : "Updated existing Fieldproxy row",
     };
   } catch (error: any) {
+    const msg = error?.message || "Failed to sync chiller reading to Fieldproxy";
+    await fpSyncRepository.recordFailed("chiller_readings", reading.id, msg);
     return {
       id: reading.id,
       log_id: reading.log_id,
       action: "failed",
-      error: error?.message || "Failed to sync chiller reading to Fieldproxy",
+      error: msg,
     };
   }
 };
@@ -542,6 +604,110 @@ export const syncFieldproxyBulk = asyncHandler(
   },
 );
 
+export const backfillFpSync = asyncHandler(
+  async (req: Request, res: Response) => {
+    const {
+      limit: rawLimit,
+      site_code,
+      chiller_id,
+      reading_time_from,
+      reading_time_to,
+      only_failed,
+      dry_run,
+    } = (req.body || {}) as {
+      limit?: number;
+      site_code?: string;
+      chiller_id?: string;
+      reading_time_from?: string;
+      reading_time_to?: string;
+      only_failed?: boolean;
+      dry_run?: boolean;
+    };
+
+    const limit = Math.min(Math.max(Number(rawLimit) || 100, 1), 500);
+    const conditions: string[] = [];
+    const params: any[] = [];
+    let i = 1;
+
+    if (only_failed) {
+      conditions.push(`fp_sync_status = 'failed'`);
+    } else {
+      conditions.push(`(fp_sync_status IS NULL OR fp_sync_status = 'failed')`);
+    }
+    if (site_code) {
+      conditions.push(`site_code = $${i++}`);
+      params.push(site_code);
+    }
+    if (chiller_id) {
+      conditions.push(`chiller_id = $${i++}`);
+      params.push(chiller_id);
+    }
+    if (reading_time_from) {
+      conditions.push(`reading_time >= $${i++}`);
+      params.push(reading_time_from);
+    }
+    if (reading_time_to) {
+      conditions.push(`reading_time <= $${i++}`);
+      params.push(reading_time_to);
+    }
+
+    const sql = `
+      SELECT * FROM chiller_readings
+      WHERE ${conditions.join(" AND ")}
+      ORDER BY reading_time DESC NULLS LAST, created_at DESC
+      LIMIT $${i}
+    `;
+    params.push(limit);
+
+    const { query: rawQuery } = await import("@jouleops/shared");
+    const rows = await rawQuery<any>(sql, params);
+
+    if (dry_run) {
+      return sendSuccess(res, {
+        dry_run: true,
+        candidates: rows.length,
+        sample: rows.slice(0, 5).map((r) => ({
+          id: r.id,
+          site_code: r.site_code,
+          chiller_id: r.chiller_id,
+          log_id: r.log_id,
+          fp_sync_status: r.fp_sync_status,
+        })),
+      });
+    }
+
+    const results: ManualChillerSyncResult[] = [];
+    for (const row of rows) {
+      const r = await syncSingleChillerReading(row);
+      results.push(r);
+    }
+
+    const summary = {
+      total: results.length,
+      created: results.filter((r) => r.action === "created").length,
+      updated: results.filter((r) => r.action === "updated").length,
+      skipped: results.filter((r) => r.action === "skipped").length,
+      failed: results.filter((r) => r.action === "failed").length,
+    };
+
+    logActivity({
+      user_id: (req as any).user?.user_id || (req as any).user?.id,
+      action: "BACKFILL_FIELDPROXY_SYNC",
+      module: "CHILLER_READING",
+      description: `FP sync backfill processed ${summary.total} chiller reading rows`,
+      metadata: { summary, filters: { site_code, chiller_id, reading_time_from, reading_time_to, only_failed, limit } },
+    }).catch(() => {});
+
+    return sendSuccess(
+      res,
+      { summary, results },
+      {
+        message: `Backfill complete — created ${summary.created}, updated ${summary.updated}, failed ${summary.failed}`,
+      },
+    );
+  },
+);
+
 export default {
   create,
   getById,
@@ -556,4 +722,5 @@ export default {
   getAverages,
   syncFieldproxySingle,
   syncFieldproxyBulk,
+  backfillFpSync,
 };

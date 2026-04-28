@@ -6,6 +6,7 @@
  */
 
 import siteLogsRepository from "../repositories/siteLogsRepository.ts";
+import fpSyncRepository from "../repositories/fpSyncRepository.ts";
 import {
   updateSiteLogInFieldproxy,
   verifySiteLogInFieldproxy,
@@ -64,6 +65,7 @@ export const create = asyncHandler(async (req: Request, res: Response) => {
   // 1) scheduled_date + task_name + log_name
   // 2) log_id
   if (result.log_name) {
+    fpSyncRepository.recordPending("site_logs", result.id);
     updateSiteLogInFieldproxy({
       log_id: result.log_id,
       log_name: result.log_name,
@@ -85,7 +87,7 @@ export const create = asyncHandler(async (req: Request, res: Response) => {
       executor_id: result.executor_id,
       status: result.status,
     })
-      .then((fp) => {
+      .then(async (fp) => {
         const syncStatus = getSyncStatus(fp);
         logActivity({
           user_id: (req as any).user?.user_id || (req as any).user?.id,
@@ -102,45 +104,74 @@ export const create = asyncHandler(async (req: Request, res: Response) => {
           },
         }).catch(() => {});
 
-        // Post-sync verification snapshot for history-edit/update visibility.
-        if (syncStatus.action !== "SYNC_TO_FIELDPROXY_FAILED") {
-          verifySiteLogInFieldproxy({
+        if (syncStatus.action === "SYNC_TO_FIELDPROXY_FAILED") {
+          const errMsg =
+            fp?.logTaskLine?.error ||
+            fp?.taskManagement?.error ||
+            "Fieldproxy returned errors";
+          await fpSyncRepository.recordFailed("site_logs", result.id, errMsg);
+          return;
+        }
+        if (syncStatus.action === "SYNC_TO_FIELDPROXY_SKIPPED") {
+          await fpSyncRepository.recordSkipped("site_logs", result.id);
+          return;
+        }
+        await fpSyncRepository.recordSynced(
+          "site_logs",
+          result.id,
+          fp?.action ?? null,
+        );
+
+        // Verification: re-fetch the FP row to confirm it actually exists.
+        try {
+          const verify = await verifySiteLogInFieldproxy({
             log_id: result.log_id,
             log_name: result.log_name,
             task_name: result.task_name,
             scheduled_date: result.scheduled_date,
-          })
-            .then((verify) => {
-              logActivity({
-                user_id: (req as any).user?.user_id || (req as any).user?.id,
-                action: "VERIFY_FIELDPROXY_SYNC",
-                module: "SITE_LOG",
-                description: `Verified Fieldproxy row after syncing site log ${result.id}`,
-                metadata: {
-                  logId: result.id,
-                  log_id: result.log_id,
-                  scheduled_date: result.scheduled_date,
-                  task_name: result.task_name,
-                  log_name: result.log_name,
-                  verify,
-                },
-              }).catch(() => {});
-            })
-            .catch((verifyErr) => {
-              logActivity({
-                user_id: (req as any).user?.user_id || (req as any).user?.id,
-                action: "VERIFY_FIELDPROXY_SYNC_FAILED",
-                module: "SITE_LOG",
-                description: `Failed to verify Fieldproxy row after syncing site log ${result.id}`,
-                metadata: {
-                  logId: result.id,
-                  error: verifyErr?.message || String(verifyErr),
-                },
-              }).catch(() => {});
-            });
+          });
+          logActivity({
+            user_id: (req as any).user?.user_id || (req as any).user?.id,
+            action: "VERIFY_FIELDPROXY_SYNC",
+            module: "SITE_LOG",
+            description: `Verified Fieldproxy row after syncing site log ${result.id}`,
+            metadata: {
+              logId: result.id,
+              log_id: result.log_id,
+              scheduled_date: result.scheduled_date,
+              task_name: result.task_name,
+              log_name: result.log_name,
+              verify,
+            },
+          }).catch(() => {});
+          if (verify.row) {
+            await fpSyncRepository.recordVerified("site_logs", result.id);
+          } else {
+            await fpSyncRepository.recordFailed(
+              "site_logs",
+              result.id,
+              verify.error || "Fieldproxy row not found after sync",
+            );
+          }
+        } catch (verifyErr: any) {
+          logActivity({
+            user_id: (req as any).user?.user_id || (req as any).user?.id,
+            action: "VERIFY_FIELDPROXY_SYNC_FAILED",
+            module: "SITE_LOG",
+            description: `Failed to verify Fieldproxy row after syncing site log ${result.id}`,
+            metadata: {
+              logId: result.id,
+              error: verifyErr?.message || String(verifyErr),
+            },
+          }).catch(() => {});
+          await fpSyncRepository.recordFailed(
+            "site_logs",
+            result.id,
+            `Verification failed: ${verifyErr?.message || String(verifyErr)}`,
+          );
         }
       })
-      .catch((err) => {
+      .catch(async (err) => {
         console.error("[FIELDPROXY] site log sync failed:", err);
         logActivity({
           user_id: (req as any).user?.user_id || (req as any).user?.id,
@@ -149,6 +180,11 @@ export const create = asyncHandler(async (req: Request, res: Response) => {
           description: `Failed to sync site log ${result.id} to Fieldproxy`,
           metadata: { logId: result.id, error: err.message },
         }).catch(() => {});
+        await fpSyncRepository.recordFailed(
+          "site_logs",
+          result.id,
+          err?.message || String(err),
+        );
       });
   } else {
     logActivity({
@@ -164,6 +200,11 @@ export const create = asyncHandler(async (req: Request, res: Response) => {
         log_name: result.log_name,
       },
     }).catch(() => {});
+    await fpSyncRepository.recordSkipped(
+      "site_logs",
+      result.id,
+      "Missing log_name",
+    );
   }
 
   return sendCreated(res, result);
@@ -280,6 +321,7 @@ export const update = asyncHandler(async (req: Request, res: Response) => {
   // 1) scheduled_date + task_name + log_name
   // 2) log_id
   if (result.log_name) {
+    fpSyncRepository.recordPending("site_logs", id);
     updateSiteLogInFieldproxy({
       log_id: result.log_id,
       log_name: result.log_name,
@@ -301,7 +343,7 @@ export const update = asyncHandler(async (req: Request, res: Response) => {
       executor_id: result.executor_id,
       status: result.status,
     })
-      .then((fp) => {
+      .then(async (fp) => {
         const syncStatus = getSyncStatus(fp);
         logActivity({
           user_id: (req as any).user?.user_id || (req as any).user?.id,
@@ -318,45 +360,73 @@ export const update = asyncHandler(async (req: Request, res: Response) => {
           },
         }).catch(() => {});
 
-        // Post-sync verification snapshot for history-edit/update visibility.
-        if (syncStatus.action !== "SYNC_TO_FIELDPROXY_FAILED") {
-          verifySiteLogInFieldproxy({
+        if (syncStatus.action === "SYNC_TO_FIELDPROXY_FAILED") {
+          const errMsg =
+            fp?.logTaskLine?.error ||
+            fp?.taskManagement?.error ||
+            "Fieldproxy returned errors";
+          await fpSyncRepository.recordFailed("site_logs", id, errMsg);
+          return;
+        }
+        if (syncStatus.action === "SYNC_TO_FIELDPROXY_SKIPPED") {
+          await fpSyncRepository.recordSkipped("site_logs", id);
+          return;
+        }
+        await fpSyncRepository.recordSynced(
+          "site_logs",
+          id,
+          fp?.action ?? null,
+        );
+
+        try {
+          const verify = await verifySiteLogInFieldproxy({
             log_id: result.log_id,
             log_name: result.log_name,
             task_name: result.task_name,
             scheduled_date: result.scheduled_date,
-          })
-            .then((verify) => {
-              logActivity({
-                user_id: (req as any).user?.user_id || (req as any).user?.id,
-                action: "VERIFY_FIELDPROXY_SYNC",
-                module: "SITE_LOG",
-                description: `Verified Fieldproxy row after updating site log ${id}`,
-                metadata: {
-                  logId: id,
-                  log_id: result.log_id,
-                  scheduled_date: result.scheduled_date,
-                  task_name: result.task_name,
-                  log_name: result.log_name,
-                  verify,
-                },
-              }).catch(() => {});
-            })
-            .catch((verifyErr) => {
-              logActivity({
-                user_id: (req as any).user?.user_id || (req as any).user?.id,
-                action: "VERIFY_FIELDPROXY_SYNC_FAILED",
-                module: "SITE_LOG",
-                description: `Failed to verify Fieldproxy row after updating site log ${id}`,
-                metadata: {
-                  logId: id,
-                  error: verifyErr?.message || String(verifyErr),
-                },
-              }).catch(() => {});
-            });
+          });
+          logActivity({
+            user_id: (req as any).user?.user_id || (req as any).user?.id,
+            action: "VERIFY_FIELDPROXY_SYNC",
+            module: "SITE_LOG",
+            description: `Verified Fieldproxy row after updating site log ${id}`,
+            metadata: {
+              logId: id,
+              log_id: result.log_id,
+              scheduled_date: result.scheduled_date,
+              task_name: result.task_name,
+              log_name: result.log_name,
+              verify,
+            },
+          }).catch(() => {});
+          if (verify.row) {
+            await fpSyncRepository.recordVerified("site_logs", id);
+          } else {
+            await fpSyncRepository.recordFailed(
+              "site_logs",
+              id,
+              verify.error || "Fieldproxy row not found after sync",
+            );
+          }
+        } catch (verifyErr: any) {
+          logActivity({
+            user_id: (req as any).user?.user_id || (req as any).user?.id,
+            action: "VERIFY_FIELDPROXY_SYNC_FAILED",
+            module: "SITE_LOG",
+            description: `Failed to verify Fieldproxy row after updating site log ${id}`,
+            metadata: {
+              logId: id,
+              error: verifyErr?.message || String(verifyErr),
+            },
+          }).catch(() => {});
+          await fpSyncRepository.recordFailed(
+            "site_logs",
+            id,
+            `Verification failed: ${verifyErr?.message || String(verifyErr)}`,
+          );
         }
       })
-      .catch((err) => {
+      .catch(async (err) => {
         console.error("[FIELDPROXY] site log update sync failed:", err);
         logActivity({
           user_id: (req as any).user?.user_id || (req as any).user?.id,
@@ -365,6 +435,11 @@ export const update = asyncHandler(async (req: Request, res: Response) => {
           description: `Failed to sync updated site log ${id} to Fieldproxy`,
           metadata: { logId: id, error: err.message },
         }).catch(() => {});
+        await fpSyncRepository.recordFailed(
+          "site_logs",
+          id,
+          err?.message || String(err),
+        );
       });
   } else {
     logActivity({
@@ -380,6 +455,11 @@ export const update = asyncHandler(async (req: Request, res: Response) => {
         log_name: result.log_name,
       },
     }).catch(() => {});
+    await fpSyncRepository.recordSkipped(
+      "site_logs",
+      id,
+      "Missing log_name",
+    );
   }
 
   return sendSuccess(res, result);
@@ -444,6 +524,11 @@ const buildSiteLogSyncPayload = (log: any) => ({
 
 const syncSingleSiteLog = async (log: any): Promise<ManualSiteLogSyncResult> => {
   if (!log.log_name) {
+    await fpSyncRepository.recordSkipped(
+      "site_logs",
+      log.id,
+      "Missing log_name",
+    );
     return {
       id: log.id,
       log_id: log.log_id,
@@ -452,10 +537,12 @@ const syncSingleSiteLog = async (log: any): Promise<ManualSiteLogSyncResult> => 
     };
   }
 
+  fpSyncRepository.recordPending("site_logs", log.id);
   try {
     const fp = await updateSiteLogInFieldproxy(buildSiteLogSyncPayload(log));
 
     if (fp.error) {
+      await fpSyncRepository.recordFailed("site_logs", log.id, fp.error);
       return {
         id: log.id,
         log_id: log.log_id,
@@ -465,6 +552,35 @@ const syncSingleSiteLog = async (log: any): Promise<ManualSiteLogSyncResult> => 
     }
 
     const action = fp.action ?? "updated";
+    if (action === "skipped") {
+      await fpSyncRepository.recordSkipped("site_logs", log.id);
+    } else {
+      await fpSyncRepository.recordSynced("site_logs", log.id, action);
+      // Verify the FP row landed.
+      try {
+        const verify = await verifySiteLogInFieldproxy({
+          log_id: log.log_id,
+          log_name: log.log_name,
+          task_name: log.task_name,
+          scheduled_date: log.scheduled_date,
+        });
+        if (verify.row) {
+          await fpSyncRepository.recordVerified("site_logs", log.id);
+        } else {
+          await fpSyncRepository.recordFailed(
+            "site_logs",
+            log.id,
+            verify.error || "Fieldproxy row not found after sync",
+          );
+        }
+      } catch (verifyErr: any) {
+        await fpSyncRepository.recordFailed(
+          "site_logs",
+          log.id,
+          `Verification failed: ${verifyErr?.message || String(verifyErr)}`,
+        );
+      }
+    }
     return {
       id: log.id,
       log_id: log.log_id,
@@ -477,11 +593,13 @@ const syncSingleSiteLog = async (log: any): Promise<ManualSiteLogSyncResult> => 
             : "Updated existing Fieldproxy row",
     };
   } catch (error: any) {
+    const msg = error?.message || "Failed to sync site log to Fieldproxy";
+    await fpSyncRepository.recordFailed("site_logs", log.id, msg);
     return {
       id: log.id,
       log_id: log.log_id,
       action: "failed",
-      error: error?.message || "Failed to sync site log to Fieldproxy",
+      error: msg,
     };
   }
 };
@@ -604,6 +722,119 @@ export const syncFieldproxyBulk = asyncHandler(
   },
 );
 
+/**
+ * Backfill: re-sync rows whose fp_sync_status is NULL or 'failed'.
+ * Bounded by `limit` (default 100, max 500) to keep the request scoped.
+ * Optional filters: site_code, log_name, scheduled_date_from/to, only_failed.
+ *
+ * Use this once after deploying the FP sync columns to populate state for
+ * historical rows, or to retry rows that previously failed FP sync.
+ */
+export const backfillFpSync = asyncHandler(
+  async (req: Request, res: Response) => {
+    const {
+      limit: rawLimit,
+      site_code,
+      log_name,
+      scheduled_date_from,
+      scheduled_date_to,
+      only_failed,
+      dry_run,
+    } = (req.body || {}) as {
+      limit?: number;
+      site_code?: string;
+      log_name?: string;
+      scheduled_date_from?: string;
+      scheduled_date_to?: string;
+      only_failed?: boolean;
+      dry_run?: boolean;
+    };
+
+    const limit = Math.min(Math.max(Number(rawLimit) || 100, 1), 500);
+    const conditions: string[] = [];
+    const params: any[] = [];
+    let i = 1;
+
+    if (only_failed) {
+      conditions.push(`fp_sync_status = 'failed'`);
+    } else {
+      conditions.push(`(fp_sync_status IS NULL OR fp_sync_status = 'failed')`);
+    }
+    if (site_code) {
+      conditions.push(`site_code = $${i++}`);
+      params.push(site_code);
+    }
+    if (log_name) {
+      conditions.push(`log_name = $${i++}`);
+      params.push(log_name);
+    }
+    if (scheduled_date_from) {
+      conditions.push(`scheduled_date >= $${i++}`);
+      params.push(scheduled_date_from);
+    }
+    if (scheduled_date_to) {
+      conditions.push(`scheduled_date <= $${i++}`);
+      params.push(scheduled_date_to);
+    }
+
+    const sql = `
+      SELECT * FROM site_logs
+      WHERE ${conditions.join(" AND ")}
+      ORDER BY created_at DESC
+      LIMIT $${i}
+    `;
+    params.push(limit);
+
+    const { query: rawQuery } = await import("@jouleops/shared");
+    const rows = await rawQuery<any>(sql, params);
+
+    if (dry_run) {
+      return sendSuccess(res, {
+        dry_run: true,
+        candidates: rows.length,
+        sample: rows.slice(0, 5).map((r) => ({
+          id: r.id,
+          site_code: r.site_code,
+          log_name: r.log_name,
+          task_name: r.task_name,
+          scheduled_date: r.scheduled_date,
+          fp_sync_status: r.fp_sync_status,
+        })),
+      });
+    }
+
+    const results: ManualSiteLogSyncResult[] = [];
+    for (const row of rows) {
+      const r = await syncSingleSiteLog(row);
+      results.push(r);
+    }
+
+    const summary = {
+      total: results.length,
+      created: results.filter((r) => r.action === "created").length,
+      updated: results.filter((r) => r.action === "updated").length,
+      skipped: results.filter((r) => r.action === "skipped").length,
+      failed: results.filter((r) => r.action === "failed").length,
+    };
+
+    logActivity({
+      user_id: (req as any).user?.user_id || (req as any).user?.id,
+      action: "BACKFILL_FIELDPROXY_SYNC",
+      module: "SITE_LOG",
+      description: `FP sync backfill processed ${summary.total} site log rows`,
+      metadata: { summary, filters: { site_code, log_name, scheduled_date_from, scheduled_date_to, only_failed, limit } },
+    }).catch(() => {});
+
+    return sendSuccess(
+      res,
+      { summary, results },
+      {
+        message: `Backfill complete — created ${summary.created}, updated ${summary.updated}, failed ${summary.failed}`,
+      },
+    );
+  },
+);
+
 export default {
   create,
   getBySite,
@@ -614,4 +845,5 @@ export default {
   bulkUpsert,
   syncFieldproxySingle,
   syncFieldproxyBulk,
+  backfillFpSync,
 };

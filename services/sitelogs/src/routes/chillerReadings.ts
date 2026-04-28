@@ -26,6 +26,11 @@ router.post(
   verifyAnyAuth,
   chillerReadingsController.syncFieldproxyBulk,
 );
+router.post(
+  "/backfill-fp-sync",
+  verifyAnyAuth,
+  chillerReadingsController.backfillFpSync,
+);
 router.get("/", verifyAnyAuth, chillerReadingsController.getAll);
 router.post(
   "/",
