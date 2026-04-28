@@ -198,6 +198,7 @@ export interface SiteLogSyncPayload {
   log_name?: string;
   task_name?: string;
   scheduled_date?: string | null;
+  site_id?: string | null;
   // Temp RH
   temperature?: number | null;
   rh?: number | null;
@@ -244,6 +245,7 @@ function buildSiteLogTableData(log: SiteLogSyncPayload): Record<string, any> {
   }
 
   if (log.remarks != null) tableData.remarks = log.remarks;
+  if (log.site_id != null) tableData.site_id = log.site_id;
   if (log.entry_time != null) tableData.entry_time = new Date(log.entry_time).toISOString();
   if (log.end_time != null) tableData.end_time = new Date(log.end_time).toISOString();
   if (log.executor_id != null) tableData.exicuter_id = log.executor_id; // fieldproxy uses "exicuter_id"
