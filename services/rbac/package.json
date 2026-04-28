@@ -8,7 +8,7 @@
         "dev": "bun --hot src/index.ts",
         "start": "bun src/index.ts",
         "build": "bun build ./src/index.ts --outdir ./dist --target bun",
-        "test": "bun test"
+        "test": "if find src \\( -name '*.test.*' -o -name '*.spec.*' \\) -print -quit | grep -q .; then bun test; else echo 'No tests yet — skipping'; fi"
     },
     "dependencies": {
         "@jouleops/shared": "workspace:*",

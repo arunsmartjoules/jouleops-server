@@ -13,7 +13,7 @@
     },
     "scripts": {
         "build": "bun build ./src/index.ts --outdir ./dist --target bun",
-        "test": "bun test"
+        "test": "if find src \\( -name '*.test.*' -o -name '*.spec.*' \\) -print -quit | grep -q .; then bun test; else echo 'No tests yet — skipping'; fi"
     },
     "dependencies": {
         "firebase-admin": "^13.7.0"
