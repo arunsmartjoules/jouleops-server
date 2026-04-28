@@ -34,6 +34,11 @@ interface LogOptions {
   type?: string | null;
 }
 
+interface LogMeta {
+  complaint_id?: string | null;
+  trigger_key?: string | null;
+}
+
 /**
  * Send push notification using Expo Push Notification API
  */
@@ -170,6 +175,7 @@ export const sendNotificationToUser = async (
   title: string,
   body: string,
   data: NotificationData = {},
+  meta: LogMeta = {},
 ): Promise<PushResponse> => {
   const tokenRecords = await getUserTokens(userId);
 
@@ -188,7 +194,7 @@ export const sendNotificationToUser = async (
 
   // Log the notification
   if (result.success) {
-    await logNotification(userId, title, body, data.type || "custom", "sent");
+    await logNotification(userId, title, body, data.type || "custom", "sent", null, meta);
   } else {
     const errorMessage =
       typeof result.error === "object"
@@ -201,6 +207,7 @@ export const sendNotificationToUser = async (
       data.type || "custom",
       "failed",
       errorMessage,
+      meta,
     );
   }
 
@@ -316,14 +323,17 @@ export const logNotification = async (
   notificationType: string,
   status: string = "sent",
   errorMessage: string | null = null,
+  meta: LogMeta = {},
 ): Promise<void> => {
+  const triggerKey = meta.trigger_key ?? notificationType;
+  const complaintId = meta.complaint_id ?? null;
   try {
     await query(
       `
-        INSERT INTO notification_logs (user_id, title, body, notification_type, status, error_message, sent_at)
-        VALUES ($1, $2, $3, $4, $5, $6, NOW())
+        INSERT INTO notification_logs (user_id, title, body, notification_type, status, error_message, sent_at, complaint_id, trigger_key)
+        VALUES ($1, $2, $3, $4, $5, $6, NOW(), $7, $8)
     `,
-      [userId, title, body, notificationType, status, errorMessage],
+      [userId, title, body, notificationType, status, errorMessage, complaintId, triggerKey],
     );
 
     // Also log to general activity_logs

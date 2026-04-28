@@ -14,7 +14,7 @@
  * Requirements: 1.1, 2.1, 3.1, 4.1, 5.1, 5.2
  */
 
-import { logger, query } from "@jouleops/shared";
+import { logger, query, queryOne } from "@jouleops/shared";
 import cron from "node-cron";
 
 import { getAllTriggerConfigs } from "../repositories/triggerConfigRepository.ts";
@@ -217,12 +217,63 @@ async function dispatchForUsers(
     const title = resolvePlaceholders(template.title_template, resolvedContext);
     const body = resolvePlaceholders(template.body_template, resolvedContext);
 
-    // Unify dispatches using pushNotificationService
-    await pushNotificationService.sendNotificationToUser(userId, title, body, {
-      type: triggerKey,
-      ...(context.complaint_id ? { ticket_no: context.complaint_id } : {}),
-      ...(siteCode ? { site_code: siteCode } : {}),
-    });
+    // Unify dispatches using pushNotificationService.
+    // The 5th arg carries dedup metadata so notification_logs records the
+    // complaint_id + trigger_key the scheduler later reads back to throttle
+    // sends to the configured repeat frequency.
+    await pushNotificationService.sendNotificationToUser(
+      userId,
+      title,
+      body,
+      {
+        type: triggerKey,
+        ...(context.complaint_id ? { ticket_no: context.complaint_id } : {}),
+        ...(siteCode ? { site_code: siteCode } : {}),
+      },
+      {
+        complaint_id: context.complaint_id || null,
+        trigger_key: triggerKey,
+      },
+    );
+  }
+}
+
+/**
+ * Idempotently ensure notification_logs has the columns the dedup query
+ * relies on. Without these, fetchRecentLogs returns nothing and every tick
+ * re-fires every eligible notification.
+ */
+async function ensureNotificationLogsSchema(): Promise<void> {
+  try {
+    await query(
+      `ALTER TABLE notification_logs
+         ADD COLUMN IF NOT EXISTS complaint_id TEXT,
+         ADD COLUMN IF NOT EXISTS trigger_key TEXT`,
+    );
+    await query(
+      `CREATE INDEX IF NOT EXISTS idx_notification_logs_trigger_sent
+         ON notification_logs (trigger_key, sent_at)`,
+    );
+  } catch (err) {
+    logger.error("[NotificationScheduler] Failed to ensure notification_logs schema", { err });
+  }
+}
+
+/**
+ * Re-read is_enabled for a single trigger directly from the DB so toggling
+ * the admin switch off aborts an in-flight tick instead of waiting for the
+ * next minute.
+ */
+async function isTriggerEnabled(triggerKey: string): Promise<boolean> {
+  try {
+    const row = await queryOne<{ is_enabled: boolean }>(
+      `SELECT is_enabled FROM notification_trigger_configs WHERE trigger_key = $1`,
+      [triggerKey],
+    );
+    return !!row?.is_enabled;
+  } catch (err) {
+    logger.error("[NotificationScheduler] Failed to re-check trigger state", { err, triggerKey });
+    return false;
   }
 }
 
@@ -306,6 +357,13 @@ async function runSchedulerTick(): Promise<void> {
 
       // Dispatch per complaint — recipients are site users for the complaint site
       for (const complaint of eligibleComplaints) {
+        // Re-check the admin toggle inside the loop so flipping it off aborts
+        // an in-flight tick instead of draining the entire batch.
+        if (!(await isTriggerEnabled(triggerKey))) {
+          logger.info("[NotificationScheduler] Trigger disabled mid-tick, aborting", { triggerKey });
+          break;
+        }
+
         const siteUserIds = await fetchSiteUserIdsBySiteCode(complaint.site_code);
         const preferenceEligibleUserIds = await filterUsersByTicketPreference(siteUserIds);
         const recipientUserIds = [...new Set(preferenceEligibleUserIds)];
@@ -383,6 +441,11 @@ async function runSchedulerTick(): Promise<void> {
       ];
 
       for (const pmInstance of eligiblePmInstances) {
+        if (!(await isTriggerEnabled(pmTriggerKey))) {
+          logger.info("[NotificationScheduler] Trigger disabled mid-tick, aborting", { triggerKey: pmTriggerKey });
+          break;
+        }
+
         const siteUserIds = await fetchSiteUserIdsBySiteCode(pmInstance.site_code);
         const preferenceEligibleUserIds = await filterUsersByTicketPreference(siteUserIds);
         const recipientUserIds = [...new Set(preferenceEligibleUserIds)];
@@ -433,6 +496,7 @@ async function runSchedulerTick(): Promise<void> {
 // ---------------------------------------------------------------------------
 
 let schedulerJob: ReturnType<typeof cron.schedule> | null = null;
+let isTickRunning = false;
 
 /**
  * Start the notification scheduler.
@@ -444,14 +508,28 @@ export function startNotificationScheduler(): void {
     return;
   }
 
+  // Bootstrap the columns the dedup query depends on. Idempotent.
+  ensureNotificationLogsSchema().catch((err) =>
+    logger.error("[NotificationScheduler] Schema bootstrap failed", { err }),
+  );
+
   // Run every minute, using UTC (cron handles timezone internally via node-cron)
   schedulerJob = cron.schedule(
     "* * * * *",
     async () => {
+      // Skip overlapping ticks — without this, a slow tick can run in parallel
+      // with the next minute's tick and double-send to every recipient.
+      if (isTickRunning) {
+        logger.warn("[NotificationScheduler] Previous tick still running, skipping");
+        return;
+      }
+      isTickRunning = true;
       try {
         await runSchedulerTick();
       } catch (err) {
         logger.error("[NotificationScheduler] Unexpected error in cron callback", { err });
+      } finally {
+        isTickRunning = false;
       }
     },
     {
