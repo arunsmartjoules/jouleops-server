@@ -33,7 +33,7 @@ async function getEmployeeCode(userId?: string): Promise<string | null> {
   if (!userId) return null;
   try {
     const row = await queryOne<{ employee_code: string }>(
-      `SELECT employee_code FROM users WHERE id = $1`,
+      `SELECT employee_code FROM users WHERE user_id = $1`,
       [userId],
     );
     return row?.employee_code ?? null;
@@ -165,19 +165,19 @@ async function syncAllChecklistsToFieldproxy(
     task_name: string | null;
     response_value: string | null;
     completed_at: Date | null;
-    completed_by_name: string | null;
+    completed_by_code: string | null;
   }>(
     `SELECT
        c.id::text AS checklist_id,
        c.task_name,
        r.response_value,
        r.completed_at,
-       u.name AS completed_by_name
+       u.employee_code AS completed_by_code
      FROM pm_checklist c
      JOIN pm_instances pi ON c.checklist_id = pi.maintenance_id
      LEFT JOIN pm_checklist_responses r
        ON r.instance_id = pi.id::text AND r.checklist_id = c.id::text
-     LEFT JOIN users u ON u.id::text = r.completed_by
+     LEFT JOIN users u ON u.user_id = r.completed_by
      WHERE pi.id = $1
      ORDER BY c.sequence_no ASC NULLS LAST`,
     [instance.id],
@@ -191,7 +191,7 @@ async function syncAllChecklistsToFieldproxy(
       task_name: row.task_name,
       checklist_id: row.checklist_id,
       status: row.response_value ?? null,
-      completed_by: row.completed_by_name ?? null,
+      completed_by: row.completed_by_code ?? null,
       completed_on: row.completed_at ? new Date(row.completed_at).toISOString() : null,
       start_datetime: startISO ?? null,
       end_datetime: endISO ?? null,
@@ -419,7 +419,10 @@ export const update = async (req: AuthRequest, res: Response) => {
     );
 
     // Sync with Fieldproxy — fire and forget
-    const employeeCode = await getEmployeeCode(req.user?.user_id);
+    const assigneeCode =
+      (await getEmployeeCode(instance?.assigned_to)) ??
+      (await getEmployeeCode(req.user?.user_id)) ??
+      undefined;
     const fpPayload: PMFieldproxyPayload = {
       instance_id: existing.instance_id,
       status: req.body.status || existing.status,
@@ -429,7 +432,7 @@ export const update = async (req: AuthRequest, res: Response) => {
       sjpl_sign: req.body.client_sign || instance?.client_sign,
       start_datetime: instance?.start_datetime?.toISOString?.() || undefined,
       end_datetime: instance?.end_datetime?.toISOString?.() || undefined,
-      assigned_to: instance?.assigned_to || employeeCode || undefined,
+      assigned_to: assigneeCode,
     };
     syncToFieldproxy(instance, fpPayload).catch(() => {});
     syncAllChecklistsToFieldproxy(instance).catch(() => {});
@@ -512,7 +515,10 @@ export const updateStatus = async (req: AuthRequest, res: Response) => {
     }).catch(() => {});
 
     // Sync with Fieldproxy — fire and forget (both pm_instance + task_management)
-    const employeeCode = await getEmployeeCode(req.user?.user_id);
+    const assigneeCode =
+      (await getEmployeeCode(instance?.assigned_to)) ??
+      (await getEmployeeCode(req.user?.user_id)) ??
+      undefined;
     const fpPayload: PMFieldproxyPayload = {
       instance_id: existing.instance_id,
       status,
@@ -526,7 +532,7 @@ export const updateStatus = async (req: AuthRequest, res: Response) => {
       end_datetime: status === "Completed"
         ? new Date().toISOString()
         : instance?.end_datetime?.toISOString?.() || undefined,
-      assigned_to: instance?.assigned_to || employeeCode || undefined,
+      assigned_to: assigneeCode,
     };
     syncToFieldproxy(instance, fpPayload).catch(() => {});
     syncAllChecklistsToFieldproxy(instance).catch(() => {});
@@ -570,11 +576,14 @@ export const updateProgress = async (req: AuthRequest, res: Response) => {
     }).catch(() => {});
 
     // Sync progress to Fieldproxy pm_instance — fire and forget
-    const employeeCode = await getEmployeeCode(req.user?.user_id);
+    const assigneeCode =
+      (await getEmployeeCode(instance?.assigned_to)) ??
+      (await getEmployeeCode(req.user?.user_id)) ??
+      undefined;
     const fpPayload: PMFieldproxyPayload = {
       instance_id: instance?.instance_id || instanceId,
       progress: String(progress),
-      assigned_to: instance?.assigned_to || employeeCode || undefined,
+      assigned_to: assigneeCode,
     };
     syncToFieldproxy(instance, fpPayload).catch(() => {});
 
@@ -715,7 +724,7 @@ async function syncSingleInstanceToFieldproxy(instance: any): Promise<{
     end_datetime: instance.end_datetime
       ? new Date(instance.end_datetime).toISOString()
       : undefined,
-    assigned_to: instance.assigned_to || undefined,
+    assigned_to: (await getEmployeeCode(instance.assigned_to)) ?? undefined,
   };
 
   try {

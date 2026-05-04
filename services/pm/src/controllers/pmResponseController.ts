@@ -12,7 +12,6 @@ import {
   sendNotFound,
   sendServerError,
   logActivity,
-  queryOne,
 } from "@jouleops/shared";
 import pmChecklistRepository from "../repositories/pmChecklistRepository.ts";
 import pmInstancesRepository from "../repositories/pmInstancesRepository.ts";
@@ -31,18 +30,16 @@ export const create = async (req: AuthRequest, res: Response) => {
 
     const response = await pmResponseRepository.create(responseInput);
 
+    // Fieldproxy expects employee_code. The auth middleware already populates
+    // req.user.employee_code from the users table, so no extra query is needed.
+    const completedByEmployeeCode = req.user?.employee_code ?? null;
+
     // Fire-and-forget: upsert pm_instance_task_line in Fieldproxy.
     Promise.all([
       pmInstancesRepository.getPMInstanceById(req.body.instance_id),
       pmChecklistRepository.getPMChecklistItemById(req.body.checklist_id),
-      response.completed_by
-        ? queryOne<{ name: string }>(
-            `SELECT name FROM users WHERE id = $1`,
-            [response.completed_by],
-          )
-        : Promise.resolve(null),
     ])
-      .then(async ([instance, checklistItem, userRow]) => {
+      .then(async ([instance, checklistItem]) => {
         if (!instance?.instance_id || !checklistItem?.task_name) {
           logActivity({
             action: "UPSERT_FIELDPROXY_PM_INSTANCE_TASK_LINE_SKIPPED",
@@ -64,7 +61,7 @@ export const create = async (req: AuthRequest, res: Response) => {
           task_name: checklistItem.task_name,
           status: req.body.response_value ?? "Pending",
           checklist_id: req.body.checklist_id,
-          completed_by: userRow?.name ?? null,
+          completed_by: completedByEmployeeCode,
           completed_on: response.completed_at
             ? new Date(response.completed_at).toISOString()
             : null,
