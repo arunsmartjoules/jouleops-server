@@ -191,6 +191,31 @@ function normalizeProgress(value?: string | null): string | undefined {
   return raw;
 }
 
+function escapeWhereValue(value: unknown): string {
+  if (value === null || value === undefined) return "";
+  const normalized =
+    value instanceof Date ? value.toISOString() : String(value);
+  return normalized.replace(/'/g, "''");
+}
+
+/**
+ * Compute duration between two timestamps as "HH:MM".
+ * Returns undefined if either is missing or end < start.
+ */
+function computeDurationHHMM(
+  start?: string | Date | null,
+  end?: string | Date | null,
+): string | undefined {
+  if (!start || !end) return undefined;
+  const s = new Date(start).getTime();
+  const e = new Date(end).getTime();
+  if (Number.isNaN(s) || Number.isNaN(e) || e < s) return undefined;
+  const totalMinutes = Math.floor((e - s) / 60000);
+  const hh = Math.floor(totalMinutes / 60).toString().padStart(2, "0");
+  const mm = (totalMinutes % 60).toString().padStart(2, "0");
+  return `${hh}:${mm}`;
+}
+
 // ─── PM Instance Payload ─────────────────────────────────────────────────────
 
 export interface PMFieldproxyPayload {
@@ -276,12 +301,16 @@ export async function updatePMInstanceInFieldproxy(
 export interface TaskManagementFieldproxyPayload {
   instance_id: string;        // Our pm_instances.instance_id — used as source_reference_id lookup
   task_status?: string;       // Mapped from pm_instance status
-  time_log_start?: string;    // ISO timestamp — when user started PM
-  time_log_end?: string;      // ISO timestamp — when user completed PM
+  time_log_start?: string;    // ISO timestamp — legacy column
+  time_log_end?: string;      // ISO timestamp — legacy column
+  start_time?: string;        // ISO timestamp — when user started PM
+  end_time?: string;          // ISO timestamp — when user completed PM
+  duration?: string;          // "HH:MM" — auto-computed if start/end provided
   assigned_to?: string;       // employee_code of the user
+  signature?: string;         // Signature URL (mapped from client_sign)
 }
 
-// ─── Create PM Instance Task Line in Fieldproxy ──────────────────────────────
+// ─── Upsert PM Instance Task Line in Fieldproxy ──────────────────────────────
 
 export interface PMInstanceTaskLinePayload {
   instance_id: string;
@@ -289,18 +318,47 @@ export interface PMInstanceTaskLinePayload {
   status?: string | null;
   checklist_id: string;
   task_line_id?: string;
+  completed_by?: string | null;       // user_name of the executor
+  completed_on?: string | null;       // ISO timestamp
+  start_datetime?: string | null;     // ISO — from parent pm_instance
+  end_datetime?: string | null;       // ISO — from parent pm_instance
 }
 
 /**
- * Creates a row in Fieldproxy sheet "pm_instance_task_line".
- * This is append-only and should be called for each checklist upsert.
+ * Upserts a row in Fieldproxy sheet "pm_instance_task_line".
+ *   - Lookup: instance_id='X' AND task_name='Y'
+ *   - Found  → updateRows
+ *   - Missing → sheetsRow (create)
  */
-export async function createPMInstanceTaskLineInFieldproxy(
+export async function upsertPMInstanceTaskLineInFieldproxy(
   payload: PMInstanceTaskLinePayload,
-): Promise<any> {
+): Promise<{ action: "created" | "updated" | "skipped"; lookup?: any; result?: any }> {
   const token = await getAccessToken();
 
-  const body = {
+  const whereClause = `instance_id='${escapeWhereValue(payload.instance_id)}' AND task_name='${escapeWhereValue(payload.task_name)}'`;
+  const { id: rowId, response: lookupResponse } = await getRowIdByWhereClause(
+    "pm_instance_task_line",
+    whereClause,
+    token,
+  );
+
+  const tableData: Record<string, any> = {};
+  if (payload.status !== undefined) tableData.status = payload.status;
+  if (payload.completed_by != null) tableData.completed_by = payload.completed_by;
+  if (payload.completed_on != null) tableData.completed_on = payload.completed_on;
+  if (payload.start_datetime != null) tableData.start_datetime = payload.start_datetime;
+  if (payload.end_datetime != null) tableData.end_datetime = payload.end_datetime;
+
+  if (rowId) {
+    if (Object.keys(tableData).length === 0) {
+      return { action: "skipped", lookup: lookupResponse };
+    }
+    const updateResponse = await updateSheetRow(rowId, "pm_instance_task_line", tableData, token);
+    return { action: "updated", lookup: lookupResponse, result: updateResponse };
+  }
+
+  // Create — include identifying fields
+  const createBody = {
     sheetId: "pm_instance_task_line",
     sheetName: "pm_instance_task_line",
     tableData: {
@@ -309,8 +367,8 @@ export async function createPMInstanceTaskLineInFieldproxy(
         `${payload.instance_id}:${payload.checklist_id}`,
       instance_id: payload.instance_id,
       task_name: payload.task_name,
-      status: payload.status ?? null,
       checklist_id: payload.checklist_id,
+      ...tableData,
     },
   };
 
@@ -320,7 +378,7 @@ export async function createPMInstanceTaskLineInFieldproxy(
       "Content-Type": "application/json",
       "x-api-key": token,
     },
-    body: JSON.stringify(body),
+    body: JSON.stringify(createBody),
   });
 
   const responseData = await res.json().catch(() => ({}));
@@ -331,7 +389,17 @@ export async function createPMInstanceTaskLineInFieldproxy(
     );
   }
 
-  return responseData;
+  return { action: "created", lookup: lookupResponse, result: responseData };
+}
+
+/**
+ * @deprecated Use {@link upsertPMInstanceTaskLineInFieldproxy} instead.
+ * Retained as a thin wrapper so existing call sites keep compiling.
+ */
+export async function createPMInstanceTaskLineInFieldproxy(
+  payload: PMInstanceTaskLinePayload,
+): Promise<any> {
+  return upsertPMInstanceTaskLineInFieldproxy(payload);
 }
 
 /**
@@ -363,16 +431,41 @@ export async function updateTaskManagementInFieldproxy(
   if (payload.task_status)    tableData.task_status    = mapToTaskStatus(payload.task_status);
   if (payload.time_log_start) tableData.time_log_start = payload.time_log_start;
   if (payload.time_log_end)   tableData.time_log_end   = payload.time_log_end;
+  if (payload.start_time)     tableData.start_time     = payload.start_time;
+  if (payload.end_time)       tableData.end_time       = payload.end_time;
   if (payload.assigned_to)    tableData.assigned_to    = payload.assigned_to;
+  if (isRemoteUrl(payload.signature)) tableData.signature = payload.signature;
+
+  // duration: explicit if given, else compute from start/end
+  const duration =
+    payload.duration ??
+    computeDurationHHMM(
+      payload.start_time ?? payload.time_log_start,
+      payload.end_time ?? payload.time_log_end,
+    );
+  if (duration) tableData.duration = duration;
 
   if (Object.keys(tableData).length === 0) {
     return { lookup: lookupResponse, error: "No fields to update" };
   }
 
-  // 3. Update
-  const updateResponse = await updateSheetRow(rowId, "task_management", tableData, token);
-
-  return { lookup: lookupResponse, update: updateResponse };
+  // 3. Update — retry without signature if rejected (mirrors pm_instance media fallback)
+  try {
+    const updateResponse = await updateSheetRow(rowId, "task_management", tableData, token);
+    return { lookup: lookupResponse, update: updateResponse };
+  } catch (err: any) {
+    const retryData = { ...tableData };
+    delete retryData.signature;
+    if (Object.keys(retryData).length > 0 && Object.keys(retryData).length !== Object.keys(tableData).length) {
+      const retryResponse = await updateSheetRow(rowId, "task_management", retryData, token);
+      return {
+        lookup: lookupResponse,
+        update: retryResponse,
+        error: `Signature skipped after initial failure: ${err?.message || String(err)}`,
+      };
+    }
+    throw err;
+  }
 }
 
 // ─── Convenience: Sync Both Sheets ──────────────────────────────────────────
@@ -392,12 +485,17 @@ export async function syncPMToFieldproxy(
   const pmResult = await updatePMInstanceInFieldproxy(pmPayload);
 
   // Update task_management
+  const start = pmPayload.start_datetime || taskPayload?.time_log_start;
+  const end = pmPayload.end_datetime || taskPayload?.time_log_end;
   const taskData: TaskManagementFieldproxyPayload = {
     instance_id: pmPayload.instance_id,
     task_status: pmPayload.status,
-    time_log_start: pmPayload.start_datetime || taskPayload?.time_log_start,
-    time_log_end: pmPayload.end_datetime || taskPayload?.time_log_end,
+    time_log_start: start,
+    time_log_end: end,
+    start_time: start,
+    end_time: end,
     assigned_to: pmPayload.assigned_to || taskPayload?.assigned_to,
+    signature: pmPayload.sjpl_sign,
   };
 
   const taskResult = await updateTaskManagementInFieldproxy(taskData);

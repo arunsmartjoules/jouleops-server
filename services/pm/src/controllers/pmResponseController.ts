@@ -16,22 +16,36 @@ import {
 } from "@jouleops/shared";
 import pmChecklistRepository from "../repositories/pmChecklistRepository.ts";
 import pmInstancesRepository from "../repositories/pmInstancesRepository.ts";
-import { createPMInstanceTaskLineInFieldproxy } from "../services/fieldproxyService.ts";
+import { upsertPMInstanceTaskLineInFieldproxy } from "../services/fieldproxyService.ts";
 
 export const create = async (req: AuthRequest, res: Response) => {
   try {
-    const response = await pmResponseRepository.create(req.body);
+    // Stamp completed_by (user_id) + completed_at when an answer is provided.
+    const hasAnswer =
+      req.body.response_value !== undefined && req.body.response_value !== null;
+    const responseInput = {
+      ...req.body,
+      completed_by: req.body.completed_by ?? (hasAnswer ? req.user?.user_id : undefined),
+      completed_at: req.body.completed_at ?? (hasAnswer ? new Date() : undefined),
+    };
 
-    // Fire-and-forget: create one row per checklist upsert in Fieldproxy
-    // sheet "pm_instance_task_line".
+    const response = await pmResponseRepository.create(responseInput);
+
+    // Fire-and-forget: upsert pm_instance_task_line in Fieldproxy.
     Promise.all([
       pmInstancesRepository.getPMInstanceById(req.body.instance_id),
       pmChecklistRepository.getPMChecklistItemById(req.body.checklist_id),
+      response.completed_by
+        ? queryOne<{ name: string }>(
+            `SELECT name FROM users WHERE id = $1`,
+            [response.completed_by],
+          )
+        : Promise.resolve(null),
     ])
-      .then(async ([instance, checklistItem]) => {
+      .then(async ([instance, checklistItem, userRow]) => {
         if (!instance?.instance_id || !checklistItem?.task_name) {
           logActivity({
-            action: "CREATE_FIELDPROXY_PM_INSTANCE_TASK_LINE_SKIPPED",
+            action: "UPSERT_FIELDPROXY_PM_INSTANCE_TASK_LINE_SKIPPED",
             module: "PM",
             description:
               "Skipped fieldproxy pm_instance_task_line forward due to missing instance/checklist mapping",
@@ -45,31 +59,41 @@ export const create = async (req: AuthRequest, res: Response) => {
           return;
         }
 
-        const fpRes = await createPMInstanceTaskLineInFieldproxy({
+        const fpRes = await upsertPMInstanceTaskLineInFieldproxy({
           instance_id: instance.instance_id,
           task_name: checklistItem.task_name,
           status: req.body.response_value ?? "Pending",
           checklist_id: req.body.checklist_id,
+          completed_by: userRow?.name ?? null,
+          completed_on: response.completed_at
+            ? new Date(response.completed_at).toISOString()
+            : null,
+          start_datetime: instance.start_datetime
+            ? new Date(instance.start_datetime).toISOString()
+            : null,
+          end_datetime: instance.end_datetime
+            ? new Date(instance.end_datetime).toISOString()
+            : null,
         });
 
         logActivity({
-          action: "CREATE_FIELDPROXY_PM_INSTANCE_TASK_LINE",
+          action: `UPSERT_FIELDPROXY_PM_INSTANCE_TASK_LINE_${fpRes.action.toUpperCase()}`,
           module: "PM",
-          description: `Created fieldproxy pm_instance_task_line row for instance ${instance.instance_id}`,
+          description: `Fieldproxy pm_instance_task_line ${fpRes.action} for instance ${instance.instance_id}`,
           metadata: {
             instance_id: instance.instance_id,
             checklist_id: req.body.checklist_id,
             task_name: checklistItem.task_name,
             status: req.body.response_value ?? "Pending",
-            fieldproxy_response: fpRes,
+            fieldproxy_response: fpRes.result,
           },
         }).catch(() => {});
       })
       .catch((err: Error) => {
         logActivity({
-          action: "CREATE_FIELDPROXY_PM_INSTANCE_TASK_LINE_FAILED",
+          action: "UPSERT_FIELDPROXY_PM_INSTANCE_TASK_LINE_FAILED",
           module: "PM",
-          description: `Failed to create fieldproxy pm_instance_task_line row: ${err.message}`,
+          description: `Failed to upsert fieldproxy pm_instance_task_line row: ${err.message}`,
           metadata: {
             instance_uuid: req.body.instance_id,
             checklist_uuid: req.body.checklist_id,

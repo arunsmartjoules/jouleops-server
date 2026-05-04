@@ -21,9 +21,12 @@ import {
 import {
   updatePMInstanceInFieldproxy,
   updateTaskManagementInFieldproxy,
-  createPMInstanceTaskLineInFieldproxy,
+  upsertPMInstanceTaskLineInFieldproxy,
   type PMFieldproxyPayload,
+  type PMInstanceTaskLinePayload,
 } from "../services/fieldproxyService.ts";
+
+type FieldproxySyncError = { scope: string; id: string; error: string };
 
 // ─── Helper: get employee_code from user_id ─────────────────────────────────
 async function getEmployeeCode(userId?: string): Promise<string | null> {
@@ -132,6 +135,83 @@ async function syncToFieldproxy(
         metadata: { instance_id: pmPayload.instance_id, error: err.message },
       }).catch(() => {});
     });
+}
+
+// ─── Helper: load all checklists for an instance and upsert each to Fieldproxy ──
+/**
+ * Reads all checklist items + their responses (LEFT JOIN) for the given instance,
+ * resolves the executor's user_name, and upserts each row in
+ * Fieldproxy sheet "pm_instance_task_line".
+ *
+ * Includes unanswered checklists (status null) so the sheet stays in sync.
+ *
+ * Used by both live updates (fire-and-forget) and the manual sync endpoints.
+ */
+async function syncAllChecklistsToFieldproxy(
+  instance: any,
+): Promise<{ created: number; updated: number; skipped: number; errors: FieldproxySyncError[] }> {
+  const summary = { created: 0, updated: 0, skipped: 0, errors: [] as FieldproxySyncError[] };
+  if (!instance?.instance_id || !instance?.id) return summary;
+
+  const startISO = instance.start_datetime
+    ? new Date(instance.start_datetime).toISOString()
+    : undefined;
+  const endISO = instance.end_datetime
+    ? new Date(instance.end_datetime).toISOString()
+    : undefined;
+
+  const rows = await query<{
+    checklist_id: string;
+    task_name: string | null;
+    response_value: string | null;
+    completed_at: Date | null;
+    completed_by_name: string | null;
+  }>(
+    `SELECT
+       c.id::text AS checklist_id,
+       c.task_name,
+       r.response_value,
+       r.completed_at,
+       u.name AS completed_by_name
+     FROM pm_checklist c
+     JOIN pm_instances pi ON c.checklist_id = pi.maintenance_id
+     LEFT JOIN pm_checklist_responses r
+       ON r.instance_id = pi.id::text AND r.checklist_id = c.id::text
+     LEFT JOIN users u ON u.id::text = r.completed_by
+     WHERE pi.id = $1
+     ORDER BY c.sequence_no ASC NULLS LAST`,
+    [instance.id],
+  );
+
+  for (const row of rows) {
+    if (!row.task_name) continue;
+
+    const payload: PMInstanceTaskLinePayload = {
+      instance_id: instance.instance_id,
+      task_name: row.task_name,
+      checklist_id: row.checklist_id,
+      status: row.response_value ?? null,
+      completed_by: row.completed_by_name ?? null,
+      completed_on: row.completed_at ? new Date(row.completed_at).toISOString() : null,
+      start_datetime: startISO ?? null,
+      end_datetime: endISO ?? null,
+    };
+
+    try {
+      const res = await upsertPMInstanceTaskLineInFieldproxy(payload);
+      if (res.action === "created") summary.created += 1;
+      else if (res.action === "updated") summary.updated += 1;
+      else summary.skipped += 1;
+    } catch (err: any) {
+      summary.errors.push({
+        scope: "pm_instance_task_line",
+        id: `${instance.instance_id}:${row.checklist_id}`,
+        error: err?.message || String(err),
+      });
+    }
+  }
+
+  return summary;
 }
 
 const VALID_STATUSES = [
@@ -346,12 +426,13 @@ export const update = async (req: AuthRequest, res: Response) => {
       progress: req.body.progress || existing.progress,
       before_image: req.body.before_image,
       after_image: req.body.after_image,
-      sjpl_sign: req.body.client_sign,
+      sjpl_sign: req.body.client_sign || instance?.client_sign,
       start_datetime: instance?.start_datetime?.toISOString?.() || undefined,
       end_datetime: instance?.end_datetime?.toISOString?.() || undefined,
-      assigned_to: employeeCode || undefined,
+      assigned_to: instance?.assigned_to || employeeCode || undefined,
     };
     syncToFieldproxy(instance, fpPayload).catch(() => {});
+    syncAllChecklistsToFieldproxy(instance).catch(() => {});
 
     logActivity({
       user_id: req.user?.user_id,
@@ -445,9 +526,10 @@ export const updateStatus = async (req: AuthRequest, res: Response) => {
       end_datetime: status === "Completed"
         ? new Date().toISOString()
         : instance?.end_datetime?.toISOString?.() || undefined,
-      assigned_to: employeeCode || undefined,
+      assigned_to: instance?.assigned_to || employeeCode || undefined,
     };
     syncToFieldproxy(instance, fpPayload).catch(() => {});
+    syncAllChecklistsToFieldproxy(instance).catch(() => {});
 
     return sendSuccess(res, instance);
   } catch (error: any) {
@@ -492,7 +574,7 @@ export const updateProgress = async (req: AuthRequest, res: Response) => {
     const fpPayload: PMFieldproxyPayload = {
       instance_id: instance?.instance_id || instanceId,
       progress: String(progress),
-      assigned_to: employeeCode || undefined,
+      assigned_to: instance?.assigned_to || employeeCode || undefined,
     };
     syncToFieldproxy(instance, fpPayload).catch(() => {});
 
@@ -607,18 +689,17 @@ export const getAll = async (req: Request, res: Response) => {
   }
 };
 
-type FieldproxySyncError = { scope: string; id: string; error: string };
-
 async function syncSingleInstanceToFieldproxy(instance: any): Promise<{
   pmInstanceSynced: number;
   taskManagementSynced: number;
   taskLineCreated: number;
+  taskLineUpdated: number;
+  taskLineSkipped: number;
   responsesSelected: number;
   errors: FieldproxySyncError[];
 }> {
   let pmInstanceSynced = 0;
   let taskManagementSynced = 0;
-  let taskLineCreated = 0;
   const errors: FieldproxySyncError[] = [];
 
   const pmPayload: PMFieldproxyPayload = {
@@ -634,6 +715,7 @@ async function syncSingleInstanceToFieldproxy(instance: any): Promise<{
     end_datetime: instance.end_datetime
       ? new Date(instance.end_datetime).toISOString()
       : undefined,
+    assigned_to: instance.assigned_to || undefined,
   };
 
   try {
@@ -653,6 +735,10 @@ async function syncSingleInstanceToFieldproxy(instance: any): Promise<{
       task_status: instance.status || undefined,
       time_log_start: pmPayload.start_datetime,
       time_log_end: pmPayload.end_datetime,
+      start_time: pmPayload.start_datetime,
+      end_time: pmPayload.end_datetime,
+      assigned_to: pmPayload.assigned_to,
+      signature: pmPayload.sjpl_sign,
     });
     if (!tmRes.error) taskManagementSynced += 1;
   } catch (err: any) {
@@ -663,39 +749,16 @@ async function syncSingleInstanceToFieldproxy(instance: any): Promise<{
     });
   }
 
-  const responseRows = await query<any>(
-    `SELECT pi.instance_id, r.checklist_id, c.task_name, r.response_value
-     FROM pm_checklist_responses r
-     JOIN pm_instances pi ON pi.id::text = r.instance_id
-     LEFT JOIN pm_checklist c ON c.id::text = r.checklist_id
-     WHERE pi.id = $1 OR pi.instance_id = $2
-     ORDER BY r.created_at ASC`,
-    [instance.id, instance.instance_id],
-  );
-
-  for (const row of responseRows) {
-    try {
-      await createPMInstanceTaskLineInFieldproxy({
-        instance_id: row.instance_id,
-        task_name: row.task_name || "PM Task",
-        status: row.response_value || "Pending",
-        checklist_id: row.checklist_id,
-      });
-      taskLineCreated += 1;
-    } catch (err: any) {
-      errors.push({
-        scope: "pm_instance_task_line",
-        id: `${row.instance_id}:${row.checklist_id}`,
-        error: err?.message || String(err),
-      });
-    }
-  }
+  const checklistResult = await syncAllChecklistsToFieldproxy(instance);
+  errors.push(...checklistResult.errors);
 
   return {
     pmInstanceSynced,
     taskManagementSynced,
-    taskLineCreated,
-    responsesSelected: responseRows.length,
+    taskLineCreated: checklistResult.created,
+    taskLineUpdated: checklistResult.updated,
+    taskLineSkipped: checklistResult.skipped,
+    responsesSelected: checklistResult.created + checklistResult.updated + checklistResult.skipped,
     errors,
   };
 }
@@ -730,6 +793,8 @@ export const syncFieldproxyByInstance = async (req: AuthRequest, res: Response) 
           pm_instance_synced: result.pmInstanceSynced,
           task_management_synced: result.taskManagementSynced,
           pm_instance_task_line_created: result.taskLineCreated,
+          pm_instance_task_line_updated: result.taskLineUpdated,
+          pm_instance_task_line_skipped: result.taskLineSkipped,
           responses_selected: result.responsesSelected,
           error_count: result.errors.length,
         },
@@ -743,6 +808,8 @@ export const syncFieldproxyByInstance = async (req: AuthRequest, res: Response) 
       pm_instance_synced: result.pmInstanceSynced,
       task_management_synced: result.taskManagementSynced,
       pm_instance_task_line_created: result.taskLineCreated,
+      pm_instance_task_line_updated: result.taskLineUpdated,
+      pm_instance_task_line_skipped: result.taskLineSkipped,
       responses_selected: result.responsesSelected,
       errors: result.errors.slice(0, 100),
     });
@@ -765,7 +832,6 @@ export const resyncFieldproxyHistory = async (req: AuthRequest, res: Response) =
       : [];
 
     const instanceFilters: string[] = [];
-    const responseFilters: string[] = [];
     const params: any[] = [];
     let idx = 1;
 
@@ -773,28 +839,22 @@ export const resyncFieldproxyHistory = async (req: AuthRequest, res: Response) =
       instanceFilters.push(
         `(pm_instances.id::text = ANY($${idx}::text[]) OR pm_instances.instance_id = ANY($${idx}::text[]))`,
       );
-      responseFilters.push(
-        `(pi.id::text = ANY($${idx}::text[]) OR pi.instance_id = ANY($${idx}::text[]))`,
-      );
       params.push(bodyInstanceIds);
       idx += 1;
     }
 
     if (site_code) {
       instanceFilters.push(`pm_instances.site_code = $${idx}`);
-      responseFilters.push(`pi.site_code = $${idx}`);
       params.push(site_code);
       idx += 1;
     }
     if (from_date) {
       instanceFilters.push(`pm_instances.start_due_date >= $${idx}::date`);
-      responseFilters.push(`pi.start_due_date >= $${idx}::date`);
       params.push(from_date);
       idx += 1;
     }
     if (to_date) {
       instanceFilters.push(`pm_instances.start_due_date <= $${idx}::date`);
-      responseFilters.push(`pi.start_due_date <= $${idx}::date`);
       params.push(to_date);
       idx += 1;
     }
@@ -804,10 +864,9 @@ export const resyncFieldproxyHistory = async (req: AuthRequest, res: Response) =
 
     const instanceWhereClause =
       instanceFilters.length > 0 ? `WHERE ${instanceFilters.join(" AND ")}` : "";
-    const responseWhereClause =
-      responseFilters.length > 0 ? `WHERE ${responseFilters.join(" AND ")}` : "";
     const instances = await query<any>(
-      `SELECT id, instance_id, status, progress, before_image, after_image, client_sign, start_datetime, end_datetime
+      `SELECT id, instance_id, status, progress, before_image, after_image, client_sign,
+              start_datetime, end_datetime, assigned_to
        FROM pm_instances
        ${instanceWhereClause}
        ORDER BY updated_at DESC
@@ -818,80 +877,21 @@ export const resyncFieldproxyHistory = async (req: AuthRequest, res: Response) =
     let pmInstanceSynced = 0;
     let taskManagementSynced = 0;
     let taskLineCreated = 0;
-    const errors: Array<{ scope: string; id: string; error: string }> = [];
+    let taskLineUpdated = 0;
+    let taskLineSkipped = 0;
+    const errors: FieldproxySyncError[] = [];
 
     for (const inst of instances) {
-      const pmPayload: PMFieldproxyPayload = {
-        instance_id: inst.instance_id,
-        status: inst.status || undefined,
-        progress: inst.progress || undefined,
-        before_image: inst.before_image || undefined,
-        after_image: inst.after_image || undefined,
-        sjpl_sign: inst.client_sign || undefined,
-        start_datetime: inst.start_datetime
-          ? new Date(inst.start_datetime).toISOString()
-          : undefined,
-        end_datetime: inst.end_datetime
-          ? new Date(inst.end_datetime).toISOString()
-          : undefined,
-      };
-
-      try {
-        const pmRes = await updatePMInstanceInFieldproxy(pmPayload);
-        if (!pmRes.error) pmInstanceSynced += 1;
-      } catch (err: any) {
-        errors.push({
-          scope: "pm_instance",
-          id: inst.instance_id,
-          error: err?.message || String(err),
-        });
-      }
-
-      try {
-        const tmRes = await updateTaskManagementInFieldproxy({
-          instance_id: inst.instance_id,
-          task_status: inst.status || undefined,
-          time_log_start: pmPayload.start_datetime,
-          time_log_end: pmPayload.end_datetime,
-        });
-        if (!tmRes.error) taskManagementSynced += 1;
-      } catch (err: any) {
-        errors.push({
-          scope: "task_management",
-          id: inst.instance_id,
-          error: err?.message || String(err),
-        });
-      }
+      const result = await syncSingleInstanceToFieldproxy(inst);
+      pmInstanceSynced += result.pmInstanceSynced;
+      taskManagementSynced += result.taskManagementSynced;
+      taskLineCreated += result.taskLineCreated;
+      taskLineUpdated += result.taskLineUpdated;
+      taskLineSkipped += result.taskLineSkipped;
+      errors.push(...result.errors);
     }
 
-    const responseRows = await query<any>(
-      `SELECT pi.instance_id, r.checklist_id, c.task_name, r.response_value
-       FROM pm_checklist_responses r
-       JOIN pm_instances pi ON pi.id::text = r.instance_id
-       LEFT JOIN pm_checklist c ON c.id::text = r.checklist_id
-       ${responseWhereClause}
-       ORDER BY r.created_at ASC
-       LIMIT $${idx}`,
-      params,
-    );
-
-    for (const row of responseRows) {
-      try {
-        await createPMInstanceTaskLineInFieldproxy({
-          instance_id: row.instance_id,
-          task_name: row.task_name || "PM Task",
-          status: row.response_value || "Pending",
-          checklist_id: row.checklist_id,
-        });
-        taskLineCreated += 1;
-      } catch (err: any) {
-        errors.push({
-          scope: "pm_instance_task_line",
-          id: `${row.instance_id}:${row.checklist_id}`,
-          error: err?.message || String(err),
-        });
-      }
-    }
+    const responsesSelected = taskLineCreated + taskLineUpdated + taskLineSkipped;
 
     logActivity({
       user_id: req.user?.user_id,
@@ -902,10 +902,12 @@ export const resyncFieldproxyHistory = async (req: AuthRequest, res: Response) =
         filter: { site_code: site_code || null, from_date: from_date || null, to_date: to_date || null, limit: safeLimit },
         counts: {
           instances_selected: instances.length,
-          responses_selected: responseRows.length,
+          responses_selected: responsesSelected,
           pm_instance_synced: pmInstanceSynced,
           task_management_synced: taskManagementSynced,
           pm_instance_task_line_created: taskLineCreated,
+          pm_instance_task_line_updated: taskLineUpdated,
+          pm_instance_task_line_skipped: taskLineSkipped,
           error_count: errors.length,
         },
       },
@@ -913,10 +915,12 @@ export const resyncFieldproxyHistory = async (req: AuthRequest, res: Response) =
 
     return sendSuccess(res, {
       instances_selected: instances.length,
-      responses_selected: responseRows.length,
+      responses_selected: responsesSelected,
       pm_instance_synced: pmInstanceSynced,
       task_management_synced: taskManagementSynced,
       pm_instance_task_line_created: taskLineCreated,
+      pm_instance_task_line_updated: taskLineUpdated,
+      pm_instance_task_line_skipped: taskLineSkipped,
       errors: errors.slice(0, 100),
     });
   } catch (error: any) {
